@@ -30,6 +30,7 @@ public final class OrbitStores {
         let account = account
         library.preferredDevice = { preferences?.preferredDevice }
         playback.contextStarted = { library.recordRecent($0) }
+        playback.contextNotFound = { library.markMissing($0) }
         playback.contextName = { library.playlist(for: $0)?.name }
         playback.contextTracks = { library.knownTrackURIs(for: $0) }
         playback.preferredDeviceID = {

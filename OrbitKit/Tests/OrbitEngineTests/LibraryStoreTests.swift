@@ -199,6 +199,16 @@ struct LibraryStoreTests {
         #expect(library.missingPlaylistIDs == [doomed.id])
     }
 
+    @Test func openingADeletedPlaylistFlagsItMissing() async {
+        let doomed = MockFixtures.playlists[3]
+        library.pin(doomed)
+        await rig.spotify.removePlaylist(id: doomed.id)
+        await library.loadItems(for: doomed)
+        #expect(library.items(for: doomed) == .failed(.notFound))
+        #expect(library.missingPlaylistIDs == [doomed.id])
+        #expect(library.isPinned(doomed))
+    }
+
     @Test func aSavedDeviceThatNoLongerExistsIsReportedMissing() async {
         let gone = DeviceReference(id: "dev-old", name: "Old Speaker")
         library.preferredDevice = { gone }

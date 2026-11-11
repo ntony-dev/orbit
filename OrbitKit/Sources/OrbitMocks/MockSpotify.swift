@@ -328,7 +328,9 @@ public actor MockSpotify {
         guard !ignoresPlayCommands else { return }
         switch target {
         case .context(let uri, let offset):
-            guard let tracks = contextTracks(for: uri), !tracks.isEmpty else { throw .contentRestricted }
+            // As the real Web API does, a playlist that no longer exists is a 404 rather than a refusal.
+            guard let tracks = contextTracks(for: uri) else { throw uri.kind == .playlist ? .notFound : .contentRestricted }
+            guard !tracks.isEmpty else { throw .contentRestricted }
             // Spotify never names the context in playback state; the engine fills names in from the library.
             context = PlaybackContext(uri: uri)
             contextTracks = tracks

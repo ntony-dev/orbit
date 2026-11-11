@@ -61,6 +61,7 @@ public final class PlaybackCoordinator {
     public private(set) var syncError: OrbitError?
 
     @ObservationIgnored var contextStarted: ((Playlist) -> Void)?
+    @ObservationIgnored var contextNotFound: ((SpotifyURI) -> Void)?
     @ObservationIgnored var contextName: ((SpotifyURI) -> String?)?
     // Known track URIs of a context, used to tell a confirmed switch from an unrelated track change.
     @ObservationIgnored var contextTracks: ((SpotifyURI) -> Set<SpotifyURI>?)?
@@ -281,6 +282,12 @@ public final class PlaybackCoordinator {
     @discardableResult
     public func play(context uri: SpotifyURI) async -> Bool {
         await play(context: uri, name: nil)
+    }
+
+    private func play(context uri: SpotifyURI, name: String?) async -> Bool {
+        let started = await startContext(uri, name: name)
+        if !started, lastError == .notFound { contextNotFound?(uri) }
+        return started
     }
 
     @discardableResult
@@ -939,7 +946,7 @@ extension PlaybackCoordinator {
         }
     }
 
-    private func play(context uri: SpotifyURI, name: String?) async -> Bool {
+    private func startContext(_ uri: SpotifyURI, name: String?) async -> Bool {
         let tracks = contextTracks?(uri)
         return await start(
             .playContext(uri),

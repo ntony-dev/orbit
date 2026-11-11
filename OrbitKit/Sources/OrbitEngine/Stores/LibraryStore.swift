@@ -151,6 +151,7 @@ public final class LibraryStore {
             if result.value != nil || playlistItems[playlist.id]?.value == nil || result.error == .playlistItemsUnavailable {
                 playlistItems[playlist.id] = result
             }
+            if result.error == .notFound { markMissing(playlist.uri) }
             return result.value != nil
         }
     }
@@ -314,6 +315,12 @@ public final class LibraryStore {
     public func removeRecent(_ playlist: Playlist) {
         recentPlaylists.removeAll { $0.id == playlist.id }
         saveShelf()
+    }
+
+    // Spotify reported the playlist gone; it stays pinned and in recents, flagged like one missing from a full load.
+    func markMissing(_ uri: SpotifyURI) {
+        guard !LikedSongs.isLikedSongs(uri), let playlist = playlist(for: uri) else { return }
+        missingPlaylistIDs.insert(playlist.id)
     }
 
     func setUser(_ profile: UserProfile?) {

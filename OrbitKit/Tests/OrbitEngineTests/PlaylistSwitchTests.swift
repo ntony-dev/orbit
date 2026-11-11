@@ -152,6 +152,18 @@ struct PlaylistSwitchTests {
         #expect(stores.library.recentPlaylists.first?.id == LikedSongs.playlistID)
     }
 
+    // A playlist deleted since the library loaded fails clearly and is flagged, so pins and recents can show it.
+    @Test func aDeletedPlaylistFailsAndIsFlaggedMissing() async {
+        stores.library.pin(target)
+        await rig.spotify.removePlaylist(id: target.id)
+        await rig.spotify.setAutomationPermission(.denied)
+        await playback.refresh()
+        #expect(await playback.play(playlist: target) == false)
+        #expect(playback.lastError == .notFound)
+        #expect(stores.library.missingPlaylistIDs == [target.id])
+        #expect(stores.library.recentPlaylists.isEmpty)
+    }
+
     @Test func switchesThroughTheWebAPIWhenAutomationIsDenied() async {
         await rig.spotify.setAutomationPermission(.denied)
         await playback.refresh()
