@@ -29,6 +29,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private let tabs = NSTabViewController()
     private unowned let shell: Shell
     private var previousApp: NSRunningApplication?
+    // Top-right corner the window keeps while it was placed for --settings; the tab controller resizes the window
+    // to each pane after it is on screen.
+    private var pinnedTopRight: CGPoint?
 
     init(shell: Shell) {
         self.shell = shell
@@ -69,7 +72,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         guard let window else { return }
         let screen = point.flatMap { point in NSScreen.screens.first { $0.frame.contains(point) } } ?? NSScreen.main
         if let visible = screen?.visibleFrame {
-            window.setFrameTopLeftPoint(CGPoint(x: visible.maxX - window.frame.width, y: visible.maxY))
+            pinnedTopRight = CGPoint(x: visible.maxX, y: visible.maxY)
+            keepPinnedCorner()
         }
         window.orderBack(nil)
     }
@@ -81,7 +85,17 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         previousApp = app
     }
 
+    func windowDidResize(_ notification: Notification) {
+        keepPinnedCorner()
+    }
+
+    private func keepPinnedCorner() {
+        guard let pinnedTopRight, let window else { return }
+        window.setFrameTopLeftPoint(CGPoint(x: pinnedTopRight.x - window.frame.width, y: pinnedTopRight.y))
+    }
+
     func windowWillClose(_ notification: Notification) {
+        pinnedTopRight = nil
         guard let previousApp, NSApp.isActive else { return }
         NSApp.yieldActivation(to: previousApp)
         previousApp.activate()
