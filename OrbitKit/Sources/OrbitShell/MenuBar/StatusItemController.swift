@@ -23,7 +23,19 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         statusItem.menu = menu
     }
 
+    // While a menu tracks, Carbon hot keys are queued and fire when it closes. The items show the same key
+    // equivalents, so a shortcut pressed with the menu open would run twice: once from the item, once afterwards.
+    func menuWillOpen(_ menu: NSMenu) {
+        KeyboardShortcuts.disable(ShortcutAction.allCases.map(shell.shortcuts.name(for:)))
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        KeyboardShortcuts.enable(ShortcutAction.allCases.map(shell.shortcuts.name(for:)))
+    }
+
     func menuNeedsUpdate(_ menu: NSMenu) {
+        // Each shortcut binding holds a NotificationCenter observer that outlives its item unless it is unbound.
+        for item in menu.items { item.setShortcut(for: nil) }
         menu.removeAllItems()
         let playback = shell.stores.playback
         let snapshot = playback.snapshot
