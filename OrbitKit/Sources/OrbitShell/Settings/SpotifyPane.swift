@@ -7,6 +7,8 @@ import SwiftUI
 struct SpotifyPane: View {
     let stores: OrbitStores
     @Bindable var preferences: Preferences
+    // Re-read when a Web API pause ends, so the pause row goes away on time.
+    @State private var now = Date()
 
     private var account: AccountStore { stores.account }
     private var library: LibraryStore { stores.library }
@@ -22,6 +24,12 @@ struct SpotifyPane: View {
         }
         .formStyle(.grouped)
         .frame(width: SettingsLayout.paneWidth, height: SettingsLayout.spotifyPaneHeight)
+        .task(id: playback.webAPIPausedUntil) {
+            now = Date()
+            guard let until = playback.webAPIPausedUntil, until > now else { return }
+            try? await Task.sleep(for: .seconds(until.timeIntervalSince(now)))
+            now = Date()
+        }
     }
 
     private var accountSection: some View {
@@ -70,6 +78,9 @@ struct SpotifyPane: View {
             LabeledContent("Spotify app") {
                 Text(!account.isSpotifyInstalled ? "Not installed" : account.isSpotifyRunning ? "Running" : "Not running")
             }
+            LabeledContent("Controlling") {
+                Text(controlRoute)
+            }
             LabeledContent("Automation") {
                 HStack(spacing: SettingsLayout.spacing) {
                     Text(automationStatus)
@@ -91,6 +102,14 @@ struct SpotifyPane: View {
         }
     }
 
+    private var controlRoute: String {
+        switch stores.playback.authority {
+        case .local: "Spotify on this Mac"
+        case .webAPI: stores.playback.snapshot.device.map { "\($0.name), through Spotify Connect" } ?? "Spotify Connect"
+        case nil: "Nothing is playing"
+        }
+    }
+
     private var automationStatus: String {
         switch account.automationPermission {
         case .granted: "Allowed"
@@ -104,9 +123,14 @@ struct SpotifyPane: View {
         Section {
             Picker("Preferred device", selection: $preferences.preferredDevice) {
                 Text("Whichever is active").tag(DeviceReference?.none)
-                ForEach(deviceChoices, id: \.self) { device in
-                    Text(device.name).tag(Optional(device))
+                ForEach(deviceChoices, id: \.self) { choice in
+                    Text(choice.title).tag(Optional(choice.reference))
                 }
+            }
+            if case .missing(let device) = library.preferredDeviceStatus {
+                Text("\(device.name) isn't available right now, so Orbit plays on whichever device is active.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
             switch library.devices {
             case .idle, .loading:
@@ -132,13 +156,12 @@ struct SpotifyPane: View {
         }
     }
 
-    // A saved device that is asleep or gone still shows, so the choice is not silently dropped.
-    private var deviceChoices: [DeviceReference] {
-        var choices = (library.devices.value ?? []).map { DeviceReference(id: $0.id, name: $0.name) }
-        if let preferred = preferences.preferredDevice, !choices.contains(where: { $0.id == preferred.id }) {
-            choices.append(DeviceReference(id: preferred.id, name: "\(preferred.name) (unavailable)"))
-        }
-        return choices
+    private var deviceChoices: [DeviceChoice] {
+        DeviceChoice.choices(
+            devices: library.devices.value ?? [],
+            preferred: preferences.preferredDevice,
+            status: library.preferredDeviceStatus
+        )
     }
 
     private var pinnedSection: some View {
@@ -150,6 +173,7 @@ struct SpotifyPane: View {
             ForEach(Array(library.pinnedPlaylists.enumerated()), id: \.element.id) { index, playlist in
                 PinnedRow(
                     playlist: playlist,
+                    isMissing: library.missingPlaylistIDs.contains(playlist.id),
                     canMoveUp: index > 0,
                     canMoveDown: index < library.pinnedPlaylists.count - 1,
                     move: { offset in library.movePinned(fromOffsets: [index], toOffset: offset > 0 ? index + 2 : index - 1) },
@@ -157,11 +181,11 @@ struct SpotifyPane: View {
                 )
             }
             Menu("Pin a Playlist") {
-                ForEach((library.playlists.value ?? []).filter { !library.isPinned($0) }) { playlist in
+                ForEach(pinnablePlaylists) { playlist in
                     Button(playlist.name) { library.pin(playlist) }
                 }
             }
-            .disabled((library.playlists.value ?? []).allSatisfy(library.isPinned))
+            .disabled(pinnablePlaylists.isEmpty)
             if let error = library.playlists.error {
                 ErrorRow(error: error, retry: { await library.loadPlaylists() }, signIn: { await account.signIn() })
             }
@@ -170,13 +194,47 @@ struct SpotifyPane: View {
         }
     }
 
+    // Liked Songs first, as in the picker; it is not part of the playlist list Spotify returns.
+    private var pinnablePlaylists: [Playlist] {
+        ([library.likedSongs].compactMap(\.self) + (library.playlists.value ?? [])).filter { !library.isPinned($0) }
+    }
+
+    private var playback: PlaybackCoordinator { stores.playback }
+
+    private static func isRateLimit(_ error: OrbitError) -> Bool {
+        switch error {
+        case .rateLimited, .quotaExceeded: true
+        default: false
+        }
+    }
+
     @ViewBuilder
     private var problemsSection: some View {
-        if let error = stores.playback.lastError {
-            Section("Playback") {
-                ErrorRow(error: error, retry: { await stores.playback.refresh() }, signIn: { await account.signIn() }) {
-                    stores.playback.dismissError()
+        let pausedUntil = playback.webAPIPausedUntil.flatMap { $0 > now ? $0 : nil }
+        // Rate limits are explained by the pause row; a failure already shown as the playback error is not repeated.
+        let syncError = playback.syncError.flatMap { $0 == playback.lastError || Self.isRateLimit($0) ? nil : $0 }
+        if playback.lastError != nil || syncError != nil || library.lastError != nil || pausedUntil != nil {
+            Section {
+                if let pausedUntil {
+                    WebAPIPauseRow(until: pausedUntil)
                 }
+                if let error = playback.lastError {
+                    ErrorRow(error: error, retry: { await playback.refresh() }, signIn: { await account.signIn() }) {
+                        playback.dismissError()
+                    }
+                }
+                // Background syncing failures never interrupt the player, so this is the one place they show.
+                if let syncError {
+                    ErrorRow(error: syncError, retry: { await playback.refresh() }, signIn: { await account.signIn() })
+                }
+                if let error = library.lastError {
+                    // A failed one-off action such as adding to the queue has nothing to retry from here.
+                    ErrorRow(error: error, retry: nil, signIn: { await account.signIn() }) {
+                        library.dismissError()
+                    }
+                }
+            } header: {
+                Text("Problems")
             }
         }
     }
@@ -231,7 +289,7 @@ private struct ClientIDSection: View {
 
 private struct ErrorRow: View {
     let error: OrbitError
-    let retry: () async -> Void
+    let retry: (() async -> Void)?
     let signIn: () async -> Void
     var dismiss: (() -> Void)?
 
@@ -246,7 +304,7 @@ private struct ErrorRow: View {
                 }
             }
             Spacer(minLength: 0)
-            if let action = RecoveryAction(for: error) {
+            if let action = RecoveryAction(for: error), action != .retry || retry != nil {
                 Button(action.title) { perform(action) }
             }
             if let dismiss {
@@ -258,7 +316,7 @@ private struct ErrorRow: View {
     private func perform(_ action: RecoveryAction) {
         switch action {
         case .signIn: Task { await signIn() }
-        case .retry: Task { await retry() }
+        case .retry: Task { await retry?() }
         case .openAutomationSettings: RecoveryAction.openAutomationSettings()
         case .openSpotify: RecoveryAction.openSpotify()
         case .openDeveloperDashboard: NSWorkspace.shared.open(RecoveryAction.developerDashboardURL)
@@ -291,8 +349,26 @@ private struct DeviceRow: View {
     }
 }
 
+private struct WebAPIPauseRow: View {
+    let until: Date
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: SettingsLayout.spacing) {
+            Image(systemName: "hourglass")
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: SettingsLayout.tightSpacing) {
+                Text("Spotify asked Orbit to slow down. Requests resume in \(Text(until, style: .relative)).")
+                Text("Play, pause and skip keep working through the Spotify app on this Mac.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
 private struct PinnedRow: View {
     let playlist: Playlist
+    let isMissing: Bool
     let canMoveUp: Bool
     let canMoveDown: Bool
     let move: (Int) -> Void
@@ -301,6 +377,9 @@ private struct PinnedRow: View {
     var body: some View {
         HStack(spacing: SettingsLayout.spacing) {
             Text(playlist.name).lineLimit(1)
+            if isMissing {
+                Text("No longer in your library").font(.callout).foregroundStyle(.secondary).lineLimit(1)
+            }
             Spacer()
             Button { move(-1) } label: { Image(systemName: "chevron.up") }
                 .disabled(!canMoveUp)
@@ -326,5 +405,32 @@ extension PlaybackDevice.Kind {
         case .automobile: "car"
         case .other: "dot.radiowaves.left.and.right"
         }
+    }
+}
+
+// The preferred-device picker's rows. A saved device that is asleep or gone still shows, so the choice is not
+// silently dropped, and a saved device Spotify now lists under a new ID keeps the saved reference as its tag so
+// the picker still shows it selected.
+struct DeviceChoice: Hashable {
+    var reference: DeviceReference
+    var title: String
+
+    static func choices(devices: [PlaybackDevice], preferred: DeviceReference?, status: PreferredDeviceStatus) -> [DeviceChoice] {
+        var choices = devices.map { DeviceChoice(reference: DeviceReference(id: $0.id, name: $0.name), title: $0.name) }
+        switch status {
+        case .notSet:
+            break
+        case .available(let device):
+            if let preferred, let index = choices.firstIndex(where: { $0.reference.id == device.id }) {
+                choices[index].reference = preferred
+            }
+        case .unverified(let reference):
+            if !choices.contains(where: { $0.reference.id == reference.id }) {
+                choices.append(DeviceChoice(reference: reference, title: reference.name))
+            }
+        case .missing(let reference):
+            choices.append(DeviceChoice(reference: reference, title: "\(reference.name) (unavailable)"))
+        }
+        return choices
     }
 }
