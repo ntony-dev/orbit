@@ -81,6 +81,7 @@ final class PanelController: PanelHost {
         if !visibility(presentedOnDemand: false).showsPanel { isPresentedOnDemand = true }
         updateVisibility()
         state.expand(to: destination)
+        orderFrontIfVisible()
         takeKeyboardFocus()
     }
 
@@ -279,6 +280,12 @@ final class PanelController: PanelHost {
         stores.setInterfaceVisibility(visibility)
     }
 
+    // With "Keep above other windows" off the panel sits at the normal level, and clicking a non-activating panel
+    // does not raise it, so an opening card would otherwise come up underneath the user's windows.
+    private func orderFrontIfVisible() {
+        if panel.isVisible { panel.orderFrontRegardless() }
+    }
+
     private func takeKeyboardFocus() {
         guard !suppressesFocus else { return }
         panel.acceptsKey = true
@@ -390,6 +397,7 @@ final class PanelController: PanelHost {
     private func expansionChanged(_ expanded: Bool) {
         if expanded {
             installClickMonitor()
+            orderFrontIfVisible()
             takeKeyboardFocus()
         } else {
             removeClickMonitor()
