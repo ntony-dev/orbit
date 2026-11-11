@@ -14,7 +14,9 @@ public protocol PanelHost: AnyObject {
     func updateDrag()
     func endDrag()
 
-    // Playback controls must never take keyboard focus from the user's frontmost app; the UI asks for key
-    // status only while a text field needs typing, and gives it back when done.
+    // Popover model: the shell makes the panel key whenever the user opens it and hands key status back to the
+    // user's app when it collapses; the collapsed pill never takes key, so its playback controls leave focus where
+    // it was. Asking for true makes an open but unfocused panel key (a click into a search field). False is
+    // ignored while expanded, so Escape still reaches Orbit after a field gives up focus.
     func setAcceptsKeyboardInput(_ accepts: Bool)
 }
