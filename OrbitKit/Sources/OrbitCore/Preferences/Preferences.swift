@@ -18,6 +18,8 @@ public final class Preferences {
     public var remembersPosition: Bool { didSet { store(remembersPosition, .remembersPosition) } }
     // Keyed by display UUID (CGDisplayCreateUUIDFromDisplayID), which stays stable across reconnects.
     public var savedPositions: [String: SavedPanelPosition] { didSet { store(savedPositions, .savedPositions) } }
+    // The display the user last placed the pill on, so it returns there when that display reconnects.
+    public var panelDisplayID: String? { didSet { store(panelDisplayID, .panelDisplayID) } }
     public var hidesInFullscreen: Bool { didSet { store(hidesInFullscreen, .hidesInFullscreen) } }
     public var hidesWhenSpotifyQuits: Bool { didSet { store(hidesWhenSpotifyQuits, .hidesWhenSpotifyQuits) } }
     public var collapsesAfterAction: Bool { didSet { store(collapsesAfterAction, .collapsesAfterAction) } }
@@ -42,6 +44,7 @@ public final class Preferences {
         docksAtTopCenter = Self.load(.docksAtTopCenter, from: defaults) ?? false
         remembersPosition = Self.load(.remembersPosition, from: defaults) ?? true
         savedPositions = Self.load(.savedPositions, from: defaults) ?? [:]
+        panelDisplayID = Self.load(.panelDisplayID, from: defaults) ?? nil
         hidesInFullscreen = Self.load(.hidesInFullscreen, from: defaults) ?? true
         hidesWhenSpotifyQuits = Self.load(.hidesWhenSpotifyQuits, from: defaults) ?? false
         collapsesAfterAction = Self.load(.collapsesAfterAction, from: defaults) ?? true
@@ -51,7 +54,7 @@ public final class Preferences {
 
     private enum Key: String {
         case appearance, glassPreset, backgroundOpacity, accent, pillSize, showsArtwork, reducesAnimation
-        case alwaysOnTop, isPillVisible, snapsToEdges, docksAtTopCenter, remembersPosition, savedPositions
+        case alwaysOnTop, isPillVisible, snapsToEdges, docksAtTopCenter, remembersPosition, savedPositions, panelDisplayID
         case hidesInFullscreen, hidesWhenSpotifyQuits, collapsesAfterAction, preferredDevice, clientIDOverride
 
         var defaultsKey: String { "orbit.preferences.\(rawValue)" }
