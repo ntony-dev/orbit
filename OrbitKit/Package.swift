@@ -30,6 +30,7 @@ let package = Package(
         .testTarget(name: "SpotifyKitTests", dependencies: ["SpotifyKit", "OrbitCore"]),
         .testTarget(name: "OrbitEngineTests", dependencies: ["OrbitEngine", "OrbitCore", "OrbitMocks"]),
         .testTarget(name: "OrbitShellTests", dependencies: ["OrbitShell", "OrbitCore"]),
+        .testTarget(name: "OrbitUITests", dependencies: ["OrbitUI", "OrbitEngine", "OrbitCore", "OrbitMocks"]),
     ],
     swiftLanguageModes: [.v6]
 )
