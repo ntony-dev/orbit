@@ -37,7 +37,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         window.styleMask = [.titled, .closable]
         window.toolbarStyle = .preference
         window.isReleasedWhenClosed = false
-        window.setFrameAutosaveName("OrbitSettings")
+        // The frame is saved in the standard defaults, which a throwaway demo run must not write to.
+        if !shell.isDemo { window.setFrameAutosaveName("OrbitSettings") }
         super.init(window: window)
         window.delegate = self
         for pane in SettingsPane.allCases {
@@ -59,6 +60,18 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
     func select(_ pane: SettingsPane) {
         tabs.selectedTabViewItemIndex = SettingsPane.allCases.firstIndex(of: pane) ?? 0
+    }
+
+    // For the --settings launch argument: behind every other window, against the trailing edge of the display
+    // holding `point` (the --panel-anchor, else the main display), so a capture run never lands on the side of
+    // the screen the user is working in.
+    func orderBackAtTrailingEdge(near point: CGPoint?) {
+        guard let window else { return }
+        let screen = point.flatMap { point in NSScreen.screens.first { $0.frame.contains(point) } } ?? NSScreen.main
+        if let visible = screen?.visibleFrame {
+            window.setFrameTopLeftPoint(CGPoint(x: visible.maxX - window.frame.width, y: visible.maxY))
+        }
+        window.orderBack(nil)
     }
 
     // Settings is the only reason Orbit is ever the active app. Once it closes, Orbit has no window to type into,

@@ -7,8 +7,9 @@ import OrbitCore
 //   --panel-anchor X,Y       pin the pill's anchored corner to X,Y in AppKit screen coordinates (origin at the
 //                            bottom-left of the main display); the canvas grows from there toward screen centre
 //   --appearance light|dark  force an appearance for this run without touching Preferences
-//   --settings [PANE]        open Settings behind all other windows, without activating Orbit; PANE is
-//                            appearance, behavior, spotify or shortcuts
+//   --settings [PANE]        open Settings behind all other windows, without activating Orbit, against the
+//                            right edge of the --panel-anchor's display; PANE is appearance, behavior,
+//                            spotify or shortcuts
 //   --ui-scenario NAME       Debug builds, with --demo: run the whole app against that OrbitMocks DemoScenario
 // OrbitUI reads its own Debug-only --ui-* arguments for screens and looks; this shell owns every store.
 struct LaunchOptions {

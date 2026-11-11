@@ -29,7 +29,7 @@ final class Shell {
         panel.start(pinnedAt: options.anchorPoint, expanded: options.startsExpanded)
         statusItem = StatusItemController(shell: self)
         shortcuts.start { [unowned self] in perform($0) }
-        if let pane = options.settingsPane { showSettings(pane, inBackground: true) }
+        if let pane = options.settingsPane { showSettingsInBackground(pane, near: options.anchorPoint) }
     }
 
     func perform(_ action: ShortcutAction) {
@@ -44,18 +44,23 @@ final class Shell {
         }
     }
 
-    // `inBackground` is for the --settings launch argument: the window is put behind every other window and Orbit
-    // is not activated, so it can be captured by window ID without disturbing whoever is using the Mac.
-    func showSettings(_ pane: SettingsPane? = nil, inBackground: Bool = false) {
+    func showSettings(_ pane: SettingsPane? = nil) {
+        let controller = settingsController(selecting: pane)
+        controller.returnsActivation(to: NSWorkspace.shared.frontmostApplication)
+        NSApp.activate()
+        controller.showWindow(nil)
+    }
+
+    // For the --settings launch argument: the window is put behind every other window and Orbit is not activated,
+    // so it can be captured by window ID without disturbing whoever is using the Mac.
+    private func showSettingsInBackground(_ pane: SettingsPane, near point: CGPoint?) {
+        settingsController(selecting: pane).orderBackAtTrailingEdge(near: point)
+    }
+
+    private func settingsController(selecting pane: SettingsPane?) -> SettingsWindowController {
         let controller = settingsWindow ?? SettingsWindowController(shell: self)
         settingsWindow = controller
         if let pane { controller.select(pane) }
-        if inBackground {
-            controller.window?.orderBack(nil)
-        } else {
-            controller.returnsActivation(to: NSWorkspace.shared.frontmostApplication)
-            NSApp.activate()
-            controller.showWindow(nil)
-        }
+        return controller
     }
 }
