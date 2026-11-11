@@ -115,6 +115,46 @@ struct LibraryStoreTests {
         #expect(library.searchResults == .idle)
     }
 
+    // Refining a search or refreshing any list keeps what is on screen until the new result or an error lands.
+    @Test func reloadsKeepTheirValueVisibleWhileLoading() async {
+        await library.search("night")
+        let night = library.searchResults.value
+        #expect(night != nil)
+        await library.loadPlaylists()
+        await library.loadSavedTracks()
+        await library.loadDevices()
+        await library.loadQueue()
+        await library.loadItems(for: MockFixtures.playlists[0])
+
+        await rig.spotify.holdReads()
+        let library = library
+        library.updateSearch("jazz")
+        #expect(library.searchResults.value == night)
+        #expect(library.isSearching)
+        let reloads = [
+            Task { await library.loadPlaylists(force: true) },
+            Task { await library.loadSavedTracks(force: true) },
+            Task { await library.loadDevices(force: true) },
+            Task { await library.loadQueue(force: true) },
+            Task { await library.loadItems(for: MockFixtures.playlists[0], force: true) },
+        ]
+        #expect(await eventually { rig.clock.pendingSleepers == 1 })
+        rig.clock.advance(by: 1)
+        #expect(await eventually { await rig.spotify.heldCommandCount == 6 })
+        #expect(library.searchResults.value == night)
+        #expect(library.playlists.value != nil)
+        #expect(library.savedTracks.value != nil)
+        #expect(library.devices.value != nil)
+        #expect(library.queue.value != nil)
+        #expect(library.items(for: MockFixtures.playlists[0]).value != nil)
+
+        await rig.spotify.releaseCommands()
+        for reload in reloads { await reload.value }
+        #expect(await eventually { !library.isSearching })
+        #expect(library.searchResults.value?.playlists.contains { $0.name == "Late Night Jazz" } == true)
+        #expect(library.searchResults.value != night)
+    }
+
     @Test func searchCapsResultsAtTen() async {
         await library.search("a")
         #expect((library.searchResults.value?.tracks.count ?? 0) <= 10)

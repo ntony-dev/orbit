@@ -36,7 +36,10 @@ public final class LibraryStore {
     public private(set) var playlistItems: [Playlist.ID: LoadState<[Track]>] = [:]
     public private(set) var savedTracks: LoadState<[Track]> = .idle
     public private(set) var searchQuery = ""
+    // Keeps showing the previous query's results while a newer one loads, so refining never flashes empty;
+    // `isSearching` says a newer query is still on its way.
     public private(set) var searchResults: LoadState<SearchResults> = .idle
+    public private(set) var isSearching = false
     public private(set) var queue: LoadState<PlaybackQueue> = .idle
     public private(set) var devices: LoadState<[PlaybackDevice]> = .idle
     // Liked Songs as a playable, pinnable playlist; nil until the signed-in user is known.
@@ -176,13 +179,16 @@ public final class LibraryStore {
         let key = Self.searchKey(query)
         guard !key.isEmpty else {
             searchResults = .idle
+            isSearching = false
             return
         }
         if let cached = searchCache[key], clock.now().timeIntervalSince(cached.at) < timing.searchLifetime {
             searchResults = .loaded(cached.results)
+            isSearching = false
             return
         }
-        searchResults = .loading
+        if searchResults.value == nil { searchResults = .loading }
+        isSearching = true
         let started = generation
         let result: LoadState<SearchResults>
         do {
@@ -194,7 +200,10 @@ public final class LibraryStore {
             result = .failed(error)
         }
         // A slower, older query must not overwrite the results of the one the user is looking at.
-        if searchQuery == query { searchResults = result }
+        if searchQuery == query {
+            searchResults = result
+            isSearching = false
+        }
     }
 
     // Debounced and cancellable: each keystroke replaces the pending search, and only the last one is sent.
@@ -204,13 +213,16 @@ public final class LibraryStore {
         let key = Self.searchKey(query)
         guard !key.isEmpty else {
             searchResults = .idle
+            isSearching = false
             return
         }
         if let cached = searchCache[key], clock.now().timeIntervalSince(cached.at) < timing.searchLifetime {
             searchResults = .loaded(cached.results)
+            isSearching = false
             return
         }
-        searchResults = .loading
+        if searchResults.value == nil { searchResults = .loading }
+        isSearching = true
         searchTask = Task { [weak self, clock, timing] in
             do { try await clock.sleep(timing.searchDebounce) } catch { return }
             await self?.search(query)
@@ -326,6 +338,7 @@ public final class LibraryStore {
         savedTracks = .idle
         searchQuery = ""
         searchResults = .idle
+        isSearching = false
         queue = .idle
         devices = .idle
         likedSongs = nil
