@@ -28,6 +28,13 @@ struct LaunchOptionsTests {
         #expect(options.settingsPane == .spotify)
     }
 
+    @Test func measurementStatesNeedTheDemo() {
+        let demo = LaunchOptions(arguments: ["Orbit", "--demo", "--paused", "--pill-hidden"])
+        #expect(demo.startsPaused && demo.startsWithPillHidden)
+        let real = LaunchOptions(arguments: ["Orbit", "--paused", "--pill-hidden"])
+        #expect(!real.startsPaused && !real.startsWithPillHidden)
+    }
+
     @Test func settingsWithoutAPaneOpensAppearance() {
         #expect(LaunchOptions(arguments: ["Orbit", "--settings"]).settingsPane == .appearance)
         #expect(LaunchOptions(arguments: ["Orbit"]).settingsPane == nil)

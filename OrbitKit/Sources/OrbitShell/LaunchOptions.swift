@@ -11,6 +11,9 @@ import OrbitCore
 //                            right edge of the --panel-anchor's display; PANE is appearance, behavior,
 //                            spotify or shortcuts
 //   --ui-scenario NAME       Debug builds, with --demo: run the whole app against that OrbitMocks DemoScenario
+//   --paused, --pill-hidden  with --demo: start with the simulated playback paused, or with the pill hidden, so
+//                            idle cost can be measured in those states (they never touch the real Spotify or
+//                            the user's settings)
 // OrbitUI reads its own Debug-only --ui-* arguments for screens and looks; this shell owns every store.
 struct LaunchOptions {
     var usesMocks = false
@@ -19,6 +22,8 @@ struct LaunchOptions {
     var appearance: AppearanceMode?
     var settingsPane: SettingsPane?
     var demoScenario: String?
+    var startsPaused = false
+    var startsWithPillHidden = false
 
     init(arguments: [String]) {
         usesMocks = arguments.contains("--demo")
@@ -31,6 +36,8 @@ struct LaunchOptions {
         if arguments.contains("--settings") {
             settingsPane = Self.value(after: "--settings", in: arguments).flatMap(SettingsPane.init(rawValue:)) ?? .appearance
         }
+        startsPaused = usesMocks && arguments.contains("--paused")
+        startsWithPillHidden = usesMocks && arguments.contains("--pill-hidden")
         #if DEBUG
         if usesMocks { demoScenario = Self.value(after: "--ui-scenario", in: arguments) }
         #endif

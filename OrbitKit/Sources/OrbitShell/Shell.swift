@@ -25,7 +25,16 @@ final class Shell {
     }
 
     func start(options: LaunchOptions) {
+        // Both flags exist only with --demo, whose Preferences and Spotify are throwaway.
+        if options.startsWithPillHidden { preferences.isPillVisible = false }
         stores.start()
+        if options.startsPaused {
+            let playback = stores.playback
+            Task {
+                await playback.refresh()
+                if playback.snapshot.isPlaying { await playback.togglePlayPause() }
+            }
+        }
         panel.start(pinnedAt: options.anchorPoint, expanded: options.startsExpanded)
         statusItem = StatusItemController(shell: self)
         shortcuts.start { [unowned self] in perform($0) }
