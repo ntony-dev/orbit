@@ -1,0 +1,53 @@
+name: Orbit
+options:
+  bundleIdPrefix: io.github.ntony46
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+  # Target build settings come from Config/Orbit.xcconfig so Config/Local.xcconfig can override them.
+  settingPresets: project
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+packages:
+  OrbitKit:
+    path: OrbitKit
+targets:
+  Orbit:
+    type: application
+    platform: macOS
+    configFiles:
+      Debug: Config/Orbit.xcconfig
+      Release: Config/Orbit.xcconfig
+    sources:
+      - App
+    dependencies:
+      - package: OrbitKit
+        product: OrbitShell
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Orbit
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        LSApplicationCategoryType: public.app-category.music
+        LSUIElement: true
+        NSAppleEventsUsageDescription: Orbit controls playback in the Spotify app on this Mac.
+        NSHumanReadableCopyright: ""
+        SpotifyClientID: $(SPOTIFY_CLIENT_ID)
+    entitlements:
+      path: App/Orbit.entitlements
+      properties:
+        com.apple.security.automation.apple-events: true
+schemes:
+  Orbit:
+    build:
+      targets:
+        Orbit: all
+    run:
+      config: Debug
+      commandLineArguments:
+        "--demo": false
+    archive:
+      config: Release
