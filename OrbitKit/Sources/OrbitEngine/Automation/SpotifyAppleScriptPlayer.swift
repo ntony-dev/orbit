@@ -1,6 +1,7 @@
 import AppKit
 import OrbitCore
 import Synchronization
+import SystemConfiguration
 
 // Controls the Spotify desktop app through its scripting dictionary using raw Apple events on a background queue.
 // State changes arrive through Spotify's distributed notification, so nothing polls while the app is idle.
@@ -28,6 +29,11 @@ public struct SpotifyAppleScriptPlayer: LocalPlayer {
         let permission = await channel.permission(prompting: prompting)
         cache.permission = permission
         return permission
+    }
+
+    // Spotify names the desktop app's Connect device after the computer.
+    public func connectDeviceName() async -> String? {
+        SCDynamicStoreCopyComputerName(nil, nil) as String?
     }
 
     public func events() -> AsyncStream<LocalPlayerEvent> {

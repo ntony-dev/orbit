@@ -63,4 +63,10 @@ public protocol LocalPlayer: Sendable {
     func setShuffling(_ enabled: Bool) async throws(OrbitError)
     // AppleScript exposes repeat as a boolean only; it cannot express repeat-one.
     func setRepeating(_ enabled: Bool) async throws(OrbitError)
+    // The name this Mac's Spotify app appears under in Spotify Connect, used to recognise it in Web API state.
+    func connectDeviceName() async -> String?
+}
+
+extension LocalPlayer {
+    public func connectDeviceName() async -> String? { nil }
 }

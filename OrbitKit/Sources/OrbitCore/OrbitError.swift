@@ -16,6 +16,8 @@ public enum OrbitError: Error, Hashable, Sendable {
     case deviceRestricted
     case contentRestricted
     case playlistItemsUnavailable
+    // Spotify accepted a play command but was never seen playing what was asked for.
+    case playbackNotConfirmed
     case network(detail: String)
     case callbackPortInUse(port: Int)
     case missingClientID
@@ -39,6 +41,7 @@ public enum OrbitError: Error, Hashable, Sendable {
         case .deviceRestricted: "This device can't be controlled remotely."
         case .contentRestricted: "This content can't be played here."
         case .playlistItemsUnavailable: "Spotify doesn't share the tracks of playlists you don't own."
+        case .playbackNotConfirmed: "Spotify didn't start playing that."
         case .network: "Can't reach Spotify."
         case .callbackPortInUse(let port): "Port \(port) is in use, so sign-in can't finish."
         case .missingClientID: "No Spotify Client ID is configured."
@@ -63,6 +66,7 @@ public enum OrbitError: Error, Hashable, Sendable {
         case .deviceRestricted: "Choose another device."
         case .contentRestricted: nil
         case .playlistItemsUnavailable: "You can still play the playlist."
+        case .playbackNotConfirmed: "Check Spotify, then try again."
         case .network: "Check your internet connection."
         case .callbackPortInUse: "Quit the app using it and try signing in again."
         case .missingClientID: "Add your Spotify Client ID in Orbit's settings."

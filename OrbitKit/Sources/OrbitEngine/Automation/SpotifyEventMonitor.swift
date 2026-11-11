@@ -50,8 +50,8 @@ final class SpotifyEventMonitor {
     }
 }
 
-// The notification's userInfo, confirmed against Spotify 1.2 on macOS. Duration is in milliseconds and the
-// position in seconds; volume, shuffle, repeat and artwork are never included.
+// The notification's userInfo, confirmed against Spotify 1.3.6 on macOS 27. Duration is in milliseconds and the
+// position in seconds; volume, shuffle, repeat, artwork URL and the playing context are never included.
 enum SpotifyNotificationPayload {
     static func state(from info: [AnyHashable: Any]) -> LocalPlayerState? {
         guard let rawState = info["Player State"] as? String else { return nil }
