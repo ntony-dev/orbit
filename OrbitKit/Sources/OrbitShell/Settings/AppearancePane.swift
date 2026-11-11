@@ -75,7 +75,7 @@ private struct AccentPicker: View {
 
     var body: some View {
         LabeledContent("Color") {
-            HStack(spacing: OrbitTokens.Spacing.s) {
+            HStack(spacing: SettingsLayout.spacing) {
                 ForEach(AccentChoice.presets, id: \.self) { choice in
                     swatch(choice)
                 }
@@ -94,7 +94,7 @@ private struct AccentPicker: View {
             accent = choice
         } label: {
             Circle()
-                .fill(OrbitTokens.Palette.accent(choice))
+                .fill(OrbitPalette.accent(choice))
                 .overlay(Circle().strokeBorder(.separator))
                 .frame(width: SettingsLayout.swatch, height: SettingsLayout.swatch)
                 .overlay { if accent == choice { SelectionRing() } }
@@ -107,7 +107,7 @@ private struct AccentPicker: View {
 
     private var customColor: Binding<Color> {
         Binding {
-            OrbitTokens.Palette.accent(accent)
+            OrbitPalette.accent(accent)
         } set: { color in
             guard let rgb = NSColor(color).usingColorSpace(.sRGB) else { return }
             accent = .custom(RGBColor(red: rgb.redComponent, green: rgb.greenComponent, blue: rgb.blueComponent))
@@ -119,7 +119,7 @@ private struct SelectionRing: View {
     var body: some View {
         Circle()
             .strokeBorder(Color.primary, lineWidth: 2)
-            .padding(-OrbitTokens.Spacing.xs)
+            .padding(-SettingsLayout.ringOutset)
             .accessibilityHidden(true)
     }
 }
@@ -143,7 +143,7 @@ extension GlassPreset {
         }
     }
 
-    // Matches OrbitTokens.Material.glass: the presets pick a native variant and optionally add Orbit's tint.
+    // Matches the UI's glass surface: the presets pick a native variant and optionally add Orbit's tint.
     var summary: String {
         switch self {
         case .clear: "The native clear glass, for the most see-through pill."
@@ -163,21 +163,18 @@ extension PillSize {
 }
 
 extension AccentChoice {
-    var title: String {
-        switch self {
-        case .neutral: "Neutral"
-        case .mint: "Mint"
-        case .ice: "Ice"
-        case .amber: "Amber"
-        case .lavender: "Lavender"
-        case .custom: "Custom"
-        }
-    }
+    var title: String { OrbitPalette.accentName(self) }
 }
 
+// Settings is a native form, so it follows system metrics rather than the floating UI's design tokens; these are
+// the few values the form does not supply itself.
 enum SettingsLayout {
     static let paneWidth: CGFloat = 520
     static let swatch: CGFloat = 20
+    static let spacing: CGFloat = 6
+    static let tightSpacing: CGFloat = 2
+    static let ringOutset: CGFloat = 4
+    static let rowIcon: CGFloat = 24
     // The Spotify pane scrolls; the others size to their content.
     static let spotifyPaneHeight: CGFloat = 640
 }

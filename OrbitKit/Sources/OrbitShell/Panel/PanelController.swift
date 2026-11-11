@@ -148,7 +148,7 @@ final class PanelController: PanelHost {
     }
 
     private var collapsedCanvasSize: CGSize {
-        OrbitTokens.Size.canvas(for: OrbitTokens.Size.pill(preferences.pillSize))
+        PanelMetrics.canvas(for: PanelMetrics.pillSize(preferences.pillSize))
     }
 
     // Collapsed and no longer animating, so the canvas is exactly the pill plus its margin.
@@ -161,7 +161,7 @@ final class PanelController: PanelHost {
     }
 
     private static func surface(ofCanvas canvas: CGRect) -> CGRect {
-        canvas.insetBy(dx: OrbitTokens.Size.canvasMargin, dy: OrbitTokens.Size.canvasMargin)
+        canvas.insetBy(dx: PanelMetrics.canvasMargin, dy: PanelMetrics.canvasMargin)
     }
 
     // Where the pill is, or will be once an expansion collapses back into its anchored corner.
@@ -192,7 +192,7 @@ final class PanelController: PanelHost {
 
     private func restore() {
         guard let restored = PanelPlacement.restore(
-            size: OrbitTokens.Size.pill(preferences.pillSize),
+            size: PanelMetrics.pillSize(preferences.pillSize),
             saved: positions,
             preferredDisplayID: displayID,
             displays: NSScreen.layouts,

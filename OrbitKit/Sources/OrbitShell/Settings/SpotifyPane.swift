@@ -27,7 +27,7 @@ struct SpotifyPane: View {
     private var accountSection: some View {
         Section("Account") {
             LabeledContent("Status") {
-                HStack(spacing: OrbitTokens.Spacing.s) {
+                HStack(spacing: SettingsLayout.spacing) {
                     if account.authState == .authorizing || account.authState == .unknown {
                         ProgressView().controlSize(.small)
                     }
@@ -71,7 +71,7 @@ struct SpotifyPane: View {
                 Text(!account.isSpotifyInstalled ? "Not installed" : account.isSpotifyRunning ? "Running" : "Not running")
             }
             LabeledContent("Automation") {
-                HStack(spacing: OrbitTokens.Spacing.s) {
+                HStack(spacing: SettingsLayout.spacing) {
                     Text(automationStatus)
                     switch account.automationPermission {
                     case .denied:
@@ -236,10 +236,10 @@ private struct ErrorRow: View {
     var dismiss: (() -> Void)?
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: OrbitTokens.Spacing.s) {
+        HStack(alignment: .firstTextBaseline, spacing: SettingsLayout.spacing) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(OrbitTokens.Palette.warning)
-            VStack(alignment: .leading, spacing: OrbitTokens.Spacing.xxs) {
+                .symbolRenderingMode(.multicolor)
+            VStack(alignment: .leading, spacing: SettingsLayout.tightSpacing) {
                 Text(error.message)
                 if let hint = error.recoveryHint {
                     Text(hint).font(.callout).foregroundStyle(.secondary)
@@ -271,9 +271,9 @@ private struct DeviceRow: View {
     let transfer: () -> Void
 
     var body: some View {
-        HStack(spacing: OrbitTokens.Spacing.s) {
+        HStack(spacing: SettingsLayout.spacing) {
             Image(systemName: device.kind.symbol)
-                .frame(width: OrbitTokens.Size.playlistArtwork)
+                .frame(width: SettingsLayout.rowIcon)
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 0) {
                 Text(device.name)
@@ -299,7 +299,7 @@ private struct PinnedRow: View {
     let unpin: () -> Void
 
     var body: some View {
-        HStack(spacing: OrbitTokens.Spacing.s) {
+        HStack(spacing: SettingsLayout.spacing) {
             Text(playlist.name).lineLimit(1)
             Spacer()
             Button { move(-1) } label: { Image(systemName: "chevron.up") }
