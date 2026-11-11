@@ -23,6 +23,10 @@ public final class PanelState {
 
     // Set by expand(to:). The UI navigates there and then calls clearRequestedDestination().
     public private(set) var requestedDestination: PanelDestination?
+    // Written by the UI: how many layers (picker, library, a playlist, devices) sit above the player.
+    public var openLayerCount = 0
+    // Bumped by dismissActiveLayer() when a layer is open; the UI steps back one layer each time it changes.
+    public private(set) var layerDismissals = 0
 
     public init() {}
 
@@ -37,5 +41,14 @@ public final class PanelState {
 
     public func collapse() {
         isExpanded = false
+    }
+
+    // What Escape should do: close the active expanded layer, and collapse only from the player itself.
+    public func dismissActiveLayer() {
+        if isExpanded, openLayerCount > 0 {
+            layerDismissals += 1
+        } else {
+            collapse()
+        }
     }
 }

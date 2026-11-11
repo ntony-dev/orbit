@@ -119,3 +119,18 @@ struct ThemeTests {
         #expect(theme.backingOpacity >= 0.6)
     }
 }
+
+@MainActor
+struct EscapeTests {
+    @Test func escapeClosesLayersBeforeCollapsing() {
+        let panel = PanelState()
+        panel.expand(to: .playlistPicker)
+        panel.openLayerCount = 1
+        panel.dismissActiveLayer()
+        #expect(panel.isExpanded)
+        #expect(panel.layerDismissals == 1)
+        panel.openLayerCount = 0
+        panel.dismissActiveLayer()
+        #expect(!panel.isExpanded)
+    }
+}

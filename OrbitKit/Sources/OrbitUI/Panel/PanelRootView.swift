@@ -64,6 +64,12 @@ public struct PanelRootView: View {
             withAnimation(theme.animation(OrbitTokens.Motion.navigate)) { navigator.reset(to: destination) }
             panel.clearRequestedDestination()
         }
+        .onChange(of: navigator.depth, initial: true) { _, depth in
+            panel.openLayerCount = depth
+        }
+        .onChange(of: panel.layerDismissals) {
+            withAnimation(theme.animation(OrbitTokens.Motion.navigate)) { _ = navigator.back() }
+        }
         .onChange(of: currentSurfaceSize) { _, size in
             fitCanvas(to: size)
         }
