@@ -19,6 +19,11 @@ public struct SpotifyURI: RawRepresentable, Hashable, Codable, Sendable, CustomS
         self.rawValue = "spotify:\(kind.rawValue):\(id)"
     }
 
+    // The user's Liked Songs as a playable context, in the shape Spotify itself reports in playback state.
+    public static func likedSongs(userID: String) -> SpotifyURI {
+        SpotifyURI(rawValue: "spotify:user:\(userID):collection")
+    }
+
     private var components: [Substring] {
         rawValue.split(separator: ":")
     }
