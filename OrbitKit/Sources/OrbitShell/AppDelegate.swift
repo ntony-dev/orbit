@@ -19,7 +19,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func launch() async {
-        let services = await CompositionRoot.services(usingMocks: options.usesMocks, preferences: preferences)
+        let services: Services
+        if let scenario = await CompositionRoot.scenarioServices(named: options.demoScenario) {
+            services = scenario
+        } else {
+            services = await CompositionRoot.services(usingMocks: options.usesMocks, preferences: preferences)
+        }
         let shell = Shell(isDemo: options.usesMocks, preferences: preferences, services: services)
         self.shell = shell
         shell.start(options: options)

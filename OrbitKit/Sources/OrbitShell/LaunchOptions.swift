@@ -9,12 +9,15 @@ import OrbitCore
 //   --appearance light|dark  force an appearance for this run without touching Preferences
 //   --settings [PANE]        open Settings behind all other windows, without activating Orbit; PANE is
 //                            appearance, behavior, spotify or shortcuts
+//   --ui-scenario NAME       Debug builds, with --demo: run the whole app against that OrbitMocks DemoScenario
+// OrbitUI reads its own Debug-only --ui-* arguments for screens and looks; this shell owns every store.
 struct LaunchOptions {
     var usesMocks = false
     var startsExpanded = false
     var anchorPoint: CGPoint?
     var appearance: AppearanceMode?
     var settingsPane: SettingsPane?
+    var demoScenario: String?
 
     init(arguments: [String]) {
         usesMocks = arguments.contains("--demo")
@@ -27,6 +30,9 @@ struct LaunchOptions {
         if arguments.contains("--settings") {
             settingsPane = Self.value(after: "--settings", in: arguments).flatMap(SettingsPane.init(rawValue:)) ?? .appearance
         }
+        #if DEBUG
+        if usesMocks { demoScenario = Self.value(after: "--ui-scenario", in: arguments) }
+        #endif
     }
 
     private static func value(after flag: String, in arguments: [String]) -> String? {

@@ -6,8 +6,9 @@ import SwiftUI
 // without writing to the user's Preferences:
 //   --ui-screen player|picker|library|liked|queue|search|devices|playlist:<id>
 //   --ui-hover                     show the pill's hover controls
-//   --ui-scenario <name>           with --demo only: signed-out, automation-denied, spotify-closed, idle,
-//                                  rate-limited, empty-library, switch-fails
+//   --ui-scenario <name>           with --demo only, read by the shell, which builds the scenario's stores:
+//                                  signed-out, automation-denied, spotify-closed, idle, rate-limited,
+//                                  empty-library, switch-fails
 //   --ui-glass clear|balanced|tinted, --ui-opacity 0...1, --ui-accent neutral|mint|ice|amber|lavender,
 //   --ui-pill compact|regular, --ui-no-artwork
 //   --ui-reduce-transparency, --ui-increase-contrast, --ui-reduce-motion
@@ -19,7 +20,6 @@ import SwiftUI
 struct UIDebugOptions {
     var screen: String?
     var forcesPillHover = false
-    var scenario: String?
     var glassPreset: GlassPreset?
     var backgroundOpacity: Double?
     var accent: AccentChoice?
@@ -48,7 +48,6 @@ struct UIDebugOptions {
         }
         screen = value("--ui-screen")
         forcesPillHover = arguments.contains("--ui-hover")
-        if arguments.contains("--demo") { scenario = value("--ui-scenario") }
         glassPreset = value("--ui-glass").flatMap(GlassPreset.init(rawValue:))
         backgroundOpacity = value("--ui-opacity").flatMap(Double.init)
         accent = value("--ui-accent").flatMap { name in

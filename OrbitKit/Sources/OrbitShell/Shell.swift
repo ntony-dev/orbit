@@ -18,7 +18,7 @@ final class Shell {
     init(isDemo: Bool, preferences: Preferences, services: Services) {
         self.isDemo = isDemo
         self.preferences = preferences
-        stores = OrbitStores(localPlayer: services.localPlayer, api: services.api, authorizer: services.authorizer)
+        stores = CompositionRoot.stores(for: services, usingMocks: isDemo, preferences: preferences)
         panel = PanelController(stores: stores, preferences: preferences)
         shortcuts = GlobalShortcuts(isDemo: isDemo)
         loginItem = LoginItem(isAvailable: !isDemo)

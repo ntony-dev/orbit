@@ -80,7 +80,7 @@ public struct PanelRootView: View {
             await loadArtworkTint()
         }
         .task {
-            await applyDebugScenario()
+            await openPendingDebugPlaylist()
             await runDebugTour()
             await runDebugSwitch()
         }
@@ -243,11 +243,8 @@ public struct PanelRootView: View {
         #endif
     }
 
-    private func applyDebugScenario() async {
+    private func openPendingDebugPlaylist() async {
         #if DEBUG
-        if let name = debug.scenario, let scenarioStores = await DebugScenarioStores.make(named: name) {
-            stores = scenarioStores
-        }
         if let id = pendingDebugPlaylistID {
             for _ in 0..<40 {
                 if let playlist = stores.library.playlists.value?.first(where: { $0.id == id }) {

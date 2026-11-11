@@ -46,3 +46,29 @@ enum CompositionRoot {
             .first { !$0.isEmpty && !$0.hasPrefix("$(") }
     }
 }
+
+extension CompositionRoot {
+    // Real sessions keep pins and recents on disk and honor the preferred device. Demo sessions get the throwaway
+    // demo Preferences and no shelf file, so fixtures never land in the user's library file.
+    static func stores(for services: Services, usingMocks: Bool, preferences: Preferences) -> OrbitStores {
+        OrbitStores(
+            localPlayer: services.localPlayer,
+            api: services.api,
+            authorizer: services.authorizer,
+            preferences: preferences,
+            shelfFile: usingMocks ? nil : LibraryShelfFile(url: LibraryShelfFile.defaultURL)
+        )
+    }
+
+    // `--demo --ui-scenario NAME` in Debug builds: the whole app, not only the panel, runs against that scenario,
+    // so the menu bar, Settings and visibility rules see the same state the UI shows.
+    static func scenarioServices(named name: String?) async -> Services? {
+        #if DEBUG
+        guard let scenario = name.flatMap(DemoScenario.init(rawValue:)) else { return nil }
+        let services = await scenario.services()
+        return Services(localPlayer: services.localPlayer, api: services.api, authorizer: services.authorizer)
+        #else
+        return nil
+        #endif
+    }
+}
