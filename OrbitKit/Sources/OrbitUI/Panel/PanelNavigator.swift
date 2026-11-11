@@ -28,8 +28,9 @@ final class PanelNavigator {
     var searchQuery = ""
     // Which way the last move went, so the incoming screen slides in from the side the user is heading toward.
     private(set) var isForward = true
-    // Bumped when search should take focus as soon as it appears (a "focus search" request from outside).
-    private(set) var searchFocusRequest = 0
+    // Set when the user (or a focus-search shortcut) asked to type a search. Taking focus makes the panel key, so
+    // search never focuses merely because it appeared.
+    var wantsSearchFocus = false
 
     var depth: Int {
         (section == .player ? 0 : 1) + (detail == nil ? 0 : 1)
@@ -78,7 +79,7 @@ final class PanelNavigator {
         case .search:
             libraryTab = .search
             section = .library
-            searchFocusRequest += 1
+            wantsSearchFocus = true
         }
     }
 

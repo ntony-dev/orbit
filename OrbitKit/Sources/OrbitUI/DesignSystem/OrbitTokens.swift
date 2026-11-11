@@ -97,6 +97,15 @@ enum OrbitTokens {
         static let hover = Animation.easeOut(duration: 0.14)
         static let press = Animation.easeOut(duration: 0.08)
         static let reduced = Animation.easeInOut(duration: 0.16)
+        // The pill fades out before the surface has grown much, and the expanded content fades in once there is
+        // room for it, so neither ever floats inside a surface of the wrong size.
+        static let pillFadeOut = Animation.easeOut(duration: 0.1)
+        static let pillFadeIn = Animation.easeOut(duration: 0.2).delay(0.1)
+        static let surfaceFadeIn = Animation.easeOut(duration: 0.24).delay(0.08)
+        static let surfaceFadeOut = Animation.easeIn(duration: 0.12)
+        static let screenFadeOut = Animation.easeOut(duration: 0.14)
+        // When a morph has visibly finished, so the canvas can shrink without clipping the spring's tail.
+        static let settle: Duration = .milliseconds(560)
         // Long enough to read "Now playing" on a switched row before the panel collapses on its own.
         static let confirmationHold: Duration = .milliseconds(700)
         static let searchDebounce: Duration = .milliseconds(320)

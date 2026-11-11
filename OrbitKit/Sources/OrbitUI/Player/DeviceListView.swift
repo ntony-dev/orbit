@@ -128,7 +128,8 @@ private struct DeviceRow: View {
             .frame(height: OrbitTokens.Size.rowHeight)
         }
         .rowButton(isSelected: isActive)
-        .disabled(device.isRestricted || isActive || isPending)
+        .disabled(device.isRestricted || isPending)
+        .allowsHitTesting(!isActive)
         .accessibilityLabel("\(device.name), \(statusText)")
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }

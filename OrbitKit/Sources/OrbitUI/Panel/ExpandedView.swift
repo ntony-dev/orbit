@@ -51,13 +51,14 @@ struct ExpandedView: View {
         let detail: PanelDetail?
     }
 
+    // The outgoing screen clears out faster than the incoming one arrives, so the two never read as a double
+    // exposure in the middle of the move.
     private var screenTransition: AnyTransition {
-        guard !theme.reducesMotion else { return .opacity }
+        let fadeOut = AnyTransition.opacity.animation(theme.animation(OrbitTokens.Motion.screenFadeOut))
+        guard !theme.reducesMotion else { return .asymmetric(insertion: .opacity, removal: fadeOut) }
         let offset = OrbitTokens.Motion.navigationOffset
-        let leading = AnyTransition.offset(x: -offset).combined(with: .opacity)
-        let trailing = AnyTransition.offset(x: offset).combined(with: .opacity)
-        return navigator.isForward
-            ? .asymmetric(insertion: trailing, removal: leading)
-            : .asymmetric(insertion: leading, removal: trailing)
+        let incoming = AnyTransition.offset(x: navigator.isForward ? offset : -offset).combined(with: .opacity)
+        let outgoing = AnyTransition.offset(x: navigator.isForward ? -offset : offset).combined(with: fadeOut)
+        return .asymmetric(insertion: incoming, removal: outgoing)
     }
 }

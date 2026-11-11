@@ -13,6 +13,8 @@ struct OrbitTheme {
     var contrast: ColorSchemeContrast
     // Muted average color of the current artwork; only the Tinted preset uses it.
     var artworkTint: Color?
+    // Below 1 only for the debug slow-motion argument, so morph frames can be captured mid-flight.
+    var animationSpeed: Double = 1
 
     static let standard = OrbitTheme(
         accent: OrbitPalette.accent(.neutral),
@@ -28,7 +30,7 @@ struct OrbitTheme {
     var isHighContrast: Bool { contrast == .increased }
 
     func animation(_ animation: Animation) -> Animation {
-        reducesMotion ? OrbitTokens.Motion.reduced : animation
+        (reducesMotion ? OrbitTokens.Motion.reduced : animation).speed(animationSpeed)
     }
 
     // Native glass has only the regular and clear variants. Presets choose one, and Tinted adds a native tint;
@@ -37,7 +39,7 @@ struct OrbitTheme {
         switch glassPreset {
         case .clear: .clear
         case .balanced: .regular
-        case .tinted: .regular.tint((artworkTint ?? OrbitPalette.backing).opacity(0.42))
+        case .tinted: .regular.tint((artworkTint ?? OrbitPalette.backing).opacity(0.62))
         }
     }
 
@@ -48,7 +50,7 @@ struct OrbitTheme {
         let ceiling: Double = switch glassPreset {
         case .clear: 0.62
         case .balanced: 0.58
-        case .tinted: 0.42
+        case .tinted: 0.34
         }
         let value = min(1, max(0, backgroundOpacity)) * ceiling
         return isHighContrast ? max(value, 0.6) : value

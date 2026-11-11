@@ -21,7 +21,14 @@ struct LibraryView: View {
                             Segment(value: LibraryTab.queue, title: "Queue", symbol: "list.bullet"),
                             Segment(value: LibraryTab.search, title: "Search", symbol: "magnifyingglass"),
                         ],
-                        selection: $navigator.libraryTab
+                        selection: Binding(
+                            get: { navigator.libraryTab },
+                            set: { tab in
+                                // Choosing Search by hand means the user is about to type.
+                                navigator.wantsSearchFocus = tab == .search
+                                navigator.libraryTab = tab
+                            }
+                        )
                     )
                     .padding(.horizontal, OrbitTokens.Spacing.xl)
                     .padding(.top, OrbitTokens.Spacing.m)
@@ -250,7 +257,7 @@ private struct SearchTab: View {
     var body: some View {
         @Bindable var navigator = navigator
         VStack(spacing: 0) {
-            SearchField(prompt: "Search songs, albums, playlists", text: $navigator.searchQuery, focusOnAppear: true) {
+            SearchField(prompt: "Search songs, albums, playlists", text: $navigator.searchQuery, focusOnAppear: navigator.wantsSearchFocus) {
                 withAnimation(theme.animation(OrbitTokens.Motion.navigate)) { _ = navigator.back() }
             }
             .padding(.horizontal, OrbitTokens.Spacing.xl)
@@ -260,6 +267,7 @@ private struct SearchTab: View {
         .onChange(of: library.searchResults.value, initial: true) { _, value in
             if let value { retained = value }
         }
+        .onAppear { navigator.wantsSearchFocus = false }
         .task(id: navigator.searchQuery) {
             let query = navigator.searchQuery
             guard query != library.searchQuery || library.searchResults.value == nil else { return }

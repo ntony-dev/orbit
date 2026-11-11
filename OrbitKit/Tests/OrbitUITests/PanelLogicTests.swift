@@ -66,7 +66,7 @@ struct PanelNavigatorTests {
         #expect(navigator.section == .picker && navigator.detail == nil)
         navigator.reset(to: .search)
         #expect(navigator.section == .library && navigator.libraryTab == .search)
-        #expect(navigator.searchFocusRequest == 1)
+        #expect(navigator.wantsSearchFocus)
     }
 
     @Test func everyScreenFitsTheCanvasWidth() {

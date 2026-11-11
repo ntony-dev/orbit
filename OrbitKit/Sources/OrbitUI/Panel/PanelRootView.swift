@@ -51,6 +51,9 @@ public struct PanelRootView: View {
         .animation(theme.animation(OrbitTokens.Motion.morph), value: expandedSize)
         .padding(OrbitTokens.Size.canvasMargin)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: Alignment(panel.anchor))
+        .background {
+            if debug.showsBackdrop { DebugBackdrop() }
+        }
         .modifier(PanelEnvironment(
             stores: stores, panel: panel, host: host, preferences: preferences,
             navigator: navigator, switcher: switcher, theme: theme
@@ -78,6 +81,8 @@ public struct PanelRootView: View {
         }
         .task {
             await applyDebugScenario()
+            await runDebugTour()
+            await runDebugSwitch()
         }
     }
 
@@ -90,7 +95,8 @@ public struct PanelRootView: View {
             reducesMotion: preferences.reducesAnimation || systemReducesMotion || debug.reducesMotion,
             reducesTransparency: systemReducesTransparency || debug.reducesTransparency,
             contrast: debug.increasesContrast ? .increased : systemContrast,
-            artworkTint: artworkTint
+            artworkTint: artworkTint,
+            animationSpeed: debug.animationSpeed
         )
     }
 
@@ -114,8 +120,8 @@ public struct PanelRootView: View {
     // The pill fades out quickly so it never floats inside a growing card; the expanded content scales up from
     // the anchored corner as the surface reveals it. Reduced motion keeps only the fades.
     private func expandedTransition(_ theme: OrbitTheme) -> AnyTransition {
-        let fadeIn = AnyTransition.opacity.animation(.easeOut(duration: 0.24).delay(0.08))
-        let fadeOut = AnyTransition.opacity.animation(.easeIn(duration: 0.12))
+        let fadeIn = AnyTransition.opacity.animation(theme.animation(OrbitTokens.Motion.surfaceFadeIn))
+        let fadeOut = AnyTransition.opacity.animation(theme.animation(OrbitTokens.Motion.surfaceFadeOut))
         guard !theme.reducesMotion else { return .asymmetric(insertion: fadeIn, removal: fadeOut) }
         return .asymmetric(
             insertion: fadeIn.combined(with: .scale(scale: 0.94, anchor: UnitPoint(panel.anchor))),
@@ -125,8 +131,8 @@ public struct PanelRootView: View {
 
     private func pillTransition(_ theme: OrbitTheme) -> AnyTransition {
         .asymmetric(
-            insertion: .opacity.animation(.easeOut(duration: 0.2).delay(theme.reducesMotion ? 0 : 0.18)),
-            removal: .opacity.animation(.easeOut(duration: 0.1))
+            insertion: .opacity.animation(theme.animation(OrbitTokens.Motion.pillFadeIn)),
+            removal: .opacity.animation(theme.animation(OrbitTokens.Motion.pillFadeOut))
         )
     }
 
@@ -167,7 +173,7 @@ public struct PanelRootView: View {
             host.setCanvasSize(during)
         }
         Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(560))
+            try? await Task.sleep(for: OrbitTokens.Motion.settle / resolvedTheme.animationSpeed)
             guard generation == resizeGeneration, let after = CanvasPlan.after(current: allocatedCanvas, target: surface) else { return }
             allocatedCanvas = after
             host.setCanvasSize(after)
@@ -211,6 +217,31 @@ public struct PanelRootView: View {
     }
 
     @State private var pendingDebugPlaylistID: String?
+
+    private func runDebugSwitch() async {
+        #if DEBUG
+        guard let id = debug.switchPlaylistID else { return }
+        try? await Task.sleep(for: .seconds(2))
+        guard let playlist = stores.library.playlists.value?.first(where: { $0.id == id }) else { return }
+        await switcher.play(playlist, with: stores.playback, thenCollapse: nil)
+        #endif
+    }
+
+    // Expands, walks the sections and collapses on a timer, so transitions can be captured with no input.
+    private func runDebugTour() async {
+        #if DEBUG
+        guard debug.runsTour else { return }
+        let step = Duration.seconds(2.5)
+        try? await Task.sleep(for: step)
+        expandFromPill()
+        for section in [PanelSection.picker, .library, .player] {
+            try? await Task.sleep(for: step)
+            withAnimation(resolvedTheme.animation(OrbitTokens.Motion.navigate)) { navigator.show(section) }
+        }
+        try? await Task.sleep(for: step)
+        panel.collapse()
+        #endif
+    }
 
     private func applyDebugScenario() async {
         #if DEBUG

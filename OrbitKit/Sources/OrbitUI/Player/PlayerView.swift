@@ -81,6 +81,13 @@ struct PlayerView: View {
                 message: "Open it in the background to start listening.",
                 actions: [StateAction(title: "Open Spotify", symbol: "play.fill") { SpotifyApp.launchInBackground() }]
             )
+        case .automationDenied:
+            StatusMessage(
+                symbol: "lock.shield",
+                title: "Orbit can't control Spotify",
+                message: "Allow Orbit in System Settings › Privacy & Security › Automation, then come back.",
+                actions: [StateAction(title: "Open Settings") { SpotifyApp.openAutomationSettings() }]
+            )
         case .idle(let canBrowse):
             StatusMessage(
                 symbol: "music.note",
@@ -103,6 +110,7 @@ struct PlayerAvailability {
     enum Blocking: Equatable {
         case spotifyNotInstalled
         case spotifyClosed
+        case automationDenied
         case idle(canBrowse: Bool)
     }
 
@@ -113,6 +121,7 @@ struct PlayerAvailability {
         guard snapshot.track == nil else { return nil }
         if !account.isSpotifyInstalled { return .spotifyNotInstalled }
         if !account.isSpotifyRunning { return .spotifyClosed }
+        if account.automationPermission == .denied { return .automationDenied }
         return .idle(canBrowse: account.authState.isSignedIn)
     }
 }
