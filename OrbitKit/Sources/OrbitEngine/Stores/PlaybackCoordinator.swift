@@ -159,6 +159,9 @@ public final class PlaybackCoordinator {
             remote = nil
             savedState = nil
             isCurrentTrackSaved = nil
+            syncError = nil
+            webAPIPausedUntil = nil
+            webPauseReason = nil
         }
         recompute()
         scheduleSync(after: available ? .zero : nil)
@@ -317,6 +320,7 @@ public final class PlaybackCoordinator {
                 try await api.saveToLibrary([uri])
             }
             savedState = (uri, !saved)
+            noteWebSuccess()
         } catch {
             noteWebFailure(error)
             if snapshot.track?.uri == uri { isCurrentTrackSaved = saved }
@@ -528,6 +532,7 @@ extension PlaybackCoordinator {
         switch result {
         case .success(let incoming):
             syncError = nil
+            noteWebSuccess()
             // A command finished while this read was in flight, so it may describe the state before that command.
             guard epoch == commandEpoch else { return }
             contextSequence += 1
@@ -560,6 +565,7 @@ extension PlaybackCoordinator {
         do {
             let saved = try await api.libraryContains([uri]).contains(uri)
             savedState = (uri, saved)
+            noteWebSuccess()
             if snapshot.track?.uri == uri { isCurrentTrackSaved = saved }
         } catch {
             noteWebFailure(error)
@@ -574,11 +580,18 @@ extension PlaybackCoordinator {
             webPauseReason = error
             syncError = error
             scheduleSync(after: nil)
-        case .notSignedIn, .authExpired:
-            webSignedIn = false
         default:
+            // Auth failures are left to the account store: the client signs out itself once the session is truly
+            // gone, while a single rejected request must not stop syncing for the rest of the session.
             break
         }
+    }
+
+    // Spotify answering again ends any rate-limit or quota pause.
+    private func noteWebSuccess() {
+        guard webAPIPausedUntil != nil else { return }
+        webAPIPausedUntil = nil
+        webPauseReason = nil
     }
 
     private func noteLocalFailure(_ error: OrbitError) {
@@ -817,6 +830,7 @@ extension PlaybackCoordinator {
                     try await Self.typed { [localPlayer] in try await local?(localPlayer) }
                 case .webAPI:
                     try await sendWeb(web)
+                    noteWebSuccess()
                 }
                 return .success(route)
             } catch {

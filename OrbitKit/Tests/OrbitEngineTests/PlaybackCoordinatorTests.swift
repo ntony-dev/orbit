@@ -203,6 +203,32 @@ struct PlaybackCoordinatorTests {
         await coordinator.refresh()
         #expect(await rig.webRequests("playbackState") > before + 1)
         #expect(coordinator.syncError == nil)
+        #expect(coordinator.webAPIPausedUntil == nil)
+    }
+
+    @Test func signingOutClearsWebSyncFailures() async {
+        await coordinator.refresh()
+        await rig.spotify.failWebAPI(with: .rateLimited(retryAfter: 30))
+        await coordinator.refresh()
+        #expect(coordinator.syncError != nil)
+        coordinator.setWebAPIAvailable(false)
+        #expect(coordinator.syncError == nil)
+        #expect(coordinator.webAPIPausedUntil == nil)
+    }
+
+    // A 401 that survives the client's refresh, or a missing scope, fails one request; only the account store
+    // decides that the session is gone, so the next sync must still go out.
+    @Test func anAuthErrorFromOneRequestDoesNotDisableTheWebAPI() async {
+        await rig.spotify.simulateRemotePlayback(on: "dev-kitchen")
+        await coordinator.refresh()
+        await rig.spotify.failWebAPI(with: .authExpired)
+        await coordinator.refresh()
+        await rig.spotify.failWebAPI(with: nil)
+        let before = await rig.webRequests("playbackState")
+        await coordinator.refresh()
+        #expect(await rig.webRequests("playbackState") == before + 1)
+        #expect(coordinator.authority == .webAPI)
+        #expect(coordinator.snapshot.device?.id == "dev-kitchen")
     }
 
     @Test func quotaExhaustionWithoutRetryAfterUsesTheDefaultBackoff() async {
