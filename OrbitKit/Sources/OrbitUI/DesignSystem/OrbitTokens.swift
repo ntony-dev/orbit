@@ -1,106 +1,108 @@
 import OrbitCore
 import SwiftUI
 
-// First-pass tokens. Every color, size, radius, font and timing in OrbitUI comes from here.
-public enum OrbitTokens {
-    public enum Spacing {
-        public static let xxs: CGFloat = 2
-        public static let xs: CGFloat = 4
-        public static let s: CGFloat = 8
-        public static let m: CGFloat = 12
-        public static let l: CGFloat = 16
-        public static let xl: CGFloat = 24
+// Every size, radius, font and timing in OrbitUI comes from here; colors live in OrbitPalette.
+enum OrbitTokens {
+    enum Spacing {
+        static let xxs: CGFloat = 2
+        static let xs: CGFloat = 4
+        static let s: CGFloat = 6
+        static let m: CGFloat = 8
+        static let l: CGFloat = 12
+        static let xl: CGFloat = 16
+        static let xxl: CGFloat = 20
     }
 
-    public enum Radius {
-        public static let artwork: CGFloat = 8
-        public static let row: CGFloat = 10
-        public static let card: CGFloat = 26
+    enum Radius {
+        // Large enough that a pill-height surface clamps to a capsule, so the pill and the expanded card share one
+        // shape and the morph only animates the frame.
+        static let surface: CGFloat = 26
+        static let artworkLarge: CGFloat = 12
+        static let artwork: CGFloat = 7
+        static let artworkSmall: CGFloat = 5
+        static let row: CGFloat = 10
+        static let control: CGFloat = 9
+        static let field: CGFloat = 10
+        static let segment: CGFloat = 9
+        static let callout: CGFloat = 14
     }
 
-    public enum Size {
-        // Room around the glass so its shadow is not clipped by the canvas edge.
-        public static let canvasMargin: CGFloat = 18
-        public static let expandedCard = CGSize(width: 340, height: 430)
-        public static let pillArtwork: CGFloat = 26
-        public static let nowPlayingArtwork: CGFloat = 54
-        public static let playlistArtwork: CGFloat = 32
-        public static let controlIcon: CGFloat = 15
-        public static let primaryControlIcon: CGFloat = 20
+    enum Size {
+        // Room around the surface so the glass shadow is not clipped by the canvas edge.
+        static let canvasMargin: CGFloat = 20
+        static let expandedWidth: CGFloat = 344
 
-        public static func pill(_ size: PillSize) -> CGSize {
+        static let pillArtworkCompact: CGFloat = 26
+        static let pillArtworkRegular: CGFloat = 34
+        static let nowPlayingArtwork: CGFloat = 76
+        static let stripArtwork: CGFloat = 30
+        static let rowArtwork: CGFloat = 34
+        static let detailArtwork: CGFloat = 64
+
+        static let iconButton: CGFloat = 28
+        static let transportButton: CGFloat = 36
+        static let primaryTransportButton: CGFloat = 46
+        static let rowHeight: CGFloat = 46
+        static let trackRowHeight: CGFloat = 40
+        static let segmentHeight: CGFloat = 30
+        static let fieldHeight: CGFloat = 30
+        static let sliderTrack: CGFloat = 4
+        static let sliderTrackActive: CGFloat = 6
+        static let sliderHitHeight: CGFloat = 18
+        static let sliderKnob: CGFloat = 12
+
+        static func pill(_ size: PillSize) -> CGSize {
             switch size {
-            case .compact: CGSize(width: 210, height: 40)
-            case .regular: CGSize(width: 250, height: 48)
+            case .compact: CGSize(width: 212, height: 40)
+            case .regular: CGSize(width: 272, height: 52)
             }
         }
 
-        public static func canvas(for surface: CGSize) -> CGSize {
+        static func pillArtwork(_ size: PillSize) -> CGFloat {
+            size == .compact ? pillArtworkCompact : pillArtworkRegular
+        }
+
+        static func canvas(for surface: CGSize) -> CGSize {
             CGSize(width: surface.width + canvasMargin * 2, height: surface.height + canvasMargin * 2)
         }
     }
 
-    public enum Typography {
-        public static let pillTitle = Font.system(size: 13, weight: .semibold)
-        public static let trackTitle = Font.system(size: 15, weight: .semibold)
-        public static let secondary = Font.system(size: 12, weight: .regular)
-        public static let sectionHeading = Font.system(size: 11, weight: .semibold)
-        public static let rowTitle = Font.system(size: 13, weight: .medium)
-        public static let caption = Font.system(size: 11, weight: .regular).monospacedDigit()
+    enum Icon {
+        static let small: CGFloat = 11
+        static let regular: CGFloat = 13
+        static let transport: CGFloat = 16
+        static let primaryTransport: CGFloat = 22
     }
 
-    public enum Motion {
-        public static let morph = Animation.spring(response: 0.42, dampingFraction: 0.86)
-        public static let reducedMorph = Animation.easeInOut(duration: 0.18)
-        public static let press = Animation.easeOut(duration: 0.12)
-        public static let dragThreshold = PanelGeometry.dragThreshold
-        public static let progressTick: TimeInterval = 0.5
-
-        public static func morph(reduced: Bool) -> Animation {
-            reduced ? reducedMorph : morph
-        }
+    enum Typography {
+        static let title = Font.system(size: 15, weight: .semibold)
+        static let headline = Font.system(size: 13, weight: .semibold)
+        static let body = Font.system(size: 13)
+        static let rowTitle = Font.system(size: 13, weight: .medium)
+        static let subheadline = Font.system(size: 12)
+        static let caption = Font.system(size: 11)
+        static let captionEmphasized = Font.system(size: 11, weight: .semibold)
+        static let sectionHeading = Font.system(size: 11, weight: .semibold)
+        static let timecode = Font.system(size: 10.5, weight: .medium).monospacedDigit()
+        static let pillTitleCompact = Font.system(size: 12, weight: .semibold)
+        static let pillTitleRegular = Font.system(size: 13, weight: .semibold)
+        static let pillSubtitle = Font.system(size: 11)
+        static let segment = Font.system(size: 12, weight: .medium)
     }
 
-    public enum Palette {
-        public static let primaryText = Color.primary
-        public static let secondaryText = Color.secondary
-        public static let separator = Color.primary.opacity(0.12)
-        public static let rowHover = Color.primary.opacity(0.08)
-        public static let track = Color.primary.opacity(0.16)
-        public static let warning = Color(red: 0.95, green: 0.71, blue: 0.42)
-
-        public static func accent(_ choice: AccentChoice) -> Color {
-            switch choice {
-            case .neutral: Color(hex: 0xCBD1D7)
-            case .mint: Color(hex: 0x80D5B1)
-            case .ice: Color(hex: 0x91B7F0)
-            case .amber: Color(hex: 0xE3BD83)
-            case .lavender: Color(hex: 0xB6A0EF)
-            case .custom(let rgb): Color(.sRGB, red: rgb.red, green: rgb.green, blue: rgb.blue)
-            }
-        }
-    }
-
-    public enum Material {
-        // Native glass offers only regular and clear; presets layer Orbit's own tint on top of those.
-        public static func glass(_ preset: GlassPreset, accent: Color) -> Glass {
-            switch preset {
-            case .clear: .clear
-            case .balanced: .regular
-            case .tinted: .regular.tint(accent.opacity(0.35))
-            }
-        }
-    }
-}
-
-extension Color {
-    init(hex: UInt32) {
-        self.init(
-            .sRGB,
-            red: Double((hex >> 16) & 0xFF) / 255,
-            green: Double((hex >> 8) & 0xFF) / 255,
-            blue: Double(hex & 0xFF) / 255
-        )
+    enum Motion {
+        static let morph = Animation.spring(duration: 0.44, bounce: 0.16)
+        static let navigate = Animation.smooth(duration: 0.32)
+        static let content = Animation.smooth(duration: 0.36)
+        static let hover = Animation.easeOut(duration: 0.14)
+        static let press = Animation.easeOut(duration: 0.08)
+        static let reduced = Animation.easeInOut(duration: 0.16)
+        // Long enough to read "Now playing" on a switched row before the panel collapses on its own.
+        static let confirmationHold: Duration = .milliseconds(700)
+        static let searchDebounce: Duration = .milliseconds(320)
+        static let volumeThrottle: Duration = .milliseconds(120)
+        static let progressInterval: TimeInterval = 0.5
+        static let navigationOffset: CGFloat = 18
     }
 }
 
@@ -114,5 +116,16 @@ extension Alignment {
         case (.bottom, .center): self = .bottom
         case (.bottom, .trailing): self = .bottomTrailing
         }
+    }
+}
+
+extension UnitPoint {
+    init(_ anchor: PanelAnchor) {
+        let x: CGFloat = switch anchor.horizontal {
+        case .leading: 0
+        case .center: 0.5
+        case .trailing: 1
+        }
+        self.init(x: x, y: anchor.vertical == .top ? 0 : 1)
     }
 }
