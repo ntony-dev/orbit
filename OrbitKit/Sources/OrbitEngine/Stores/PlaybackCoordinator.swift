@@ -619,7 +619,7 @@ extension PlaybackCoordinator {
         case .webAPI:
             guard var result = remoteSnapshot else { return .idle }
             if let context = result.context {
-                result.context = named(context, preferKnown: false)
+                result.context = named(context)
             }
             return result
         case .local:
@@ -634,7 +634,7 @@ extension PlaybackCoordinator {
             }
             // A track change seen locally before the next Web API read keeps the context it was playing in.
             let sameDevice = remoteSnapshot.flatMap { isLocalDevice($0.device) ? $0 : nil }
-            var context = (paired ?? sameDevice)?.context.map { named($0, preferKnown: true) }
+            var context = (paired ?? sameDevice)?.context.map { named($0) }
             if let known = knownContext, known.sequence > (remote?.sequence ?? -1) || context == nil {
                 context = known.context
             }
@@ -664,7 +664,7 @@ extension PlaybackCoordinator {
 
     static let localDevicePlaceholderID = "orbit.local-device"
 
-    private func named(_ context: PlaybackContext, preferKnown: Bool) -> PlaybackContext {
+    private func named(_ context: PlaybackContext) -> PlaybackContext {
         guard context.name == nil else { return context }
         var named = context
         named.name = (knownContext?.context.uri == context.uri ? knownContext?.context.name : nil) ?? contextName?(context.uri)
@@ -729,6 +729,7 @@ extension PlaybackCoordinator {
         overlayExpiry = Task { [weak self, clock] in
             do { try await clock.sleep(.seconds(delay)) } catch { return }
             guard let self else { return }
+            self.overlayExpiry = nil
             self.recompute()
             // A notification that was stale on arrival may be the last thing observed; read back the truth.
             if self.authority == .local { await self.readLocalState() }
