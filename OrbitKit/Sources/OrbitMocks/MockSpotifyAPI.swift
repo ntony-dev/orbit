@@ -15,7 +15,7 @@ public struct MockSpotifyAPI: SpotifyAPI {
 
     public func playlists(_ page: PageRequest) async throws(OrbitError) -> Page<Playlist> {
         try await spotify.webRequest("playlists")
-        return MockSpotify.page(await spotify.libraryPlaylists(), page)
+        return await spotify.playlistsPage(page)
     }
 
     public func playlistItems(playlistID: String, page: PageRequest) async throws(OrbitError) -> Page<Track> {

@@ -24,6 +24,19 @@ struct LibraryStoreTests {
         #expect(library.playlists.value?.count == 12)
     }
 
+    // The real client drops null and local entries and reports where the next page starts.
+    @Test func pagesFollowTheReportedNextOffset() async {
+        let dropped = [MockFixtures.playlists[1].id, MockFixtures.playlists[6].id]
+        let droppedTrack = MockFixtures.savedTrackIDs[2]
+        await rig.spotify.pageLikeTheWebAPI(size: 5, dropping: Set(dropped + [droppedTrack]))
+        await library.loadPlaylists()
+        await library.loadSavedTracks()
+        let expected = MockFixtures.playlists.map(\.id).filter { !dropped.contains($0) }
+        #expect(library.playlists.value?.map(\.id) == expected)
+        #expect(library.savedTracks.value?.map(\.id) == MockFixtures.savedTrackIDs.filter { $0 != droppedTrack })
+        #expect(await rig.webRequests("playlists") == 3)
+    }
+
     @Test func reopeningWithinTheCacheLifetimeMakesNoRequest() async {
         await library.loadPlaylists()
         await library.loadPlaylists()

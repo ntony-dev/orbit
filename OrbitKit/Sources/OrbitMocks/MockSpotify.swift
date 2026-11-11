@@ -36,6 +36,8 @@ public actor MockSpotify {
     private var localFailure: OrbitError?
     private var ignoresPlayCommands = false
     var rejectsLikedSongsContext = false
+    private var pageSizeLimit: Int?
+    private var droppedFromPages: Set<String> = []
     // Every Web API request and AppleScript command, in order, so tests can assert routing and request counts.
     public private(set) var webRequests: [String] = []
     public private(set) var localCommands: [String] = []
@@ -130,6 +132,17 @@ public actor MockSpotify {
     // Play commands are accepted but nothing starts, as when Spotify silently refuses a context.
     public func ignorePlayCommands(_ ignores: Bool) {
         ignoresPlayCommands = ignores
+    }
+
+    // Pages like the real client: at most `size` raw entries each, with the given playlist or track IDs dropped
+    // as Spotify's null and local entries are, so a page's next offset differs from its item count.
+    public func pageLikeTheWebAPI(size: Int, dropping ids: Set<String>) {
+        pageSizeLimit = size
+        droppedFromPages = ids
+    }
+
+    func playlistsPage(_ request: PageRequest) -> Page<Playlist> {
+        libraryPage(playlists, id: \.id, request)
     }
 
     // Spotify answers 400 to Liked Songs as a context, and the Web client plays the saved tracks as a list instead,
@@ -411,7 +424,21 @@ public actor MockSpotify {
     }
 
     func savedTracksPage(_ request: PageRequest) -> Page<Track> {
-        Self.page(savedTracks, request)
+        libraryPage(savedTracks, id: \.id, request)
+    }
+
+    private func libraryPage<Item>(_ items: [Item], id: (Item) -> String, _ request: PageRequest) -> Page<Item> {
+        var request = request
+        if let pageSizeLimit { request.limit = min(request.limit, pageSizeLimit) }
+        let raw = Self.page(items, request)
+        let kept = raw.items.filter { !droppedFromPages.contains(id($0)) }
+        return Page(
+            items: kept,
+            offset: raw.offset,
+            total: raw.total,
+            hasMore: raw.hasMore,
+            nextOffset: kept.count == raw.items.count ? nil : raw.offset + raw.items.count
+        )
     }
 
     private func start(_ track: Track) {
