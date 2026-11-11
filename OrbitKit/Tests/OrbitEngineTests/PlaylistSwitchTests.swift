@@ -146,3 +146,28 @@ struct PlaylistSwitchTests {
         #expect(playback.snapshot.context?.uri == target.uri)
     }
 }
+
+// Real time and simulated latency, as `--demo` runs, to catch anything the manual clock hides.
+@MainActor
+struct DemoSmokeTests {
+    @Test func switchesAndSkipsWithRealTimeAndLatency() async throws {
+        let spotify = MockSpotify(latency: .milliseconds(30))
+        let services = MockServices(spotify: spotify, authorizer: MockAuthorizer(latency: .zero))
+        let stores = OrbitStores(localPlayer: services.localPlayer, api: services.api, authorizer: services.authorizer)
+        stores.start()
+        stores.setInterfaceVisibility(.expanded)
+        try #require(await eventually { stores.playback.snapshot.context?.name == "Night Drive" })
+
+        let target = MockFixtures.playlist("pl-late-jazz")
+        #expect(await stores.playback.play(playlist: target))
+        #expect(stores.playback.snapshot.context?.name == target.name)
+        let tracks = MockFixtures.playlistTracks[target.id] ?? []
+        #expect(stores.playback.snapshot.track.map(tracks.contains) == true)
+
+        let before = stores.playback.snapshot.track
+        await stores.playback.next()
+        #expect(stores.playback.snapshot.track != before)
+        #expect(stores.playback.lastError == nil)
+        stores.playback.stop()
+    }
+}
