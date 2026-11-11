@@ -28,6 +28,7 @@ enum SettingsPane: String, CaseIterable, Sendable {
 final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private let tabs = NSTabViewController()
     private unowned let shell: Shell
+    private var previousApp: NSRunningApplication?
 
     init(shell: Shell) {
         self.shell = shell
@@ -58,6 +59,20 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
     func select(_ pane: SettingsPane) {
         tabs.selectedTabViewItemIndex = SettingsPane.allCases.firstIndex(of: pane) ?? 0
+    }
+
+    // Settings is the only reason Orbit is ever the active app. Once it closes, Orbit has no window to type into,
+    // so activation goes back to the app the user came from instead of leaving keystrokes with nowhere to go.
+    func returnsActivation(to app: NSRunningApplication?) {
+        guard let app, app != NSRunningApplication.current else { return }
+        previousApp = app
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        guard let previousApp, NSApp.isActive else { return }
+        NSApp.yieldActivation(to: previousApp)
+        previousApp.activate()
+        self.previousApp = nil
     }
 
     // Login item approval and Automation consent change in System Settings, so re-read them on every return.

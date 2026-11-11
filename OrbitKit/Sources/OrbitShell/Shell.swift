@@ -53,6 +53,7 @@ final class Shell {
         if inBackground {
             controller.window?.orderBack(nil)
         } else {
+            controller.returnsActivation(to: NSWorkspace.shared.frontmostApplication)
             NSApp.activate()
             controller.showWindow(nil)
         }
