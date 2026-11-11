@@ -1,5 +1,12 @@
 import Observation
 
+// Where an expansion requested from outside the panel (menu bar, global shortcut) should land.
+public enum PanelDestination: Hashable, Sendable {
+    case player
+    case playlistPicker
+    case search
+}
+
 // Shared between OrbitUI and OrbitShell. Each property has one writer, noted beside it.
 @MainActor
 @Observable
@@ -14,10 +21,18 @@ public final class PanelState {
     // Written by the shell: true while the panel is the key window and can receive typing.
     public var isKeyWindow = false
 
+    // Set by expand(to:). The UI navigates there and then calls clearRequestedDestination().
+    public private(set) var requestedDestination: PanelDestination?
+
     public init() {}
 
-    public func expand() {
+    public func expand(to destination: PanelDestination = .player) {
+        requestedDestination = destination
         isExpanded = true
+    }
+
+    public func clearRequestedDestination() {
+        requestedDestination = nil
     }
 
     public func collapse() {

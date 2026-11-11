@@ -30,7 +30,7 @@ public struct PanelRootView: View {
                     .glassEffect(glass, in: .rect(cornerRadius: OrbitTokens.Radius.card))
                     .glassEffectID(GlassID.surface, in: glassNamespace)
             } else {
-                PillView(playback: stores.playback, preferences: preferences, onExpand: panel.expand)
+                PillView(playback: stores.playback, preferences: preferences, onExpand: { panel.expand() })
                     .panelDragGesture(host)
                     .glassEffect(glass.interactive(), in: .capsule)
                     .glassEffectID(GlassID.surface, in: glassNamespace)
