@@ -2,11 +2,32 @@ import Foundation
 import Observation
 import OrbitCore
 
-// Pinned and recent playlists live here, not in Preferences. This first pass keeps them in memory only.
+public enum PreferredDeviceStatus: Hashable, Sendable {
+    case notSet
+    // The device list has not been loaded yet, so the saved device is neither confirmed nor ruled out.
+    case unverified(DeviceReference)
+    case available(PlaybackDevice)
+    // Saved in settings but absent from Spotify's device list: asleep, signed out or gone for good.
+    case missing(DeviceReference)
+}
+
+// Library data from the Web API, cached briefly so reopening the picker is instant and several views asking for
+// the same thing share one request. Values stay visible while they refresh, and every load ends loaded or failed.
 @MainActor
 @Observable
 public final class LibraryStore {
     public static let recentLimit = 8
+
+    public struct Timing: Sendable {
+        public var playlistsLifetime: TimeInterval = 300
+        public var itemsLifetime: TimeInterval = 300
+        public var queueLifetime: TimeInterval = 10
+        public var devicesLifetime: TimeInterval = 15
+        public var searchLifetime: TimeInterval = 120
+        public var searchDebounce: Duration = .milliseconds(300)
+
+        public init() {}
+    }
 
     public private(set) var playlists: LoadState<[Playlist]> = .idle
     public private(set) var pinnedPlaylists: [Playlist] = []
@@ -18,49 +39,152 @@ public final class LibraryStore {
     public private(set) var searchResults: LoadState<SearchResults> = .idle
     public private(set) var queue: LoadState<PlaybackQueue> = .idle
     public private(set) var devices: LoadState<[PlaybackDevice]> = .idle
+    // Liked Songs as a playable, pinnable playlist; nil until the signed-in user is known.
+    public private(set) var likedSongs: Playlist?
+    // Pinned or recent playlists that the last full load no longer contained, e.g. deleted or unfollowed.
+    public private(set) var missingPlaylistIDs: Set<Playlist.ID> = []
+    // Failure of an action such as adding to the queue, kept apart from the load states it does not invalidate.
+    public private(set) var lastError: OrbitError?
+
+    @ObservationIgnored var preferredDevice: () -> DeviceReference? = { nil }
 
     @ObservationIgnored private let api: any SpotifyAPI
+    @ObservationIgnored private let shelfFile: LibraryShelfFile?
+    @ObservationIgnored private let clock: EngineClock
+    @ObservationIgnored private let timing: Timing
+    @ObservationIgnored private var loadedAt: [CacheKey: Date] = [:]
+    @ObservationIgnored private var inFlight: [CacheKey: Task<Void, Never>] = [:]
+    @ObservationIgnored private var searchCache: [String: (results: SearchResults, at: Date)] = [:]
+    @ObservationIgnored private var searchTask: Task<Void, Never>?
+    @ObservationIgnored private var shelfRestore: Task<Void, Never>?
+    @ObservationIgnored private var shelfRevision = 0
+    @ObservationIgnored private var generation = 0
 
-    public init(api: any SpotifyAPI) {
-        self.api = api
+    private enum CacheKey: Hashable {
+        case playlists, savedTracks, queue, devices
+        case items(Playlist.ID)
     }
 
-    public func loadPlaylists() async {
-        playlists = .loading
-        playlists = await loadAll { [api] (page) async throws(OrbitError) in try await api.playlists(page) }
+    public init(api: any SpotifyAPI, shelfFile: LibraryShelfFile? = nil, clock: EngineClock = .system, timing: Timing = Timing()) {
+        self.api = api
+        self.shelfFile = shelfFile
+        self.clock = clock
+        self.timing = timing
+    }
+
+    // Loads pins and recents from disk once; anything pinned before it finishes is kept.
+    public func restoreShelf() async {
+        if shelfRestore == nil {
+            shelfRestore = Task { [weak self, shelfFile] in
+                guard let stored = await shelfFile?.load() else { return }
+                self?.merge(stored)
+            }
+        }
+        await shelfRestore?.value
+    }
+
+    public var preferredDeviceStatus: PreferredDeviceStatus {
+        guard let reference = preferredDevice() else { return .notSet }
+        guard let list = devices.value else { return .unverified(reference) }
+        if let device = list.first(where: { $0.id == reference.id }) ?? list.first(where: { $0.name == reference.name }) {
+            return .available(device)
+        }
+        return .missing(reference)
+    }
+
+    public func playlists(matching filter: String) -> [Playlist] {
+        let all = playlists.value ?? []
+        let trimmed = filter.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return all }
+        return all.filter { $0.name.localizedStandardContains(trimmed) }
+    }
+
+    public func playlist(for uri: SpotifyURI) -> Playlist? {
+        if let likedSongs, LikedSongs.isLikedSongs(uri) { return likedSongs }
+        return (playlists.value ?? []).first { $0.uri == uri }
+            ?? pinnedPlaylists.first { $0.uri == uri }
+            ?? recentPlaylists.first { $0.uri == uri }
+    }
+
+    public func loadPlaylists(force: Bool = false) async {
+        await load(.playlists, lifetime: timing.playlistsLifetime, force: force) { [self] in
+            if playlists.value == nil { playlists = .loading }
+            let result = await loadAll { [api] (page) async throws(OrbitError) in try await api.playlists(page) }
+            switch result {
+            case .loaded(let all):
+                playlists = result
+                reconcileShelf(with: all)
+                return true
+            case .failed where playlists.value != nil:
+                return false
+            default:
+                playlists = result
+                return false
+            }
+        }
     }
 
     public func items(for playlist: Playlist) -> LoadState<[Track]> {
-        playlistItems[playlist.id] ?? .idle
+        if playlist.id == LikedSongs.playlistID { return savedTracks }
+        return playlistItems[playlist.id] ?? .idle
     }
 
-    public func loadItems(for playlist: Playlist) async {
+    public func loadItems(for playlist: Playlist, force: Bool = false) async {
+        if playlist.id == LikedSongs.playlistID {
+            await loadSavedTracks(force: force)
+            return
+        }
         guard playlist.canReadItems else {
             playlistItems[playlist.id] = .failed(.playlistItemsUnavailable)
             return
         }
-        playlistItems[playlist.id] = .loading
-        playlistItems[playlist.id] = await loadAll { [api] (page) async throws(OrbitError) in
-            try await api.playlistItems(playlistID: playlist.id, page: page)
+        await load(.items(playlist.id), lifetime: timing.itemsLifetime, force: force) { [self] in
+            if playlistItems[playlist.id]?.value == nil { playlistItems[playlist.id] = .loading }
+            let result = await loadAll { [api] (page) async throws(OrbitError) in
+                try await api.playlistItems(playlistID: playlist.id, page: page)
+            }
+            if result.value != nil || playlistItems[playlist.id]?.value == nil || result.error == .playlistItemsUnavailable {
+                playlistItems[playlist.id] = result
+            }
+            return result.value != nil
         }
     }
 
-    public func loadSavedTracks() async {
-        savedTracks = .loading
-        savedTracks = await loadAll { [api] (page) async throws(OrbitError) in try await api.savedTracks(page) }
+    public func loadSavedTracks(force: Bool = false) async {
+        await load(.savedTracks, lifetime: timing.itemsLifetime, force: force) { [self] in
+            if savedTracks.value == nil { savedTracks = .loading }
+            let result = await loadAll { [api] (page) async throws(OrbitError) in try await api.savedTracks(page) }
+            if result.value != nil || savedTracks.value == nil { savedTracks = result }
+            if let count = result.value?.count { likedSongs?.itemCount = count }
+            return result.value != nil
+        }
     }
 
+    // Track URIs of a context whose items are loaded, so the coordinator can recognise a confirmed switch.
+    func knownTrackURIs(for uri: SpotifyURI) -> Set<SpotifyURI>? {
+        if LikedSongs.isLikedSongs(uri) { return savedTracks.value.map { Set($0.map(\.uri)) } }
+        guard let playlist = playlist(for: uri) else { return nil }
+        return playlistItems[playlist.id]?.value.map { Set($0.map(\.uri)) }
+    }
+
+    // Runs immediately; views bound to a text field should use `updateSearch(_:)` instead.
     public func search(_ query: String) async {
         searchQuery = query
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
+        let key = Self.searchKey(query)
+        guard !key.isEmpty else {
             searchResults = .idle
+            return
+        }
+        if let cached = searchCache[key], clock.now().timeIntervalSince(cached.at) < timing.searchLifetime {
+            searchResults = .loaded(cached.results)
             return
         }
         searchResults = .loading
         let result: LoadState<SearchResults>
         do {
-            result = .loaded(try await api.search(trimmed, categories: Set(SearchCategory.allCases), page: PageRequest(limit: 10)))
+            let found = try await api.search(key, categories: Set(SearchCategory.allCases), page: PageRequest(limit: 10))
+            searchCache[key] = (found, clock.now())
+            result = .loaded(found)
         } catch {
             result = .failed(error)
         }
@@ -68,31 +192,68 @@ public final class LibraryStore {
         if searchQuery == query { searchResults = result }
     }
 
-    public func loadQueue() async {
-        queue = .loading
-        do {
-            queue = .loaded(try await api.queue())
-        } catch {
-            queue = .failed(error)
+    // Debounced and cancellable: each keystroke replaces the pending search, and only the last one is sent.
+    public func updateSearch(_ query: String) {
+        searchTask?.cancel()
+        searchQuery = query
+        let key = Self.searchKey(query)
+        guard !key.isEmpty else {
+            searchResults = .idle
+            return
+        }
+        if let cached = searchCache[key], clock.now().timeIntervalSince(cached.at) < timing.searchLifetime {
+            searchResults = .loaded(cached.results)
+            return
+        }
+        searchResults = .loading
+        searchTask = Task { [weak self, clock, timing] in
+            do { try await clock.sleep(timing.searchDebounce) } catch { return }
+            await self?.search(query)
         }
     }
 
-    public func addToQueue(_ track: Track) async {
+    public func loadQueue(force: Bool = false) async {
+        await load(.queue, lifetime: timing.queueLifetime, force: force) { [self] in
+            if queue.value == nil { queue = .loading }
+            do throws(OrbitError) {
+                queue = .loaded(try await api.queue())
+                return true
+            } catch {
+                if queue.value == nil { queue = .failed(error) }
+                return false
+            }
+        }
+    }
+
+    @discardableResult
+    public func addToQueue(_ track: Track) async -> Bool {
         do {
             try await api.addToQueue(track.uri, deviceID: nil)
-            await loadQueue()
+            lastError = nil
+            await loadQueue(force: true)
+            return true
         } catch {
-            queue = .failed(error)
+            lastError = error
+            if queue.value == nil { queue = .failed(error) }
+            return false
         }
     }
 
-    public func loadDevices() async {
-        devices = .loading
-        do {
-            devices = .loaded(try await api.devices())
-        } catch {
-            devices = .failed(error)
+    public func loadDevices(force: Bool = false) async {
+        await load(.devices, lifetime: timing.devicesLifetime, force: force) { [self] in
+            if devices.value == nil { devices = .loading }
+            do throws(OrbitError) {
+                devices = .loaded(try await api.devices())
+                return true
+            } catch {
+                if devices.value == nil { devices = .failed(error) }
+                return false
+            }
         }
+    }
+
+    public func dismissError() {
+        lastError = nil
     }
 
     public func isPinned(_ playlist: Playlist) -> Bool {
@@ -102,10 +263,12 @@ public final class LibraryStore {
     public func pin(_ playlist: Playlist) {
         guard !isPinned(playlist) else { return }
         pinnedPlaylists.append(playlist)
+        saveShelf()
     }
 
     public func unpin(_ playlist: Playlist) {
         pinnedPlaylists.removeAll { $0.id == playlist.id }
+        saveShelf()
     }
 
     public func movePinned(fromOffsets source: IndexSet, toOffset destination: Int) {
@@ -114,6 +277,7 @@ public final class LibraryStore {
         let insertion = destination - source.count(in: 0..<destination)
         pinnedPlaylists = pinnedPlaylists.indices.filter { !source.contains($0) }.map { pinnedPlaylists[$0] }
         pinnedPlaylists.insert(contentsOf: moving, at: insertion)
+        saveShelf()
     }
 
     public func recordRecent(_ playlist: Playlist) {
@@ -122,10 +286,97 @@ public final class LibraryStore {
         if recentPlaylists.count > Self.recentLimit {
             recentPlaylists.removeLast(recentPlaylists.count - Self.recentLimit)
         }
+        missingPlaylistIDs.remove(playlist.id)
+        saveShelf()
     }
 
     public func removeRecent(_ playlist: Playlist) {
         recentPlaylists.removeAll { $0.id == playlist.id }
+        saveShelf()
+    }
+
+    func setUser(_ profile: UserProfile?) {
+        guard let profile else {
+            likedSongs = nil
+            return
+        }
+        guard likedSongs?.uri != LikedSongs.contextURI(userID: profile.id) else { return }
+        likedSongs = LikedSongs.playlist(userID: profile.id, ownerName: profile.displayName, itemCount: savedTracks.value?.count)
+    }
+
+    // Drops everything that came from the signed-in account; pins and recents are local and stay.
+    func reset() {
+        generation += 1
+        inFlight.values.forEach { $0.cancel() }
+        inFlight.removeAll()
+        loadedAt.removeAll()
+        searchCache.removeAll()
+        searchTask?.cancel()
+        playlists = .idle
+        playlistItems = [:]
+        savedTracks = .idle
+        searchQuery = ""
+        searchResults = .idle
+        queue = .idle
+        devices = .idle
+        likedSongs = nil
+        missingPlaylistIDs = []
+        lastError = nil
+    }
+
+    private func load(
+        _ key: CacheKey,
+        lifetime: TimeInterval,
+        force: Bool,
+        _ body: @escaping @MainActor () async -> Bool
+    ) async {
+        if let running = inFlight[key] {
+            await running.value
+            return
+        }
+        if !force, let loaded = loadedAt[key], clock.now().timeIntervalSince(loaded) < lifetime { return }
+        let started = generation
+        let task = Task { @MainActor [weak self] in
+            let succeeded = await body()
+            guard let self, started == self.generation else { return }
+            if succeeded { self.loadedAt[key] = self.clock.now() }
+        }
+        inFlight[key] = task
+        await task.value
+        if started == generation { inFlight[key] = nil }
+    }
+
+    private func merge(_ stored: LibraryShelf) {
+        let pinnedIDs = Set(pinnedPlaylists.map(\.id))
+        pinnedPlaylists = stored.pinned.filter { !pinnedIDs.contains($0.id) } + pinnedPlaylists
+        let recentIDs = Set(recentPlaylists.map(\.id))
+        recentPlaylists = Array((recentPlaylists + stored.recents.filter { !recentIDs.contains($0.id) }).prefix(Self.recentLimit))
+    }
+
+    // Refreshes names and artwork of pinned and recent playlists, and flags the ones that no longer exist.
+    private func reconcileShelf(with all: [Playlist]) {
+        let byID = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        func refreshed(_ playlist: Playlist) -> Playlist { byID[playlist.id] ?? playlist }
+        let shelf = pinnedPlaylists + recentPlaylists
+        missingPlaylistIDs = Set(shelf.map(\.id).filter { byID[$0] == nil && $0 != LikedSongs.playlistID })
+        let updatedPinned = pinnedPlaylists.map(refreshed)
+        let updatedRecents = recentPlaylists.map(refreshed)
+        guard updatedPinned != pinnedPlaylists || updatedRecents != recentPlaylists else { return }
+        pinnedPlaylists = updatedPinned
+        recentPlaylists = updatedRecents
+        saveShelf()
+    }
+
+    private func saveShelf() {
+        guard let shelfFile else { return }
+        shelfRevision += 1
+        let revision = shelfRevision
+        let shelf = LibraryShelf(pinned: pinnedPlaylists, recents: recentPlaylists)
+        Task { await shelfFile.save(shelf, revision: revision) }
+    }
+
+    private static func searchKey(_ query: String) -> String {
+        query.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func loadAll<Item: Sendable>(
