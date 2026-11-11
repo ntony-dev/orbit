@@ -16,7 +16,7 @@ enum RecoveryAction: Equatable {
         case .automationDenied: self = .openAutomationSettings
         case .spotifyNotRunning: self = .openSpotify
         case .notAllowlisted: self = .openDeveloperDashboard
-        case .network, .unexpected, .noActiveDevice, .playbackNotConfirmed: self = .retry
+        case .network, .unexpected, .noActiveDevice, .playbackNotConfirmed, .notFound: self = .retry
         case .spotifyNotInstalled, .premiumRequired, .rateLimited, .quotaExceeded, .deviceRestricted,
              .contentRestricted, .playlistItemsUnavailable, .missingClientID, .cancelled, .notImplemented:
             return nil
