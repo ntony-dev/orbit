@@ -27,6 +27,16 @@ public actor MockSpotify {
     private var repeatMode = RepeatMode.off
     private var volume = 64
 
+    private var playlists = MockFixtures.playlists
+    private var commandsHeld = false
+    private var heldCommands: [CheckedContinuation<Void, Never>] = []
+    private var webFailure: OrbitError?
+    private var localFailure: OrbitError?
+    private var ignoresPlayCommands = false
+    // Every Web API request and AppleScript command, in order, so tests can assert routing and request counts.
+    public private(set) var webRequests: [String] = []
+    public private(set) var localCommands: [String] = []
+
     public init(latency: Duration = .milliseconds(120), now: @escaping @Sendable () -> Date = { .now }) {
         self.latency = latency
         self.now = now
@@ -34,7 +44,7 @@ public actor MockSpotify {
         savedTracks = MockFixtures.savedTrackIDs.compactMap(MockFixtures.track(id:))
         userQueue = MockFixtures.queuedTrackIDs.compactMap(MockFixtures.track(id:))
         let first = MockFixtures.playlists[0]
-        context = PlaybackContext(uri: first.uri, name: first.name)
+        context = PlaybackContext(uri: first.uri)
         contextTracks = MockFixtures.playlistTracks[first.id] ?? []
         nowPlaying = contextTracks.first
         positionAtSample = (nowPlaying?.duration ?? 0) * 0.38
@@ -67,9 +77,10 @@ public actor MockSpotify {
         emitChange()
     }
 
+    // Quitting the app stops playback only when this Mac was the device playing.
     public func simulateQuit() {
         isRunning = false
-        isPlaying = false
+        if activeDeviceID == MockFixtures.localDevice.id { isPlaying = false }
         events.send(.terminated)
     }
 
@@ -81,6 +92,81 @@ public actor MockSpotify {
 
     public func setAutomationPermission(_ permission: AutomationPermission) {
         automationPermission = permission
+    }
+
+    // Commands wait here until released, so tests can interleave notifications with commands in flight.
+    public func holdCommands() {
+        commandsHeld = true
+    }
+
+    public func releaseCommands() {
+        commandsHeld = false
+        let held = heldCommands
+        heldCommands.removeAll()
+        held.forEach { $0.resume() }
+    }
+
+    public var heldCommandCount: Int { heldCommands.count }
+
+    // Every Web API call throws this until cleared, e.g. `.rateLimited(retryAfter: 30)` or `.network(detail:)`.
+    public func failWebAPI(with error: OrbitError?) {
+        webFailure = error
+    }
+
+    public func failLocalCommands(with error: OrbitError?) {
+        localFailure = error
+    }
+
+    // Play commands are accepted but nothing starts, as when Spotify silently refuses a context.
+    public func ignorePlayCommands(_ ignores: Bool) {
+        ignoresPlayCommands = ignores
+    }
+
+    // Delivers a notification as if Spotify posted it, e.g. one that is stale by the time it arrives.
+    public func emitLocalState(_ state: LocalPlayerState) {
+        events.send(.stateChanged(state))
+    }
+
+    public func currentLocalState() -> LocalPlayerState? {
+        try? localState()
+    }
+
+    // Another device takes over playback, as when the user presses play on their phone.
+    public func simulateRemotePlayback(on deviceID: String) {
+        guard devices.contains(where: { $0.id == deviceID }) else { return }
+        activeDeviceID = deviceID
+        isPlaying = nowPlaying != nil
+        sampledAt = now()
+        emitChange()
+    }
+
+    // A playlist the user deleted or unfollowed elsewhere disappears from the library.
+    public func removePlaylist(id: String) {
+        playlists.removeAll { $0.id == id }
+    }
+
+    func libraryPlaylists() -> [Playlist] {
+        playlists
+    }
+
+    func webRequest(_ name: String, isCommand: Bool = false) async throws(OrbitError) {
+        webRequests.append(name)
+        if isCommand { await awaitCommandTurn() } else { await simulateLatency() }
+        if let webFailure { throw webFailure }
+    }
+
+    func localCommand(_ name: String) async throws(OrbitError) {
+        try requireRunning()
+        localCommands.append(name)
+        await awaitCommandTurn()
+        try requireRunning()
+        if let localFailure { throw localFailure }
+    }
+
+    private func awaitCommandTurn() async {
+        await simulateLatency()
+        guard commandsHeld else { return }
+        await withCheckedContinuation { heldCommands.append($0) }
     }
 
     nonisolated func eventStream() -> AsyncStream<LocalPlayerEvent> {
@@ -126,8 +212,12 @@ public actor MockSpotify {
         )
     }
 
+    private var activeDeviceReachable: Bool {
+        isRunning || activeDeviceID != MockFixtures.localDevice.id
+    }
+
     func snapshot() -> PlaybackSnapshot? {
-        guard isRunning, let device = activeDevice, nowPlaying != nil else { return nil }
+        guard activeDeviceReachable, let device = activeDevice, nowPlaying != nil else { return nil }
         var actions = Set(PlaybackAction.allCases)
         if !device.supportsVolume { actions.remove(.setVolume) }
         if device.isRestricted { actions = [] }
@@ -151,8 +241,12 @@ public actor MockSpotify {
     }
 
     func requireControllableDevice() throws(OrbitError) {
-        guard isRunning, let device = activeDevice else { throw .noActiveDevice }
+        guard activeDeviceReachable, let device = activeDevice else { throw .noActiveDevice }
         guard !device.isRestricted else { throw .deviceRestricted }
+    }
+
+    func requireVolumeControl() throws(OrbitError) {
+        guard activeDevice?.supportsVolume == true else { throw .deviceRestricted }
     }
 
     func setPlaying(_ playing: Bool) {
@@ -204,12 +298,12 @@ public actor MockSpotify {
     }
 
     func play(_ target: PlayTarget) throws(OrbitError) {
+        guard !ignoresPlayCommands else { return }
         switch target {
         case .context(let uri, let offset):
-            guard let playlist = MockFixtures.playlists.first(where: { $0.uri == uri }),
-                  let tracks = MockFixtures.playlistTracks[playlist.id], !tracks.isEmpty
-            else { throw .contentRestricted }
-            context = PlaybackContext(uri: uri, name: playlist.name)
+            guard let tracks = contextTracks(for: uri), !tracks.isEmpty else { throw .contentRestricted }
+            // Spotify never names the context in playback state; the engine fills names in from the library.
+            context = PlaybackContext(uri: uri)
             contextTracks = tracks
             contextIndex = Self.index(of: offset, in: tracks)
         case .tracks(let uris, let offset):
@@ -223,11 +317,26 @@ public actor MockSpotify {
         emitChange()
     }
 
+    // Like the real app, `play track` also accepts a playlist, album or Liked Songs URI and plays it as a context.
     func play(track uri: SpotifyURI, inContext contextURI: SpotifyURI?) throws(OrbitError) {
         if let contextURI {
             try play(.context(contextURI, offset: .track(uri)))
-        } else {
+        } else if uri.kind == .track {
             try play(.tracks([uri]))
+        } else {
+            try play(.context(uri))
+        }
+    }
+
+    private func contextTracks(for uri: SpotifyURI) -> [Track]? {
+        switch uri.kind {
+        case .collection:
+            return savedTracks
+        case .album:
+            return MockFixtures.tracks.filter { $0.id.hasPrefix((uri.id ?? "") + "-") }
+        default:
+            guard let playlist = playlists.first(where: { $0.uri == uri }) else { return nil }
+            return MockFixtures.playlistTracks[playlist.id]
         }
     }
 
@@ -309,8 +418,21 @@ public actor MockSpotify {
         start(contextTracks[contextIndex])
     }
 
+    // Without Automation permission the real player only has the notification, which omits volume, shuffle and repeat.
     private func emitChange() {
-        guard let state = try? localState() else { return }
+        guard isRunning else { return }
+        var state = LocalPlayerState(
+            status: nowPlaying == nil ? .stopped : (isPlaying ? .playing : .paused),
+            track: nowPlaying,
+            position: position
+        )
+        if automationPermission == .granted {
+            state.volume = volume
+            state.isShuffling = shuffle
+            state.isRepeating = repeatMode != .off
+        } else {
+            state.track?.artworkURL = nil
+        }
         events.send(.stateChanged(state))
     }
 

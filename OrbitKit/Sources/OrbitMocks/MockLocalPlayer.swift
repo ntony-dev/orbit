@@ -16,6 +16,10 @@ public struct MockLocalPlayer: LocalPlayer {
         await spotify.permission(prompting: prompting)
     }
 
+    public func connectDeviceName() async -> String? {
+        MockFixtures.localDevice.name
+    }
+
     public func events() -> AsyncStream<LocalPlayerEvent> {
         spotify.eventStream()
     }
@@ -25,50 +29,52 @@ public struct MockLocalPlayer: LocalPlayer {
     }
 
     public func play() async throws(OrbitError) {
-        try await command { await $0.setPlaying(true) }
+        try await spotify.localCommand("play")
+        await spotify.setPlaying(true)
     }
 
     public func pause() async throws(OrbitError) {
-        try await command { await $0.setPlaying(false) }
+        try await spotify.localCommand("pause")
+        await spotify.setPlaying(false)
     }
 
     public func playPause() async throws(OrbitError) {
-        try await command { await $0.togglePlaying() }
+        try await spotify.localCommand("playpause")
+        await spotify.togglePlaying()
     }
 
     public func nextTrack() async throws(OrbitError) {
-        try await command { await $0.next() }
+        try await spotify.localCommand("next track")
+        await spotify.next()
     }
 
     public func previousTrack() async throws(OrbitError) {
-        try await command { await $0.previous() }
+        try await spotify.localCommand("previous track")
+        await spotify.previous()
     }
 
     public func play(track: SpotifyURI, inContext context: SpotifyURI?) async throws(OrbitError) {
-        try await spotify.requireRunning()
-        await spotify.simulateLatency()
+        try await spotify.localCommand("play track")
         try await spotify.play(track: track, inContext: context)
     }
 
     public func setPosition(_ seconds: TimeInterval) async throws(OrbitError) {
-        try await command { await $0.seek(to: seconds) }
+        try await spotify.localCommand("set player position")
+        await spotify.seek(to: seconds)
     }
 
     public func setVolume(_ percent: Int) async throws(OrbitError) {
-        try await command { await $0.setVolume(percent) }
+        try await spotify.localCommand("set sound volume")
+        await spotify.setVolume(percent)
     }
 
     public func setShuffling(_ enabled: Bool) async throws(OrbitError) {
-        try await command { await $0.setShuffle(enabled) }
+        try await spotify.localCommand("set shuffling")
+        await spotify.setShuffle(enabled)
     }
 
     public func setRepeating(_ enabled: Bool) async throws(OrbitError) {
-        try await command { await $0.setRepeat(enabled ? .context : .off) }
-    }
-
-    private func command(_ body: (MockSpotify) async -> Void) async throws(OrbitError) {
-        try await spotify.requireRunning()
-        await spotify.simulateLatency()
-        await body(spotify)
+        try await spotify.localCommand("set repeating")
+        await spotify.setRepeat(enabled ? .context : .off)
     }
 }

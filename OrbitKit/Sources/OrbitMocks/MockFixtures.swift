@@ -119,6 +119,9 @@ public enum MockFixtures {
         PlaybackDevice(id: "dev-tv", name: "Living Room TV", kind: .television, isRestricted: true, supportsVolume: false),
     ]
 
+    // The Spotify Connect device the mock local player is, as the desktop app on this Mac would be.
+    public static var localDevice: PlaybackDevice { devices[0] }
+
     public static let savedTrackIDs: [String] = ["al-neon-harbor-1", "al-quiet-signal-1", "al-linen-2", "al-blue-room-1", "al-compile-1"]
 
     public static let queuedTrackIDs: [String] = ["al-paper-kites-1", "al-mile-markers-3"]
