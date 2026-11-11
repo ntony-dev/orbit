@@ -95,6 +95,20 @@ struct PlaybackCoordinatorTests {
         #expect(await eventually { abs(coordinator.snapshot.position(at: rig.clock.now()) - 102) < 0.5 })
     }
 
+    // The pause's optimistic position is still in its grace period when the seek is issued; the newer intent wins.
+    @Test func aSeekRightAfterPausingShowsTheSeekTarget() async {
+        await coordinator.refresh()
+        await coordinator.togglePlayPause()
+        await rig.spotify.holdCommands()
+        let coordinator = coordinator
+        let seek = Task { await coordinator.seek(to: 100) }
+        #expect(await eventually { await rig.spotify.heldCommandCount == 1 })
+        #expect(coordinator.snapshot.position(at: rig.clock.now()) == 100)
+        await rig.spotify.releaseCommands()
+        await seek.value
+        #expect(coordinator.snapshot.position(at: rig.clock.now()) == 100)
+    }
+
     @Test func aSeekDuringASkipLandsOnTheNewTrack() async {
         await coordinator.refresh()
         let first = coordinator.snapshot.track?.id

@@ -709,7 +709,8 @@ extension PlaybackCoordinator {
         authority = resolveAuthority()
         var result = observedSnapshot()
         let now = clock.now()
-        for (field, overlay) in overlays {
+        // Overlays touch overlapping fields (a pause also freezes the position), so the newest intent applies last.
+        for (field, overlay) in overlays.sorted(by: { $0.value.id < $1.value.id }) {
             if let expiresAt = overlay.expiresAt, now >= expiresAt || (freshRemote && overlay.isSatisfied(result)) {
                 overlays[field] = nil
             } else {
