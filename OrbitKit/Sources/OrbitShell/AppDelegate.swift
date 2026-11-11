@@ -1,17 +1,16 @@
 import AppKit
 import OrbitCore
-import OrbitEngine
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let options: LaunchOptions
-    private let preferences = Preferences()
-    private var stores: OrbitStores?
-    private var panelController: PanelController?
+    private let preferences: Preferences
+    private var shell: Shell?
     private var appearanceObservation: Task<Void, Never>?
 
     init(options: LaunchOptions) {
         self.options = options
+        preferences = CompositionRoot.preferences(usingMocks: options.usesMocks)
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -21,14 +20,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func launch() async {
         let services = await CompositionRoot.services(usingMocks: options.usesMocks, preferences: preferences)
-        let stores = OrbitStores(localPlayer: services.localPlayer, api: services.api, authorizer: services.authorizer)
-        stores.start()
-        let controller = PanelController(stores: stores, preferences: preferences)
-        controller.show(anchoredAt: options.anchorPoint, expanded: options.startsExpanded)
-        self.stores = stores
-        panelController = controller
+        let shell = Shell(isDemo: options.usesMocks, preferences: preferences, services: services)
+        self.shell = shell
+        shell.start(options: options)
     }
 
+    // Opening Orbit again from Finder or Spotlight while it runs is a request to see it, even with the pill hidden.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        shell?.panel.present()
+        return false
+    }
+
+    // Reachable from any Orbit view with NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil),
+    // so OrbitUI can offer a Settings button without depending on the shell.
+    @objc func showSettingsWindow(_ sender: Any?) {
+        shell?.showSettings()
+    }
+
+    // Applies app-wide, so the panel, menus and Settings all follow the user's choice.
     private func observeAppearance() {
         if let forced = options.appearance {
             NSApp.appearance = Self.appearance(for: forced)

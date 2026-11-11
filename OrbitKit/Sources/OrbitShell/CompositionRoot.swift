@@ -13,6 +13,16 @@ struct Services {
 // The only place concrete services are constructed. Mocks are reachable solely through the explicit --demo flag.
 @MainActor
 enum CompositionRoot {
+    static let demoDefaultsSuite = "io.github.ntony46.orbit.demo"
+
+    // Demo runs get a settings store that is wiped at every launch, so they never read or change the user's
+    // real settings and always start from the documented defaults.
+    static func preferences(usingMocks: Bool) -> Preferences {
+        guard usingMocks, let defaults = UserDefaults(suiteName: demoDefaultsSuite) else { return Preferences() }
+        defaults.removePersistentDomain(forName: demoDefaultsSuite)
+        return Preferences(defaults: defaults)
+    }
+
     static func services(usingMocks: Bool, preferences: Preferences) async -> Services {
         if usingMocks {
             let mocks = await MockServices.demo()
