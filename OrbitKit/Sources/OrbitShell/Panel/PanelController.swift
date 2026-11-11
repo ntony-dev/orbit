@@ -31,7 +31,8 @@ final class PanelController: PanelHost {
     private var isSessionInactive = false { didSet { reportInterfaceVisibility() } }
     private var reportedVisibility: InterfaceVisibility?
     // Set by the --expanded launch argument, so a test run never takes keyboard focus from the user, even if the
-    // UI asks for it on appear. Cleared by the first real click in the panel or the next deliberate opening.
+    // UI asks for it on appear, and the user's own clicks elsewhere do not collapse what is being captured.
+    // Cleared by the first real click in the panel or the next deliberate opening.
     private var suppressesFocus = false
     // Set by --panel-anchor, which holds the pill exactly where asked until the user drags it.
     private var isPinned = false
@@ -43,17 +44,16 @@ final class PanelController: PanelHost {
         positions = preferences.remembersPosition ? preferences.savedPositions : [:]
         displayID = preferences.remembersPosition ? preferences.panelDisplayID : nil
         panel = FloatingPanel(contentRect: .zero)
-        let hostingView = NSHostingView(rootView: PanelRootView(stores: stores, panel: state, host: self, preferences: preferences))
-        // The UI sizes the canvas explicitly through setCanvasSize; the hosting view must not resize the window.
-        hostingView.sizingOptions = []
-        panel.contentView = hostingView
         // Escape steps back one layer (picker to player) and collapses only from the player itself.
         panel.onCancel = { [state] in state.dismissActiveLayer() }
         // Runs before the panel handles the click, so a click on an open but unfocused panel also makes it key.
         panel.onMouseDown = { [weak self] in
             guard let self else { return }
             suppressesFocus = false
-            if state.isExpanded { panel.acceptsKey = true }
+            if state.isExpanded {
+                panel.acceptsKey = true
+                installClickMonitor()
+            }
         }
     }
 
@@ -67,17 +67,24 @@ final class PanelController: PanelHost {
             restore()
         }
         applyLevel()
-        observe()
-        updateVisibility()
+        // Expanded before the UI is attached, so it appears already open and honors its own Debug-only
+        // --ui-screen argument, which it reads only on appear.
         if expanded {
             suppressesFocus = true
             state.expand()
         }
+        let hostingView = NSHostingView(rootView: PanelRootView(stores: stores, panel: state, host: self, preferences: preferences))
+        // The UI sizes the canvas explicitly through setCanvasSize; the hosting view must not resize the window.
+        hostingView.sizingOptions = []
+        panel.contentView = hostingView
+        observe()
+        updateVisibility()
     }
 
     // Opens Orbit at `destination` for the user, including when the pill is hidden, and gives it keyboard focus.
     func present(_ destination: PanelDestination = .player) {
         suppressesFocus = false
+        if state.isExpanded { installClickMonitor() }
         if !visibility(presentedOnDemand: false).showsPanel { isPresentedOnDemand = true }
         updateVisibility()
         state.expand(to: destination)
@@ -410,7 +417,7 @@ final class PanelController: PanelHost {
     // item) do not, so appearance changes can be watched live. Transparent canvas areas pass clicks through to
     // the app below, so they count as outside clicks too. Mouse monitors need no permission.
     private func installClickMonitor() {
-        guard clickMonitor == nil else { return }
+        guard clickMonitor == nil, !suppressesFocus else { return }
         clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
             MainActor.assumeIsolated { self?.state.collapse() }
         }
