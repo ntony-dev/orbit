@@ -1,39 +1,186 @@
 import AppKit
 import OrbitCore
+import Synchronization
 
-// Seam for the AppleScript player. Installed/running checks are real; scripting is not implemented yet and fails
-// with a typed error instead of pretending to control Spotify.
+// Controls the Spotify desktop app through its scripting dictionary using raw Apple events on a background queue.
+// State changes arrive through Spotify's distributed notification, so nothing polls while the app is idle.
 public struct SpotifyAppleScriptPlayer: LocalPlayer {
     public static let bundleIdentifier = "com.spotify.client"
-    private static let unavailable = OrbitError.notImplemented(feature: "Controlling the Spotify app")
+    static let stateChangedNotification = Notification.Name("com.spotify.client.PlaybackStateChanged")
 
-    public init() {}
+    private let channel: AppleEventChannel
+    private let cache: AutomationCache
+
+    public init() {
+        channel = AppleEventChannel(bundleIdentifier: Self.bundleIdentifier)
+        cache = AutomationCache()
+    }
 
     public func isInstalled() async -> Bool {
         NSWorkspace.shared.urlForApplication(withBundleIdentifier: Self.bundleIdentifier) != nil
     }
 
     public func isRunning() async -> Bool {
-        !NSRunningApplication.runningApplications(withBundleIdentifier: Self.bundleIdentifier).isEmpty
+        channel.isRunning()
     }
 
     public func automationPermission(prompting: Bool) async -> AutomationPermission {
-        .notDetermined
+        let permission = await channel.permission(prompting: prompting)
+        cache.permission = permission
+        return permission
     }
 
     public func events() -> AsyncStream<LocalPlayerEvent> {
-        AsyncStream { $0.finish() }
+        let (raw, rawContinuation) = AsyncStream.makeStream(of: SpotifyEventMonitor.Signal.self, bufferingPolicy: .bufferingNewest(8))
+        let (events, continuation) = AsyncStream.makeStream(of: LocalPlayerEvent.self, bufferingPolicy: .bufferingNewest(16))
+        let monitor = SpotifyEventMonitor(bundleIdentifier: Self.bundleIdentifier, continuation: rawContinuation)
+        let player = self
+        // One consumer keeps events in posting order even when enriching a notification takes a round trip.
+        let consumer = Task {
+            for await signal in raw {
+                switch signal {
+                case .launched:
+                    player.cache.permission = nil
+                    continuation.yield(.launched)
+                case .terminated:
+                    player.cache.reset()
+                    continuation.yield(.terminated)
+                case .stateChanged(let notified):
+                    continuation.yield(.stateChanged(await player.enrich(notified)))
+                }
+            }
+        }
+        continuation.onTermination = { _ in
+            consumer.cancel()
+            rawContinuation.finish()
+            Task { @MainActor in monitor.invalidate() }
+        }
+        Task { @MainActor in monitor.activate() }
+        return events
     }
 
-    public func state() async throws(OrbitError) -> LocalPlayerState { throw Self.unavailable }
-    public func play() async throws(OrbitError) { throw Self.unavailable }
-    public func pause() async throws(OrbitError) { throw Self.unavailable }
-    public func playPause() async throws(OrbitError) { throw Self.unavailable }
-    public func nextTrack() async throws(OrbitError) { throw Self.unavailable }
-    public func previousTrack() async throws(OrbitError) { throw Self.unavailable }
-    public func play(track: SpotifyURI, inContext context: SpotifyURI?) async throws(OrbitError) { throw Self.unavailable }
-    public func setPosition(_ seconds: TimeInterval) async throws(OrbitError) { throw Self.unavailable }
-    public func setVolume(_ percent: Int) async throws(OrbitError) { throw Self.unavailable }
-    public func setShuffling(_ enabled: Bool) async throws(OrbitError) { throw Self.unavailable }
-    public func setRepeating(_ enabled: Bool) async throws(OrbitError) { throw Self.unavailable }
+    public func state() async throws(OrbitError) -> LocalPlayerState {
+        try await requireAccess()
+        return try await readState()
+    }
+
+    public func play() async throws(OrbitError) { try await command(.play) }
+    public func pause() async throws(OrbitError) { try await command(.pause) }
+    public func playPause() async throws(OrbitError) { try await command(.playPause) }
+    public func nextTrack() async throws(OrbitError) { try await command(.nextTrack) }
+    public func previousTrack() async throws(OrbitError) { try await command(.previousTrack) }
+
+    public func play(track: SpotifyURI, inContext context: SpotifyURI?) async throws(OrbitError) {
+        try await command(.playTrack(track, context: context))
+    }
+
+    public func setPosition(_ seconds: TimeInterval) async throws(OrbitError) { try await command(.setPosition(seconds)) }
+    public func setVolume(_ percent: Int) async throws(OrbitError) { try await command(.setVolume(percent)) }
+    public func setShuffling(_ enabled: Bool) async throws(OrbitError) { try await command(.setShuffling(enabled)) }
+    public func setRepeating(_ enabled: Bool) async throws(OrbitError) { try await command(.setRepeating(enabled)) }
+
+    private func command(_ event: SpotifyAppleEvent) async throws(OrbitError) {
+        try await requireAccess()
+        do {
+            _ = try await channel.send(event)
+        } catch {
+            if error == .automationDenied { cache.permission = .denied }
+            throw error
+        }
+    }
+
+    // A command is a direct user action, so this is the one place a not-yet-asked permission prompts.
+    private func requireAccess() async throws(OrbitError) {
+        guard channel.isRunning() else { throw .spotifyNotRunning }
+        let permission = cache.permission == .granted ? .granted : await automationPermission(prompting: true)
+        switch permission {
+        case .granted: return
+        case .requiresSpotifyRunning: throw .spotifyNotRunning
+        case .denied, .notDetermined: throw .automationDenied
+        }
+    }
+
+    private func readState() async throws(OrbitError) -> LocalPlayerState {
+        let cache = cache
+        return try await channel.batch { send in
+            let app: SpotifyAppProperties
+            switch send(.appProperties) {
+            case .success(let reply):
+                guard let properties = reply.appProperties else { return .failure(.unexpected(detail: "Unreadable Spotify state")) }
+                app = properties
+            case .failure(let error):
+                return .failure(error)
+            }
+            var track: Track?
+            if app.status != .stopped, case .success(let reply) = send(.trackProperty(.id)), let id = reply.string {
+                track = cache.track(id: id) ?? Self.readTrack(id: id, send: send).map { cache.store($0) }
+            }
+            return .success(LocalPlayerState(
+                status: app.status,
+                track: track,
+                position: app.position,
+                volume: app.volume,
+                isShuffling: app.isShuffling,
+                isRepeating: app.isRepeating,
+                canShuffle: app.controlsEnabled,
+                canRepeat: app.controlsEnabled
+            ))
+        }
+    }
+
+    private static func readTrack(id: String, send: (SpotifyAppleEvent) -> Result<AppleEventReply, OrbitError>) -> Track? {
+        func value(_ property: SpotifyAppleEvent.TrackProperty) -> AppleEventReply? {
+            try? send(.trackProperty(property)).get()
+        }
+        let uri = SpotifyURI(rawValue: id)
+        let artist = value(.artist)?.string ?? ""
+        return Track(
+            id: uri.id ?? id,
+            uri: uri,
+            name: value(.name)?.string ?? "",
+            artists: artist.isEmpty ? [] : [artist],
+            album: value(.album)?.string ?? "",
+            artworkURL: value(.artworkURL)?.string.flatMap(URL.init(string:)),
+            // Spotify reports milliseconds here, although its dictionary says seconds.
+            duration: TimeInterval(value(.duration)?.integer ?? 0) / 1000
+        )
+    }
+
+    // Without permission the notification is all there is; with it, one round trip adds volume, shuffle, repeat
+    // and artwork, none of which the notification carries.
+    private func enrich(_ notified: LocalPlayerState) async -> LocalPlayerState {
+        guard cache.permission == .granted, channel.isRunning() else { return notified }
+        guard var full = try? await readState() else { return notified }
+        if full.track == nil { full.track = notified.track }
+        return full
+    }
+}
+
+// Remembers per-track details so a play/pause notification costs one event instead of eight, and caches the
+// permission so routine reads never call into TCC.
+final class AutomationCache: Sendable {
+    private struct State {
+        var track: Track?
+        var permission: AutomationPermission?
+    }
+
+    private let state = Mutex(State())
+
+    var permission: AutomationPermission? {
+        get { state.withLock { $0.permission } }
+        set { state.withLock { $0.permission = newValue } }
+    }
+
+    func track(id: String) -> Track? {
+        state.withLock { $0.track?.uri.rawValue == id ? $0.track : nil }
+    }
+
+    func store(_ track: Track) -> Track {
+        state.withLock { $0.track = track }
+        return track
+    }
+
+    func reset() {
+        state.withLock { $0 = State() }
+    }
 }

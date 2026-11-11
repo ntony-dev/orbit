@@ -12,6 +12,9 @@ public struct LocalPlayerState: Hashable, Sendable {
     public var volume: Int?
     public var isShuffling: Bool?
     public var isRepeating: Bool?
+    // Whether the current context lets shuffle and repeat change; Spotify's dictionary exposes one shared flag.
+    public var canShuffle: Bool?
+    public var canRepeat: Bool?
 
     public init(
         status: Status,
@@ -19,7 +22,9 @@ public struct LocalPlayerState: Hashable, Sendable {
         position: TimeInterval? = nil,
         volume: Int? = nil,
         isShuffling: Bool? = nil,
-        isRepeating: Bool? = nil
+        isRepeating: Bool? = nil,
+        canShuffle: Bool? = nil,
+        canRepeat: Bool? = nil
     ) {
         self.status = status
         self.track = track
@@ -27,6 +32,8 @@ public struct LocalPlayerState: Hashable, Sendable {
         self.volume = volume
         self.isShuffling = isShuffling
         self.isRepeating = isRepeating
+        self.canShuffle = canShuffle
+        self.canRepeat = canRepeat
     }
 }
 
