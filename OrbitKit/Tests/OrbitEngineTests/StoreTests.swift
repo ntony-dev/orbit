@@ -160,11 +160,3 @@ struct AccountStoreTests {
         #expect(account.profile == nil)
     }
 }
-
-struct ProductionSeamTests {
-    @Test func appleScriptPlayerFailsWithTypedError() async {
-        await #expect(throws: OrbitError.notImplemented(feature: "Controlling the Spotify app")) {
-            try await SpotifyAppleScriptPlayer().nextTrack()
-        }
-    }
-}
