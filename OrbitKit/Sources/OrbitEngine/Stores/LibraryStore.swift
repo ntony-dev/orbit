@@ -107,9 +107,10 @@ public final class LibraryStore {
     }
 
     public func loadPlaylists(force: Bool = false) async {
-        await load(.playlists, lifetime: timing.playlistsLifetime, force: force) { [self] in
+        await load(.playlists, lifetime: timing.playlistsLifetime, force: force) { [self] isCurrent in
             if playlists.value == nil { playlists = .loading }
             let result = await loadAll { [api] (page) async throws(OrbitError) in try await api.playlists(page) }
+            guard isCurrent() else { return false }
             switch result {
             case .loaded(let all):
                 playlists = result
@@ -138,11 +139,12 @@ public final class LibraryStore {
             playlistItems[playlist.id] = .failed(.playlistItemsUnavailable)
             return
         }
-        await load(.items(playlist.id), lifetime: timing.itemsLifetime, force: force) { [self] in
+        await load(.items(playlist.id), lifetime: timing.itemsLifetime, force: force) { [self] isCurrent in
             if playlistItems[playlist.id]?.value == nil { playlistItems[playlist.id] = .loading }
             let result = await loadAll { [api] (page) async throws(OrbitError) in
                 try await api.playlistItems(playlistID: playlist.id, page: page)
             }
+            guard isCurrent() else { return false }
             if result.value != nil || playlistItems[playlist.id]?.value == nil || result.error == .playlistItemsUnavailable {
                 playlistItems[playlist.id] = result
             }
@@ -151,9 +153,10 @@ public final class LibraryStore {
     }
 
     public func loadSavedTracks(force: Bool = false) async {
-        await load(.savedTracks, lifetime: timing.itemsLifetime, force: force) { [self] in
+        await load(.savedTracks, lifetime: timing.itemsLifetime, force: force) { [self] isCurrent in
             if savedTracks.value == nil { savedTracks = .loading }
             let result = await loadAll { [api] (page) async throws(OrbitError) in try await api.savedTracks(page) }
+            guard isCurrent() else { return false }
             if result.value != nil || savedTracks.value == nil { savedTracks = result }
             if let count = result.value?.count { likedSongs?.itemCount = count }
             return result.value != nil
@@ -180,9 +183,11 @@ public final class LibraryStore {
             return
         }
         searchResults = .loading
+        let started = generation
         let result: LoadState<SearchResults>
         do {
             let found = try await api.search(key, categories: Set(SearchCategory.allCases), page: PageRequest(limit: 10))
+            guard started == generation else { return }
             searchCache[key] = (found, clock.now())
             result = .loaded(found)
         } catch {
@@ -213,13 +218,15 @@ public final class LibraryStore {
     }
 
     public func loadQueue(force: Bool = false) async {
-        await load(.queue, lifetime: timing.queueLifetime, force: force) { [self] in
+        await load(.queue, lifetime: timing.queueLifetime, force: force) { [self] isCurrent in
             if queue.value == nil { queue = .loading }
             do throws(OrbitError) {
-                queue = .loaded(try await api.queue())
+                let loaded = try await api.queue()
+                guard isCurrent() else { return false }
+                queue = .loaded(loaded)
                 return true
             } catch {
-                if queue.value == nil { queue = .failed(error) }
+                if isCurrent(), queue.value == nil { queue = .failed(error) }
                 return false
             }
         }
@@ -240,13 +247,15 @@ public final class LibraryStore {
     }
 
     public func loadDevices(force: Bool = false) async {
-        await load(.devices, lifetime: timing.devicesLifetime, force: force) { [self] in
+        await load(.devices, lifetime: timing.devicesLifetime, force: force) { [self] isCurrent in
             if devices.value == nil { devices = .loading }
             do throws(OrbitError) {
-                devices = .loaded(try await api.devices())
+                let loaded = try await api.devices()
+                guard isCurrent() else { return false }
+                devices = .loaded(loaded)
                 return true
             } catch {
-                if devices.value == nil { devices = .failed(error) }
+                if isCurrent(), devices.value == nil { devices = .failed(error) }
                 return false
             }
         }
@@ -328,7 +337,8 @@ public final class LibraryStore {
         _ key: CacheKey,
         lifetime: TimeInterval,
         force: Bool,
-        _ body: @escaping @MainActor () async -> Bool
+        // `isCurrent` turns false once `reset()` runs, so a load that outlives the account it began for writes nothing.
+        _ body: @escaping @MainActor (_ isCurrent: @escaping @MainActor () -> Bool) async -> Bool
     ) async {
         if let running = inFlight[key] {
             await running.value
@@ -337,7 +347,7 @@ public final class LibraryStore {
         if !force, let loaded = loadedAt[key], clock.now().timeIntervalSince(loaded) < lifetime { return }
         let started = generation
         let task = Task { @MainActor [weak self] in
-            let succeeded = await body()
+            let succeeded = await body { [weak self] in self?.generation == started }
             guard let self, started == self.generation else { return }
             if succeeded { self.loadedAt[key] = self.clock.now() }
         }

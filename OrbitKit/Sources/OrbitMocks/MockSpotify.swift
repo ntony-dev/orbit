@@ -29,6 +29,7 @@ public actor MockSpotify {
 
     private var playlists = MockFixtures.playlists
     private var commandsHeld = false
+    private var readsHeld = false
     private var heldCommands: [CheckedContinuation<Void, Never>] = []
     private var webFailure: OrbitError?
     private var localFailure: OrbitError?
@@ -99,8 +100,14 @@ public actor MockSpotify {
         commandsHeld = true
     }
 
+    // Web API reads wait too, until `releaseCommands()`, so tests can act while a load is in flight.
+    public func holdReads() {
+        readsHeld = true
+    }
+
     public func releaseCommands() {
         commandsHeld = false
+        readsHeld = false
         let held = heldCommands
         heldCommands.removeAll()
         held.forEach { $0.resume() }
@@ -151,7 +158,12 @@ public actor MockSpotify {
 
     func webRequest(_ name: String, isCommand: Bool = false) async throws(OrbitError) {
         webRequests.append(name)
-        if isCommand { await awaitCommandTurn() } else { await simulateLatency() }
+        if isCommand {
+            await awaitCommandTurn()
+        } else {
+            await simulateLatency()
+            if readsHeld { await withCheckedContinuation { heldCommands.append($0) } }
+        }
         if let webFailure { throw webFailure }
     }
 

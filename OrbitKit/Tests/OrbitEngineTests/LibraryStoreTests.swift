@@ -191,4 +191,40 @@ struct LibraryStoreTests {
         await library.loadPlaylists()
         #expect(await rig.webRequests("playlists") == 2)
     }
+
+    // Signing out mid-load must not let the old account's data land afterwards.
+    @Test func loadsInFlightAtSignOutAreDiscarded() async {
+        library.updateSearch("night")
+        await rig.spotify.holdReads()
+        let library = library
+        let loads = [
+            Task { await library.loadPlaylists() },
+            Task { await library.loadSavedTracks() },
+            Task { await library.loadDevices() },
+            Task { await library.loadQueue() },
+            Task { await library.loadItems(for: MockFixtures.playlists[0]) },
+        ]
+        #expect(await eventually { rig.clock.pendingSleepers == 1 })
+        rig.clock.advance(by: 1)
+        #expect(await eventually { await rig.spotify.heldCommandCount == 6 })
+        library.reset()
+        await rig.spotify.releaseCommands()
+        for load in loads { await load.value }
+        await settle()
+        #expect(library.playlists == .idle)
+        #expect(library.savedTracks == .idle)
+        #expect(library.devices == .idle)
+        #expect(library.queue == .idle)
+        #expect(library.playlistItems.isEmpty)
+        #expect(library.searchResults == .idle)
+        await library.loadPlaylists()
+        #expect(await rig.webRequests("playlists") == 2)
+    }
+
+    private func settle() async {
+        for _ in 0..<20 {
+            await Task.yield()
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+    }
 }
