@@ -133,10 +133,13 @@ struct SpotifyPane: View {
                     .foregroundStyle(.secondary)
             }
             switch library.devices {
+            case .idle where !account.authState.isSignedIn:
+                Text("Sign in to see the devices on your Spotify account.")
+                    .foregroundStyle(.secondary)
             case .idle, .loading:
                 LabeledContent("Available devices") { ProgressView().controlSize(.small) }
             case .failed(let error):
-                ErrorRow(error: error, retry: { await library.loadDevices() }, signIn: { await account.signIn() })
+                ErrorRow(error: error, retry: { await library.loadDevices(force: true) }, signIn: { await account.signIn() })
             case .loaded(let devices) where devices.isEmpty:
                 Text("No devices are available. Open Spotify on a device to see it here.")
                     .foregroundStyle(.secondary)
@@ -149,7 +152,8 @@ struct SpotifyPane: View {
             HStack {
                 Text("Devices")
                 Spacer()
-                Button("Refresh") { Task { await library.loadDevices() } }
+                // Forced, because the cached list counts as fresh for a few seconds and Refresh would do nothing.
+                Button("Refresh") { Task { await library.loadDevices(force: true) } }
                     .buttonStyle(.link)
                     .disabled(!account.authState.isSignedIn || library.devices.isLoading)
             }
@@ -187,7 +191,7 @@ struct SpotifyPane: View {
             }
             .disabled(pinnablePlaylists.isEmpty)
             if let error = library.playlists.error {
-                ErrorRow(error: error, retry: { await library.loadPlaylists() }, signIn: { await account.signIn() })
+                ErrorRow(error: error, retry: { await library.loadPlaylists(force: true) }, signIn: { await account.signIn() })
             }
         } header: {
             Text("Pinned playlists")
