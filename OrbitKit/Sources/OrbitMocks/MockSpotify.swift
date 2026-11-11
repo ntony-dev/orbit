@@ -35,6 +35,7 @@ public actor MockSpotify {
     private var webFailure: OrbitError?
     private var localFailure: OrbitError?
     private var ignoresPlayCommands = false
+    var rejectsLikedSongsContext = false
     // Every Web API request and AppleScript command, in order, so tests can assert routing and request counts.
     public private(set) var webRequests: [String] = []
     public private(set) var localCommands: [String] = []
@@ -129,6 +130,16 @@ public actor MockSpotify {
     // Play commands are accepted but nothing starts, as when Spotify silently refuses a context.
     public func ignorePlayCommands(_ ignores: Bool) {
         ignoresPlayCommands = ignores
+    }
+
+    // Spotify answers 400 to Liked Songs as a context, and the Web client plays the saved tracks as a list instead,
+    // so playback state reports no context.
+    public func rejectLikedSongsContext(_ rejects: Bool) {
+        rejectsLikedSongsContext = rejects
+    }
+
+    func savedTrackURIs(limit: Int) -> [SpotifyURI] {
+        Array(savedTracks.prefix(limit).map(\.uri))
     }
 
     // Delivers a notification as if Spotify posted it, e.g. one that is stale by the time it arrives.

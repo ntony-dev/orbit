@@ -63,6 +63,12 @@ public struct MockSpotifyAPI: SpotifyAPI {
 
     public func play(_ target: PlayTarget, deviceID: String?) async throws(OrbitError) {
         try await control("play", deviceID)
+        if case .context(let uri, let offset) = target, uri.kind == .collection, await spotify.rejectsLikedSongsContext {
+            let uris = await spotify.savedTrackURIs(limit: 100)
+            let trackOffset = offset.flatMap { if case .track(let track) = $0, uris.contains(track) { $0 } else { nil } }
+            try await spotify.play(.tracks(uris, offset: trackOffset))
+            return
+        }
         try await spotify.play(target)
     }
 

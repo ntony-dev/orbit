@@ -130,6 +130,28 @@ struct PlaylistSwitchTests {
         #expect(playback.snapshot.context?.uri == target.uri)
     }
 
+    // The Web client's fallback plays the saved tracks as a list, so no Liked Songs context is ever observed.
+    @Test func likedSongsOnAnotherDeviceConfirmsWithoutAContext() async throws {
+        let liked = try #require(stores.library.likedSongs)
+        await stores.library.loadSavedTracks()
+        await rig.spotify.rejectLikedSongsContext(true)
+        await rig.spotify.simulateRemotePlayback(on: "dev-kitchen")
+        await rig.spotify.simulateQuit()
+        await playback.refresh()
+        #expect(playback.authority == .webAPI)
+        let playback = playback
+        let switching = Task { await playback.play(playlist: liked) }
+        for _ in 0..<16 {
+            rig.clock.advance(by: 0.5)
+            await settle()
+        }
+        #expect(await switching.value)
+        #expect(playback.lastError == nil)
+        #expect(await rig.webRequests("play") == 1)
+        #expect(playback.snapshot.context?.uri == liked.uri)
+        #expect(stores.library.recentPlaylists.first?.id == LikedSongs.playlistID)
+    }
+
     @Test func switchesThroughTheWebAPIWhenAutomationIsDenied() async {
         await rig.spotify.setAutomationPermission(.denied)
         await playback.refresh()
@@ -205,6 +227,15 @@ struct DemoSmokeTests {
         await stores.playback.next()
         #expect(stores.playback.snapshot.track != before)
         #expect(stores.playback.lastError == nil)
+
+        let liked = try #require(stores.library.likedSongs)
+        #expect(await stores.playback.play(playlist: liked))
+        #expect(stores.playback.snapshot.context?.name == LikedSongs.name)
+        await spotify.setAutomationPermission(.denied)
+        await stores.playback.refresh()
+        #expect(await stores.playback.play(playlist: target))
+        #expect(await stores.playback.play(playlist: liked))
+        #expect(stores.playback.snapshot.context?.uri == liked.uri)
         stores.playback.stop()
     }
 }

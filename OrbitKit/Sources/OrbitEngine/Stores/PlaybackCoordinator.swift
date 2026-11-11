@@ -638,6 +638,10 @@ extension PlaybackCoordinator {
             guard var result = remoteSnapshot else { return .idle }
             if let context = result.context {
                 result.context = named(context)
+            } else if let known = knownContext, LikedSongs.isLikedSongs(known.context.uri), let track = result.track?.uri,
+                      contextTracks?(known.context.uri)?.contains(track) == true {
+                // Liked Songs started as a track list still belongs to Liked Songs for as long as it plays saved tracks.
+                result.context = known.context
             }
             return result
         case .local:
@@ -943,7 +947,10 @@ extension PlaybackCoordinator {
             web: { try await $0.play(LikedSongs.webTarget(for: uri), deviceID: $1) },
             confirmed: { observation, before in
                 if let context = observation.context { return Self.sameContext(context, uri) }
-                guard observation.isLocal, observation.isPlaying, let track = observation.track else { return false }
+                // When Spotify refuses Liked Songs as a context the Web client plays the saved tracks as a list,
+                // and Web API state then never names a context; the track is all there is to go on.
+                guard observation.isLocal || LikedSongs.isLikedSongs(uri) else { return false }
+                guard observation.isPlaying, let track = observation.track else { return false }
                 if let tracks, !tracks.isEmpty { return tracks.contains(track) }
                 return track != before || (observation.position ?? .infinity) < 3
             }

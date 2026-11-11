@@ -6,11 +6,11 @@ public enum LikedSongs {
     public static let name = "Liked Songs"
 
     public static func contextURI(userID: String) -> SpotifyURI {
-        SpotifyURI(rawValue: "spotify:user:\(userID):collection")
+        .likedSongs(userID: userID)
     }
 
-    // How a context is started over the Web API. Liked Songs is the one context that may need a different
-    // target, so this is the single place to change it.
+    // How a context is started over the Web API. Liked Songs goes out as its collection context too; the Web
+    // client itself falls back to a track list when Spotify refuses that, so this stays a plain context.
     static func webTarget(for context: SpotifyURI) -> PlayTarget {
         .context(context)
     }
