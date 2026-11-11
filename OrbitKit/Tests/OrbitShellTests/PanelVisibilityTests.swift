@@ -1,5 +1,6 @@
 import CoreGraphics
 import OrbitCore
+import OrbitEngine
 @testable import OrbitShell
 import Testing
 
@@ -81,5 +82,18 @@ struct FullscreenDetectionTests {
         let other = CGRect(x: 3440, y: 0, width: 1512, height: 982)
         let windows = [WindowSnapshot(ownerPID: 7, layer: 0, bounds: other, alpha: 1)]
         #expect(!FullscreenDetection.isCovered(displayBounds: display, by: windows, excluding: ownPID))
+    }
+}
+
+struct InterfaceVisibilityTests {
+    @Test func followsThePanel() {
+        #expect(InterfaceVisibility(isPanelVisible: true, isExpanded: false, areScreensAsleep: false) == .collapsed)
+        #expect(InterfaceVisibility(isPanelVisible: true, isExpanded: true, areScreensAsleep: false) == .expanded)
+    }
+
+    @Test func hiddenWheneverNobodyCanSeeIt() {
+        #expect(InterfaceVisibility(isPanelVisible: false, isExpanded: false, areScreensAsleep: false) == .hidden)
+        #expect(InterfaceVisibility(isPanelVisible: false, isExpanded: true, areScreensAsleep: false) == .hidden)
+        #expect(InterfaceVisibility(isPanelVisible: true, isExpanded: true, areScreensAsleep: true) == .hidden)
     }
 }

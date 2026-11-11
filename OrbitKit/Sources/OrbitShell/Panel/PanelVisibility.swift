@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import OrbitEngine
 
 struct PanelVisibility: Equatable, Sendable {
     var isPillVisible: Bool
@@ -17,6 +18,16 @@ struct PanelVisibility: Equatable, Sendable {
         if hidesInFullscreen, isFullscreenAppFrontmost { return false }
         if hidesWhenSpotifyQuits, !isSpotifyRunning { return false }
         return true
+    }
+}
+
+extension InterfaceVisibility {
+    init(isPanelVisible: Bool, isExpanded: Bool, areScreensAsleep: Bool) {
+        if !isPanelVisible || areScreensAsleep {
+            self = .hidden
+        } else {
+            self = isExpanded ? .expanded : .collapsed
+        }
     }
 }
 

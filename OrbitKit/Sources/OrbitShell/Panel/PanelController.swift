@@ -15,6 +15,7 @@ final class PanelController: PanelHost {
     let state = PanelState()
     private let panel: FloatingPanel
     private let preferences: Preferences
+    private let stores: OrbitStores
     private let account: AccountStore
     private var positions: [String: SavedPanelPosition]
     private var displayID: String?
@@ -24,6 +25,11 @@ final class PanelController: PanelHost {
     private var fullscreenCheck: Task<Void, Never>?
     private var isFullscreenAppFrontmost = false
     private var isPresentedOnDemand = false
+    // Nobody sees the pill while the displays sleep or another user is switched in, so playback is not polled
+    // for it then.
+    private var areScreensAsleep = false { didSet { reportInterfaceVisibility() } }
+    private var isSessionInactive = false { didSet { reportInterfaceVisibility() } }
+    private var reportedVisibility: InterfaceVisibility?
     // Set by the --expanded launch argument, so a test run never takes keyboard focus from the user, even if the
     // UI asks for it on appear. Cleared by the first real click in the panel or the next deliberate opening.
     private var suppressesFocus = false
@@ -32,6 +38,7 @@ final class PanelController: PanelHost {
 
     init(stores: OrbitStores, preferences: Preferences) {
         self.preferences = preferences
+        self.stores = stores
         account = stores.account
         positions = preferences.remembersPosition ? preferences.savedPositions : [:]
         displayID = preferences.remembersPosition ? preferences.panelDisplayID : nil
@@ -40,7 +47,8 @@ final class PanelController: PanelHost {
         // The UI sizes the canvas explicitly through setCanvasSize; the hosting view must not resize the window.
         hostingView.sizingOptions = []
         panel.contentView = hostingView
-        panel.onCancel = { [state] in state.collapse() }
+        // Escape steps back one layer (picker to player) and collapses only from the player itself.
+        panel.onCancel = { [state] in state.dismissActiveLayer() }
         // Runs before the panel handles the click, so a click on an open but unfocused panel also makes it key.
         panel.onMouseDown = { [weak self] in
             guard let self else { return }
@@ -255,6 +263,20 @@ final class PanelController: PanelHost {
             // A collapse animation does not run in a hidden window, so the canvas is shrunk here instead.
             panel.setFrame(PanelGeometry.resize(panel.frame, to: collapsedCanvasSize, keeping: state.anchor), display: false)
         }
+        reportInterfaceVisibility()
+    }
+
+    // Tells the playback coordinator how much of Orbit can be seen, which sets how often it asks the Web API for
+    // playback state. Reported only on change, because every report of .expanded also refreshes the library.
+    private func reportInterfaceVisibility() {
+        let visibility = InterfaceVisibility(
+            isPanelVisible: panel.isVisible,
+            isExpanded: state.isExpanded,
+            areScreensAsleep: areScreensAsleep || isSessionInactive
+        )
+        guard visibility != reportedVisibility else { return }
+        reportedVisibility = visibility
+        stores.setInterfaceVisibility(visibility)
     }
 
     private func takeKeyboardFocus() {
@@ -311,10 +333,13 @@ final class PanelController: PanelHost {
         observe(NotificationCenter.default, NSWindow.didResignKeyNotification, object: panel) { $0.keyStatusChanged() }
         observe(NotificationCenter.default, NSWindow.didBecomeKeyNotification, object: panel) { $0.keyStatusChanged() }
         observe(NotificationCenter.default, NSApplication.didChangeScreenParametersNotification) {
-            $0.restore()
-            $0.scheduleFullscreenCheck()
+            $0.displaysChanged()
         }
         let workspace = NSWorkspace.shared.notificationCenter
+        observe(workspace, NSWorkspace.screensDidSleepNotification) { $0.areScreensAsleep = true }
+        observe(workspace, NSWorkspace.screensDidWakeNotification) { $0.areScreensAsleep = false }
+        observe(workspace, NSWorkspace.sessionDidResignActiveNotification) { $0.isSessionInactive = true }
+        observe(workspace, NSWorkspace.sessionDidBecomeActiveNotification) { $0.isSessionInactive = false }
         observe(workspace, NSWorkspace.activeSpaceDidChangeNotification) { $0.scheduleFullscreenCheck() }
         observe(workspace, NSWorkspace.didActivateApplicationNotification) { $0.scheduleFullscreenCheck() }
     }
@@ -332,6 +357,16 @@ final class PanelController: PanelHost {
                 action(self)
             }
         })
+    }
+
+    // A pinned pill (--panel-anchor) stays exactly where it was asked to be; anything else returns to its saved
+    // place on the display it belongs to. An open card is kept on screen rather than collapsed under the user.
+    private func displaysChanged() {
+        if !isPinned {
+            restore()
+            if state.isExpanded { keepExpandedSurfaceOnScreen() }
+        }
+        scheduleFullscreenCheck()
     }
 
     private func remembersPositionChanged(_ remembers: Bool) {
@@ -360,6 +395,7 @@ final class PanelController: PanelHost {
             removeClickMonitor()
             returnKeyboardFocus()
         }
+        reportInterfaceVisibility()
     }
 
     // Clicks in other apps collapse the expanded panel. Clicks in Orbit's own windows (Settings, the menu bar
