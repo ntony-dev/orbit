@@ -415,7 +415,7 @@ extension PlaybackCoordinator {
              .premiumRequired, .rateLimited, .quotaExceeded, .network, .noActiveDevice, .notImplemented, .unexpected:
             true
         case .deviceRestricted, .contentRestricted, .playlistItemsUnavailable, .callbackPortInUse, .missingClientID,
-             .cancelled, .playbackNotConfirmed:
+             .cancelled, .playbackNotConfirmed, .notFound:
             false
         }
     }
