@@ -71,6 +71,12 @@ public final class OrbitStores {
                 library.setUser(profile)
             }
         })
+        // Contexts are named from the library, which often finishes loading after the first playback state.
+        observations.append(Task {
+            for await _ in Observations({ (library.playlists, library.likedSongs) }) {
+                playback.libraryChanged()
+            }
+        })
         observations.append(Task {
             var previous: AutomationPermission?
             for await permission in Observations({ account.automationPermission }) {

@@ -29,7 +29,8 @@ public actor MockSpotify {
 
     private var playlists = MockFixtures.playlists
     private var commandsHeld = false
-    private var readsHeld = false
+    // Names of the Web API reads that wait for `releaseCommands()`; nil holds none, an empty set holds all.
+    private var heldReads: Set<String>?
     private var heldCommands: [CheckedContinuation<Void, Never>] = []
     private var webFailure: OrbitError?
     private var localFailure: OrbitError?
@@ -100,14 +101,15 @@ public actor MockSpotify {
         commandsHeld = true
     }
 
-    // Web API reads wait too, until `releaseCommands()`, so tests can act while a load is in flight.
-    public func holdReads() {
-        readsHeld = true
+    // Web API reads wait too, until `releaseCommands()`, so tests can act while a load is in flight. Pass names
+    // such as "playlists" to hold only those requests.
+    public func holdReads(_ names: Set<String> = []) {
+        heldReads = names
     }
 
     public func releaseCommands() {
         commandsHeld = false
-        readsHeld = false
+        heldReads = nil
         let held = heldCommands
         heldCommands.removeAll()
         held.forEach { $0.resume() }
@@ -162,7 +164,9 @@ public actor MockSpotify {
             await awaitCommandTurn()
         } else {
             await simulateLatency()
-            if readsHeld { await withCheckedContinuation { heldCommands.append($0) } }
+            if let heldReads, heldReads.isEmpty || heldReads.contains(name) {
+                await withCheckedContinuation { heldCommands.append($0) }
+            }
         }
         if let webFailure { throw webFailure }
     }

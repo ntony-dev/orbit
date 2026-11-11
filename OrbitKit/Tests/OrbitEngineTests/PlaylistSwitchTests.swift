@@ -147,6 +147,43 @@ struct PlaylistSwitchTests {
     }
 }
 
+@MainActor
+struct SignInTests {
+    // Playback state can arrive before the library does; the context is named as soon as the playlists load.
+    @Test func theContextIsNamedOnceTheLibraryLoadsAfterPlaybackState() async throws {
+        let rig = Rig()
+        let stores = rig.stores()
+        await rig.spotify.holdReads(["playlists"])
+        stores.start()
+        #expect(await eventually { stores.playback.snapshot.context != nil })
+        #expect(stores.playback.snapshot.context?.name == nil)
+        await rig.spotify.releaseCommands()
+        #expect(await eventually { stores.library.playlists.value != nil })
+        #expect(await eventually { stores.playback.snapshot.context?.name == MockFixtures.startingPlaylist.name })
+    }
+
+    @Test func signingInAfterLaunchSyncsPlaybackFromTheWebAPI() async {
+        let clock = MockClock()
+        let spotify = MockSpotify(latency: .zero, now: clock.now)
+        await spotify.setAutomationPermission(.denied)
+        let authorizer = MockAuthorizer(restoredState: .signedOut, latency: .zero)
+        let services = MockServices(spotify: spotify, authorizer: authorizer)
+        let stores = OrbitStores(
+            localPlayer: services.localPlayer,
+            api: services.api,
+            authorizer: authorizer,
+            clock: EngineClock(now: clock.now, sleep: clock.sleep)
+        )
+        stores.start()
+        #expect(await eventually { stores.account.authState == .signedOut })
+        #expect(stores.playback.snapshot.track == nil)
+        await stores.account.signIn()
+        #expect(await eventually {
+            stores.playback.snapshot.track != nil && stores.playback.snapshot.context?.name == MockFixtures.startingPlaylist.name
+        })
+    }
+}
+
 // Real time and simulated latency, as `--demo` runs, to catch anything the manual clock hides.
 @MainActor
 struct DemoSmokeTests {

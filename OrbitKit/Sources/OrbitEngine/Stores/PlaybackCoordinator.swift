@@ -167,6 +167,10 @@ public final class PlaybackCoordinator {
         scheduleSync(after: available ? .zero : nil)
     }
 
+    func libraryChanged() {
+        recompute()
+    }
+
     public func refresh() async {
         await refreshLocal()
         await refreshRemote()
