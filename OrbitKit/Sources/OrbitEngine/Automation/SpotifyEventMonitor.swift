@@ -12,26 +12,36 @@ final class SpotifyEventMonitor {
     }
 
     private let bundleIdentifier: String
+    private let stateChangedName: Notification.Name
     private let continuation: AsyncStream<Signal>.Continuation
     private var observers: [(NotificationCenter, any NSObjectProtocol)] = []
+    private var stateObserver: StateObserver?
 
-    nonisolated init(bundleIdentifier: String, continuation: AsyncStream<Signal>.Continuation) {
+    nonisolated init(
+        bundleIdentifier: String,
+        stateChangedName: Notification.Name = SpotifyAppleScriptPlayer.stateChangedNotification,
+        continuation: AsyncStream<Signal>.Continuation
+    ) {
         self.bundleIdentifier = bundleIdentifier
+        self.stateChangedName = stateChangedName
         self.continuation = continuation
     }
 
     func activate() {
-        guard observers.isEmpty else { return }
+        guard observers.isEmpty, stateObserver == nil else { return }
         let continuation = continuation
         let bundleIdentifier = bundleIdentifier
-        let distributed = DistributedNotificationCenter.default()
-        observers.append((distributed, distributed.addObserver(
-            forName: SpotifyAppleScriptPlayer.stateChangedNotification, object: nil, queue: .main
-        ) { notification in
-            if let state = SpotifyNotificationPayload.state(from: notification.userInfo ?? [:]) {
-                continuation.yield(.stateChanged(state))
-            }
-        }))
+        // AppKit suspends distributed notifications while the app is inactive, which a non-activating panel
+        // almost always is; only the selector-based registration can opt out of that.
+        let observer = StateObserver(continuation: continuation)
+        DistributedNotificationCenter.default().addObserver(
+            observer,
+            selector: #selector(StateObserver.stateChanged(_:)),
+            name: stateChangedName,
+            object: nil,
+            suspensionBehavior: .deliverImmediately
+        )
+        stateObserver = observer
         let workspace = NSWorkspace.shared.notificationCenter
         for (name, signal) in [
             (NSWorkspace.didLaunchApplicationNotification, Signal.launched),
@@ -47,6 +57,22 @@ final class SpotifyEventMonitor {
     func invalidate() {
         for (center, observer) in observers { center.removeObserver(observer) }
         observers.removeAll()
+        if let stateObserver { DistributedNotificationCenter.default().removeObserver(stateObserver) }
+        stateObserver = nil
+    }
+}
+
+private final class StateObserver: NSObject, Sendable {
+    let continuation: AsyncStream<SpotifyEventMonitor.Signal>.Continuation
+
+    init(continuation: AsyncStream<SpotifyEventMonitor.Signal>.Continuation) {
+        self.continuation = continuation
+    }
+
+    @objc func stateChanged(_ notification: Notification) {
+        if let state = SpotifyNotificationPayload.state(from: notification.userInfo ?? [:]) {
+            continuation.yield(.stateChanged(state))
+        }
     }
 }
 

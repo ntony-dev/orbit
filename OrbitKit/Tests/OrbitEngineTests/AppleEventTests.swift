@@ -79,6 +79,34 @@ struct AppleEventTests {
         #expect(SpotifyNotificationPayload.state(from: [:]) == nil)
     }
 
+    // Orbit's panel never activates the app, and AppKit holds back distributed notifications while inactive.
+    @MainActor
+    @Test func stateNotificationsArriveWhileDeliveryIsSuspended() async throws {
+        let name = Notification.Name("app.orbit.tests.\(UUID().uuidString)")
+        let (stream, continuation) = AsyncStream.makeStream(of: SpotifyEventMonitor.Signal.self)
+        let monitor = SpotifyEventMonitor(bundleIdentifier: "app.orbit.tests", stateChangedName: name, continuation: continuation)
+        monitor.activate()
+        defer { monitor.invalidate() }
+        let center = DistributedNotificationCenter.default()
+        center.suspended = true
+        defer { center.suspended = false }
+        center.postNotificationName(name, object: nil, userInfo: ["Player State": "Paused"], deliverImmediately: false)
+        let received = Task { () -> LocalPlayerState.Status? in
+            for await signal in stream {
+                if case .stateChanged(let state) = signal { return state.status }
+            }
+            return nil
+        }
+        let timeout = Task {
+            try? await Task.sleep(for: .seconds(3))
+            received.cancel()
+            continuation.finish()
+        }
+        let status = await received.value
+        timeout.cancel()
+        #expect(status == .paused)
+    }
+
     // Read-only check against the real app, opt-in because it needs Spotify running and Automation consent.
     @Test(.enabled(if: ProcessInfo.processInfo.environment["ORBIT_READ_REAL_SPOTIFY"] == "1"))
     func readsTheRealAppWithoutChangingIt() async throws {
