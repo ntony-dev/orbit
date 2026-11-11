@@ -16,7 +16,7 @@ struct AppearancePane: View {
             }
 
             Section {
-                Picker("Glass", selection: $preferences.glassPreset) {
+                Picker("Style", selection: $preferences.glassPreset) {
                     ForEach(GlassPreset.allCases, id: \.self) { Text($0.title) }
                 }
                 .pickerStyle(.segmented)

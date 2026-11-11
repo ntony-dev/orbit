@@ -8,10 +8,15 @@ struct BehaviorPane: View {
 
     var body: some View {
         Form {
-            Section("Pill") {
+            Section {
                 Toggle("Show the pill", isOn: $preferences.isPillVisible)
                 Toggle("Keep above other windows", isOn: $preferences.alwaysOnTop)
                 Toggle("Collapse after choosing music", isOn: $preferences.collapsesAfterAction)
+            } header: {
+                Text("Pill")
+            } footer: {
+                Text("With the pill hidden, open Orbit from its menu bar item or a global shortcut.")
+                    .settingsFootnote()
             }
 
             Section {
@@ -50,11 +55,6 @@ struct BehaviorPane: View {
                 if !loginItem.isAvailable {
                     Text("Not available in demo mode.").settingsFootnote()
                 }
-            }
-
-            Section {
-                Text("With the pill hidden, use the Orbit menu bar item or a global shortcut to open the player.")
-                    .settingsFootnote()
             }
         }
         .formStyle(.grouped)

@@ -188,9 +188,13 @@ private struct ClientIDSection: View {
 
     var body: some View {
         Section {
-            TextField("Client ID", text: $draft, prompt: Text(builtInClientID == nil ? "Required" : "Use this copy's built-in ID"))
-                .font(.body.monospaced())
-                .onSubmit(save)
+            LabeledContent("Client ID") {
+                TextField("Client ID", text: $draft, prompt: Text(builtInClientID == nil ? "Required" : "Use this copy's built-in ID"))
+                    .labelsHidden()
+                    .font(.body.monospaced())
+                    .multilineTextAlignment(.trailing)
+                    .onSubmit(save)
+            }
             HStack {
                 Text(source).font(.callout).foregroundStyle(.secondary)
                 Spacer()
@@ -199,7 +203,7 @@ private struct ClientIDSection: View {
         } header: {
             Text("Spotify Client ID")
         } footer: {
-            Text("To use your own Spotify app, create one in the Spotify Developer Dashboard with the redirect URI http://127.0.0.1:8888/callback and paste its Client ID here. Sign in again after changing it.")
+            Text(verbatim: "To use your own Spotify app, create one in the Spotify Developer Dashboard with the redirect URI http://127.0.0.1:8888/callback and paste its Client ID here. Sign in again after changing it.")
                 .settingsFootnote()
         }
         .onAppear { draft = preferences.clientIDOverride ?? "" }
