@@ -487,7 +487,8 @@ extension PlaybackCoordinator {
             position: state.position,
             isLocal: true
         ))
-        if trackChanged, interfaceVisibility != .hidden {
+        guard interfaceVisibility != .hidden else { return }
+        if trackChanged {
             // AppleScript cannot say which context is playing or which device; one Web API read per track can.
             scheduleSync(after: .seconds(1))
             Task { await refreshSavedState() }

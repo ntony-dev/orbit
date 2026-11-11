@@ -319,6 +319,25 @@ struct PlaybackCoordinatorTests {
         })
     }
 
+    // The desktop app keeps posting notifications while another device plays; hidden, none of them may poll.
+    @Test func localNotificationsDoNotPollWhileHidden() async throws {
+        await rig.spotify.simulateRemotePlayback(on: "dev-kitchen")
+        coordinator.start()
+        await coordinator.refresh()
+        #expect(coordinator.authority == .webAPI)
+        coordinator.setInterfaceVisibility(.hidden)
+        await settle()
+        let base = await rig.webRequests("playbackState")
+        let state = try #require(await rig.spotify.currentLocalState())
+        for _ in 0..<3 {
+            await rig.spotify.emitLocalState(state)
+            await settle()
+            rig.clock.advance(by: 2)
+            await settle()
+        }
+        #expect(await rig.webRequests("playbackState") == base)
+    }
+
     @Test func syncIntervalsFollowVisibilityAndAuthority() {
         #expect(PlaybackCoordinator.syncDelay(visibility: .hidden, authority: .webAPI, untilTrackEnds: 100) == nil)
         #expect(PlaybackCoordinator.syncDelay(visibility: .collapsed, authority: .local, untilTrackEnds: nil) == nil)
