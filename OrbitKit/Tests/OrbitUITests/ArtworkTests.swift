@@ -34,3 +34,20 @@ struct ArtworkImagesTests {
         #expect(await ArtworkImages.load(url, points: 32, scale: 1)?.width == 32)
     }
 }
+
+@MainActor
+struct ArtworkFirstFrameTests {
+    private let rowSide = OrbitTokens.Size.rowArtwork
+
+    // Rows decode at the scale of the display they are on, so the first frame has to look up the same key.
+    @Test(arguments: [1.0, 2.0])
+    func theFirstFrameFindsTheCoverDecodedForThisScale(scale: CGFloat) async throws {
+        let url = try temporaryCover()
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(ArtworkView.cachedImage(url, size: rowSide, scale: scale) == nil)
+        let decoded = try #require(await ArtworkImages.load(url, points: rowSide, scale: scale))
+        #expect(decoded.width == ArtworkView.pixels(rowSide, scale: scale))
+        #expect(ArtworkView.cachedImage(url, size: rowSide, scale: scale) === decoded)
+        #expect(ArtworkView.cachedImage(url, size: rowSide, scale: scale == 1 ? 2 : 1) == nil)
+    }
+}

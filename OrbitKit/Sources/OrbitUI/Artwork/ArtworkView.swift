@@ -33,8 +33,9 @@ struct ArtworkView: View {
         self.cornerRadius = cornerRadius
         self.placeholderSymbol = placeholderSymbol
         self.keepsPrevious = keepsPrevious
-        if let url, let cached = ArtworkPipeline.shared.memory[ArtworkKey(url: url, pixelSize: Self.pixels(size, scale: 2))] {
-            _shown = State(initialValue: Shown(url: url, image: cached.image))
+        // The display's scale is unknown until the body runs, so this guesses 2x; `firstFrame` covers other scales.
+        if let url, let cached = Self.cachedImage(url, size: size, scale: 2) {
+            _shown = State(initialValue: Shown(url: url, image: cached))
         }
     }
 
@@ -67,8 +68,19 @@ struct ArtworkView: View {
     }
 
     private var visible: Shown? {
-        guard let shown else { return nil }
+        guard let shown else { return firstFrame }
         return keepsPrevious || shown.url == url ? shown : nil
+    }
+
+    // A cover already decoded at this display's scale, shown before `load` has run. On a 1x display the guess in
+    // init misses, and rows would otherwise draw their placeholder for a frame before the cached cover.
+    private var firstFrame: Shown? {
+        guard let url, let image = Self.cachedImage(url, size: size, scale: displayScale) else { return nil }
+        return Shown(url: url, image: image)
+    }
+
+    static func cachedImage(_ url: URL, size: CGFloat, scale: CGFloat) -> CGImage? {
+        ArtworkPipeline.shared.memory[ArtworkKey(url: url, pixelSize: pixels(size, scale: scale))]?.image
     }
 
     private struct TaskKey: Equatable {
