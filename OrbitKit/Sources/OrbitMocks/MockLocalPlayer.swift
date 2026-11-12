@@ -84,6 +84,6 @@ public struct MockLocalPlayer: LocalPlayer {
 
     public func setRepeating(_ enabled: Bool) async throws(OrbitError) {
         try await spotify.localCommand("set repeating")
-        await spotify.setRepeat(enabled ? .context : .off)
+        await spotify.setRepeating(enabled)
     }
 }

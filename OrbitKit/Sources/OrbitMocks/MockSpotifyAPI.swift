@@ -48,7 +48,7 @@ public struct MockSpotifyAPI: SpotifyAPI {
 
     public func playbackState() async throws(OrbitError) -> PlaybackSnapshot? {
         try await spotify.webRequest("playbackState")
-        return await spotify.snapshot()
+        return await spotify.playbackStateRead()
     }
 
     public func devices() async throws(OrbitError) -> [PlaybackDevice] {
@@ -139,6 +139,7 @@ public struct MockSpotifyAPI: SpotifyAPI {
     }
 
     private func control(_ name: String, _ deviceID: String?) async throws(OrbitError) {
+        await spotify.noteWebCommand()
         try await spotify.webRequest(name, isCommand: true)
         if let deviceID {
             try await spotify.transfer(to: deviceID, play: false)

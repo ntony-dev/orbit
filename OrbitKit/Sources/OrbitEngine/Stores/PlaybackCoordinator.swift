@@ -27,9 +27,9 @@ public enum InterfaceVisibility: Hashable, Sendable {
 // Authority: while the Spotify app on this Mac is the active device, its AppleScript state and distributed
 // notification drive the snapshot and the Web API only adds context, device and artwork. When another device is
 // playing, or the app is closed, the Web API snapshot is authoritative. Transport goes to the authoritative side
-// first; starting a playlist, album or track goes to the Web API first, aimed at this Mac by device ID while it is
-// the device in use, because the app's `play track` brings its window up. Either falls back to the other route
-// when its own is unavailable.
+// first. Starting a playlist, album or track, and setting repeat, go to the Web API first, aimed at this Mac by
+// device ID while it is the device in use, because the app's `play track` brings its window up and its repeat is
+// only on or off. Either falls back to the other route when its own is unavailable.
 //
 // Races: commands run one at a time in issue order. Each optimistic change is an overlay on top of the last
 // observed state; it stays until an observation agrees with it or its grace period ends, so a stale notification
@@ -93,6 +93,12 @@ public final class PlaybackCoordinator {
     @ObservationIgnored private var knownContext: (context: PlaybackContext, sequence: Int)?
     @ObservationIgnored private var contextSequence = 0
     @ObservationIgnored private var webSignedIn = true
+    // This Mac's repeat mode, folded from observations in the order they arrived: AppleScript reads say only on or
+    // off, so they settle that, and Web API reads of this Mac say which "on". Nil until either has been seen.
+    @ObservationIgnored private var localRepeat: RepeatMode?
+    // Counts observations so a Web API read can tell whether an AppleScript read landed while it was in flight.
+    @ObservationIgnored private var observationCount = 0
+    @ObservationIgnored private var lastLocalRepeatRead = 0
 
     private var pendingCounts: [PlaybackIntent: Int] = [:]
     @ObservationIgnored private var overlays: [Field: Overlay] = [:]
@@ -262,7 +268,8 @@ public final class PlaybackCoordinator {
         )
     }
 
-    // AppleScript only knows repeat on or off, so repeat-one always goes through the Web API.
+    // The Web API sets the exact mode. AppleScript only knows on or off, so it is the fallback for those two alone,
+    // and its "on" is sent only from off: what it does to repeat-one is not Orbit's to guess.
     func setRepeat(_ mode: RepeatMode) async {
         var local: LocalCommand?
         if mode != .track {
@@ -272,6 +279,7 @@ public final class PlaybackCoordinator {
             .repeatMode,
             overlay: (.repeatMode, { $0.repeatMode = mode }, { $0.repeatMode == mode }),
             coalesces: true,
+            preferring: .webAPI,
             local: local,
             web: { try await $0.setRepeat(mode, deviceID: $1) }
         )
@@ -436,7 +444,8 @@ extension PlaybackCoordinator {
     }
 
     // Which route a command tries first when this Mac's app is the device in use. Transport prefers the app, which
-    // answers in milliseconds; starting something new prefers the Web API, which plays without showing Spotify.
+    // answers in milliseconds; starting something new prefers the Web API, which plays without showing Spotify, and
+    // so does repeat, which the Web API sets exactly.
     private enum RoutePreference {
         case local, webAPI
     }
@@ -485,6 +494,7 @@ extension PlaybackCoordinator {
         case .terminated:
             localRunning = false
             local = nil
+            localRepeat = nil
             recompute()
             scheduleSync(after: .zero)
         }
@@ -533,6 +543,8 @@ extension PlaybackCoordinator {
         }
         local = LocalObservation(state: state, at: clock.now())
         let trackChanged = previous?.track?.uri != state.track?.uri
+        // Only a value Spotify actually reported counts, never one carried over from an earlier read.
+        let repeatNeedsWebAPI = incoming.isRepeating.map(foldLocalRepeat) ?? false
         recompute()
         notify(ObservedState(
             track: state.track?.uri,
@@ -546,9 +558,33 @@ extension PlaybackCoordinator {
             // AppleScript cannot say which context is playing or which device; one Web API read per track can.
             scheduleSync(after: .seconds(1))
             Task { await refreshSavedState() }
-        } else if authority == .webAPI {
+        } else if authority == .webAPI || repeatNeedsWebAPI {
             scheduleSync(after: .seconds(1))
         }
+    }
+
+    // Returns whether repeat came on without Orbit knowing which mode, which only the Web API can answer.
+    private func foldLocalRepeat(_ repeating: Bool) -> Bool {
+        observationCount += 1
+        lastLocalRepeatRead = observationCount
+        guard repeating else {
+            localRepeat = .off
+            return false
+        }
+        guard localRepeat == nil || localRepeat == .off else { return false }
+        localRepeat = .context
+        return true
+    }
+
+    private func foldRemoteRepeat(_ mode: RepeatMode, startedAt count: Int) {
+        guard count < lastLocalRepeatRead else {
+            localRepeat = mode
+            return
+        }
+        // An AppleScript read landed while this one was in flight, so it is newer about on or off; this read can
+        // still say which "on" it is.
+        guard localRepeat != .off, mode != .off else { return }
+        localRepeat = mode
     }
 
     private func refreshRemote() async {
@@ -562,6 +598,7 @@ extension PlaybackCoordinator {
             return
         }
         let epoch = commandEpoch
+        let started = observationCount
         let task = Task { [weak self, api] in
             let result: Result<PlaybackSnapshot?, OrbitError>
             do throws(OrbitError) {
@@ -569,7 +606,7 @@ extension PlaybackCoordinator {
             } catch {
                 result = .failure(error)
             }
-            self?.finishRemoteFetch(result, epoch: epoch)
+            self?.finishRemoteFetch(result, epoch: epoch, startedAt: started)
         }
         remoteFetch = task
         await task.value
@@ -578,7 +615,7 @@ extension PlaybackCoordinator {
         scheduleSync(after: nil)
     }
 
-    private func finishRemoteFetch(_ result: Result<PlaybackSnapshot?, OrbitError>, epoch: Int) {
+    private func finishRemoteFetch(_ result: Result<PlaybackSnapshot?, OrbitError>, epoch: Int, startedAt started: Int) {
         switch result {
         case .success(let incoming):
             syncError = nil
@@ -588,6 +625,7 @@ extension PlaybackCoordinator {
             contextSequence += 1
             remote = RemoteObservation(snapshot: incoming, at: clock.now(), sequence: contextSequence)
             if let device = incoming?.device, isLocalDevice(device) { localDeviceID = device.id }
+            if let incoming, describesThisMac(incoming) { foldRemoteRepeat(incoming.repeatMode, startedAt: started) }
             recompute(freshRemote: true)
             notify(ObservedState(
                 track: incoming?.track?.uri,
@@ -649,6 +687,13 @@ extension PlaybackCoordinator {
         recompute()
     }
 
+    // A Web API read about this Mac's playback: its device, or the very track the app reports.
+    private func describesThisMac(_ remote: PlaybackSnapshot) -> Bool {
+        if isLocalDevice(remote.device) { return true }
+        guard let track = remote.track?.uri else { return false }
+        return local?.state.track?.uri == track
+    }
+
     private func isLocalDevice(_ device: PlaybackDevice?) -> Bool {
         guard let device else { return false }
         if let localDeviceID { return device.id == localDeviceID }
@@ -691,7 +736,7 @@ extension PlaybackCoordinator {
     }
 
     // AppleScript reports no context, device or repeat-one, so those come from a Web API read of the same track or
-    // of this Mac, and fields the notification omits fall back to the previous snapshot.
+    // of this Mac, and fields the notification omits fall back to the previous observation.
     private func snapshotFromLocal(_ local: LocalObservation, remote remoteSnapshot: PlaybackSnapshot?) -> PlaybackSnapshot {
         let state = local.state
         let paired = remoteSnapshot.flatMap { $0.track?.uri == state.track?.uri && state.track != nil ? $0 : nil }
@@ -712,18 +757,14 @@ extension PlaybackCoordinator {
             ?? PlaybackDevice(id: localDeviceID ?? "orbit.local-device", name: localDeviceName ?? "This Mac", kind: .computer)
         device.isActive = true
         device.volumePercent = volume
-        let repeatMode: RepeatMode = switch state.isRepeating {
-        case true?: (paired?.repeatMode ?? snapshot.repeatMode) == .track ? .track : .context
-        case false?: .off
-        case nil: paired?.repeatMode ?? snapshot.repeatMode
-        }
+        // Never the published snapshot: it carries optimistic values, which must not become observed ones.
         return PlaybackSnapshot(
             track: track,
             isPlaying: state.status == .playing,
             position: state.position ?? 0,
             sampledAt: local.at,
-            shuffle: state.isShuffling ?? paired?.shuffle ?? snapshot.shuffle,
-            repeatMode: repeatMode,
+            shuffle: state.isShuffling ?? (paired ?? sameDevice)?.shuffle ?? false,
+            repeatMode: localRepeat ?? .off,
             context: context,
             device: device,
             volume: volume
@@ -966,6 +1007,7 @@ extension PlaybackCoordinator {
         overlay: (field: Field, apply: (inout PlaybackSnapshot) -> Void, isSatisfied: (PlaybackSnapshot) -> Bool)?,
         coalesces: Bool = false,
         waitsForTrackChange: Bool = false,
+        preferring preference: RoutePreference = .local,
         local: LocalCommand?,
         web: WebCommand?
     ) async {
@@ -983,7 +1025,7 @@ extension PlaybackCoordinator {
             if waitsForTrackChange, let skip = skipInFlight {
                 _ = await waitFor(timeout: timing.trackChangeTimeout) { $0.track != skip.from }
             }
-            await send(id, field: overlay?.field, local: local, web: web)
+            await send(id, field: overlay?.field, preferring: preference, local: local, web: web)
         }
     }
 
@@ -1006,8 +1048,14 @@ extension PlaybackCoordinator {
 
     // Delivers a queued command, then gives its overlay a grace period on success or drops it on failure.
     @discardableResult
-    private func send(_ id: Int, field: Field?, local: LocalCommand?, web: WebCommand?) async -> Result<PlaybackRoute, OrbitError> {
-        let result = await deliver(local: local, web: web)
+    private func send(
+        _ id: Int,
+        field: Field?,
+        preferring preference: RoutePreference = .local,
+        local: LocalCommand?,
+        web: WebCommand?
+    ) async -> Result<PlaybackRoute, OrbitError> {
+        let result = await deliver(local: local, web: web, preferring: preference)
         commandEpoch += 1
         switch result {
         case .success(let route):
@@ -1020,6 +1068,8 @@ extension PlaybackCoordinator {
             if route == .local {
                 // Reading back right away reconciles within milliseconds instead of waiting for the notification.
                 await readLocalState()
+            } else if let field, overlays[field]?.id == id {
+                confirmThroughWebAPI(field, id: id)
             } else {
                 scheduleSync(after: timing.webSettleDelay)
             }
@@ -1029,6 +1079,22 @@ extension PlaybackCoordinator {
             recompute()
         }
         return result
+    }
+
+    // The Web API can trail a command it accepted by more than the settle delay, and a read that still shows the old
+    // value would otherwise stand once the grace period ends; so it is read again until it agrees or the grace ends.
+    private func confirmThroughWebAPI(_ field: Field, id: Int) {
+        Task { [weak self, clock, timing] in
+            var waited = Duration.zero
+            var delay = timing.webSettleDelay
+            while waited + delay < timing.overlayGrace {
+                do { try await clock.sleep(delay) } catch { return }
+                waited += delay
+                guard let self, self.overlays[field]?.id == id else { return }
+                await self.refreshRemote()
+                delay = .seconds(1)
+            }
+        }
     }
 
     // Issues a play command, then waits for observed state to show it before reporting success.

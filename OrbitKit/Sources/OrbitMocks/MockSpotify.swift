@@ -43,6 +43,9 @@ public actor MockSpotify {
     private var heldRequests: [CheckedContinuation<Void, Never>] = []
     private var webFailure: OrbitError?
     private var requestFailures: [String: OrbitError] = [:]
+    private var lagArmed = 0
+    private var laggedReads = 0
+    private var laggedSnapshot: PlaybackSnapshot?
     private var localFailure: OrbitError?
     private var ignoresPlayCommands = false
     private(set) var rejectsLikedSongsContext = false
@@ -202,6 +205,33 @@ public actor MockSpotify {
         devices[index].id = id
         if activeDeviceID == localDeviceID { activeDeviceID = id }
         localDeviceID = id
+    }
+
+    // What Spotify is really doing, which AppleScript only reports as on or off.
+    public var repeatState: RepeatMode { repeatMode }
+
+    // The user changes repeat in Spotify's own window or on another device.
+    public func simulateRepeatChangedInApp(_ mode: RepeatMode) {
+        setRepeat(mode)
+    }
+
+    // After the next Web API command, this many playback state reads still describe the state before it, as the
+    // real Web API can for a moment after a change.
+    public func lagPlaybackState(reads: Int) {
+        lagArmed = reads
+    }
+
+    func noteWebCommand() {
+        guard lagArmed > 0 else { return }
+        laggedSnapshot = snapshot()
+        laggedReads = lagArmed
+        lagArmed = 0
+    }
+
+    func playbackStateRead() -> PlaybackSnapshot? {
+        guard laggedReads > 0 else { return snapshot() }
+        laggedReads -= 1
+        return laggedSnapshot
     }
 
     public func setWindow(_ window: Window) {
@@ -388,6 +418,11 @@ public actor MockSpotify {
     func setRepeat(_ mode: RepeatMode) {
         repeatMode = mode
         emitChange()
+    }
+
+    // AppleScript's boolean: turning it on while repeat-one is already on is modeled as leaving repeat-one alone.
+    func setRepeating(_ enabled: Bool) {
+        setRepeat(enabled ? (repeatMode == .off ? .context : repeatMode) : .off)
     }
 
     func play(_ target: PlayTarget) throws(OrbitError) {
