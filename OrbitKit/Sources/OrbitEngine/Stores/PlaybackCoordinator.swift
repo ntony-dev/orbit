@@ -908,7 +908,7 @@ extension PlaybackCoordinator {
 
     private func run(
         _ intent: PlaybackIntent,
-        overlay: (Field, (inout PlaybackSnapshot) -> Void, (PlaybackSnapshot) -> Bool)?,
+        overlay: (field: Field, apply: (inout PlaybackSnapshot) -> Void, isSatisfied: (PlaybackSnapshot) -> Bool)?,
         coalesces: Bool = false,
         waitsForTrackChange: Bool = false,
         local: LocalCommand?,
@@ -917,7 +917,7 @@ extension PlaybackCoordinator {
         let id = nextCommandID()
         latestIntent[intent] = id
         if let overlay {
-            overlays[overlay.0] = Overlay(id: id, apply: overlay.1, isSatisfied: overlay.2)
+            overlays[overlay.field] = Overlay(id: id, apply: overlay.apply, isSatisfied: overlay.isSatisfied)
             recompute()
         }
         addPending(intent)
@@ -928,7 +928,7 @@ extension PlaybackCoordinator {
             if waitsForTrackChange, let skip = skipInFlight {
                 _ = await waitFor(timeout: timing.trackChangeTimeout) { $0.track != skip.from }
             }
-            await send(id, field: overlay?.0, local: local, web: web)
+            await send(id, field: overlay?.field, local: local, web: web)
         }
     }
 
