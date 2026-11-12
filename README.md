@@ -43,15 +43,15 @@ Playback controls work without signing in, through macOS Automation, as long as 
 
 ### Gatekeeper
 
-Release builds are signed ad hoc and are not notarized, because notarization requires a paid Apple Developer Program membership. macOS therefore refuses the first launch of a downloaded copy with a warning that it cannot verify the app. If you trust where you got it:
+Release builds are signed ad hoc and are not notarized, because notarization requires a paid Apple Developer Program membership. Your browser marks the downloaded zip as quarantined and Finder passes the mark on to the extracted app, so Gatekeeper checks Orbit the first time you open it. Gatekeeper accepts only apps from the App Store or notarized apps signed with a Developer ID, so it refuses Orbit: macOS says Orbit was not opened because Apple could not verify it is free of malware, and offers Done and Move to Trash. If you trust where you got it:
 
-1. Open Orbit and dismiss the warning. Do not choose Move to Trash.
+1. Click Done. Do not choose Move to Trash.
 2. Open System Settings > Privacy & Security and scroll to the Security section. It says Orbit was blocked.
-3. Click Open Anyway, confirm with your password or Touch ID, then click Open.
+3. Click Open Anyway and confirm with your password or Touch ID. Orbit opens.
 
-You only need to do this once per downloaded copy. On older versions of macOS, right-clicking the app and choosing Open offered the same way past the warning; on current macOS it shows the warning again, so use Open Anyway.
+You only need to do this once per downloaded copy. Right-clicking the app and choosing Open no longer gets past the warning on current macOS, so use Open Anyway. If macOS instead says Orbit is damaged, the copy is broken; see [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
-Do not turn off Gatekeeper to run Orbit, and do not run commands that disable it system-wide. If you would rather not trust a downloaded binary, build Orbit from source.
+Do not turn off Gatekeeper to run Orbit, and do not run commands that disable it system-wide or strip the quarantine mark. If you would rather not trust a downloaded binary, build Orbit from source.
 
 Because each ad-hoc signed build has a different signature, macOS asks again for Keychain and Automation access after you install an update. See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
@@ -109,19 +109,15 @@ To remove Orbit's access from the Spotify side as well, remove it from the apps 
 
 You need macOS 26 or later and a recent Xcode with the macOS 26 SDK (the project is developed with Xcode 27.2; the Swift package requires Swift tools 6.2). No paid Apple Developer account is needed: the project signs ad hoc by default.
 
-1. Clone the repository and create your local configuration:
+1. Clone the repository.
+
+2. Optionally create a local configuration with your Client ID:
 
    ```
    cp Config/Local.example.xcconfig Config/Local.xcconfig
    ```
 
-2. Optionally put your Client ID in `Config/Local.xcconfig`:
-
-   ```
-   SPOTIFY_CLIENT_ID = your_client_id_here
-   ```
-
-   You can leave it out and enter the Client ID in Orbit's Settings instead. `Config/Local.xcconfig` is gitignored.
+   then set `SPOTIFY_CLIENT_ID = your_client_id_here` in it. `Config/Local.xcconfig` is gitignored. Without it Orbit builds signed ad hoc with no Client ID, and you enter the Client ID in Orbit's Settings instead.
 
 3. Build and run, either in Xcode:
 
@@ -136,9 +132,17 @@ You need macOS 26 or later and a recent Xcode with the macOS 26 SDK (the project
    open build/Build/Products/Debug/Orbit.app
    ```
 
-   The first build downloads the one Swift package dependency.
+   The first build downloads the one Swift package dependency. XcodeGen is not needed; see below.
 
-Ad-hoc signatures change with every build, so macOS asks again for Keychain and Automation access after each rebuild. To stop that, sign with a stable identity by uncommenting the signing lines in `Config/Local.xcconfig` and filling in your team ID. A free Apple ID added to Xcode provides an Apple Development certificate for this.
+### Stable signing for your own Mac
+
+Ad-hoc signatures change with every build, so macOS asks again for Keychain and Automation access after each rebuild. To stop that, sign with a certificate: uncomment the three signing lines in `Config/Local.xcconfig` and set `DEVELOPMENT_TEAM` to your certificate's team ID (the example file shows how to read it). Any Apple Development certificate works, including the free one Xcode creates when you add an Apple ID under Xcode > Settings > Accounts. macOS then keeps its grants across rebuilds signed with that certificate; grants given to an ad-hoc build do not carry over.
+
+```
+Scripts/install-local.sh [--destination folder] [--quit-running] [alias-folder]
+```
+
+This builds Release with that identity, refuses an ad-hoc result, installs it as `Orbit.app` in `/Applications` (or `--destination`) and keeps a copy in `dist/Orbit.app`. It will not replace a running copy unless you pass `--quit-running`. Given an alias folder, it also writes a Finder alias named Orbit there. Keep a single installed copy, so launch at login and the permission grants refer to one app.
 
 ### Release archive
 

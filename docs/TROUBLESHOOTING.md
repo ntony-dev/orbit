@@ -6,11 +6,13 @@ Messages in quotes are the ones Orbit shows. Orbit's bundle identifier, used in 
 
 ### Orbit is blocked or "can't be opened"
 
-**Cause.** Release builds are signed ad hoc and not notarized, so Gatekeeper blocks the first launch of a downloaded copy.
+**Cause.** Release builds are signed ad hoc and not notarized. A downloaded copy carries the quarantine mark, so Gatekeeper checks it on first launch and refuses it, saying Apple could not verify that Orbit is free of malware.
 
-**Fix.** Open Orbit once and dismiss the warning without moving it to the Trash. Then open System Settings > Privacy & Security, find the note that Orbit was blocked in the Security section, click Open Anyway and confirm. On current macOS, right-click > Open shows the same warning again, so use Open Anyway.
+**Fix.** Click Done, not Move to Trash. Then open System Settings > Privacy & Security, find the note that Orbit was blocked in the Security section, click Open Anyway and confirm. On current macOS, right-click > Open shows the same warning again, so use Open Anyway.
 
-Do not turn off Gatekeeper to get past this.
+Do not turn off Gatekeeper or strip the quarantine mark to get past this.
+
+`spctl -a -vv Orbit.app` reports `rejected` for every ad-hoc signed copy, including one you build yourself. That is expected: Gatekeeper only stops a copy that carries the quarantine mark, and Open Anyway lets that copy through.
 
 ### "Orbit is damaged and can't be opened"
 
@@ -72,7 +74,7 @@ Quit it, then click Sign In again. Orbit holds the port only while a sign-in is 
 
 **Cause.** Orbit keeps your tokens in the login keychain. The keychain lets an app read its item without asking only if the app's signature matches the one that saved it. Each ad-hoc signed build has a different signature, so after installing an update or rebuilding, macOS asks whether Orbit may use the item.
 
-**Fix.** Enter your login password and click Always Allow. That covers the current build; the next update or rebuild asks once more. If you build Orbit yourself, sign it with a stable identity to stop the prompts: uncomment the signing lines in `Config/Local.xcconfig` and set your team ID.
+**Fix.** Enter your login password and click Always Allow. That covers the current build; the next update or rebuild asks once more. If you build Orbit yourself, sign it with a certificate to stop the prompts, as described under Stable signing in the README. Grants then survive every rebuild signed with that certificate.
 
 ## Automation
 
