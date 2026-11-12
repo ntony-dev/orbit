@@ -61,8 +61,7 @@ struct PillView: View {
     private func leadingTile(_ snapshot: PlaybackSnapshot, status: PlaybackStatus) -> some View {
         if theme.showsArtwork, let track = snapshot.track {
             ArtworkView(url: track.artworkURL, size: artworkSize, cornerRadius: artworkSize / 2, keepsPrevious: true)
-                .saturation(snapshot.isPlaying ? 1 : 0.55)
-                .opacity(snapshot.isPlaying ? 1 : 0.85)
+                .pausedArtwork(!snapshot.isPlaying)
                 .animation(theme.animation(OrbitTokens.Motion.content), value: snapshot.isPlaying)
         } else {
             Circle()

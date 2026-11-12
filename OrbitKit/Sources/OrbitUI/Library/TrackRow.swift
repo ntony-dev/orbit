@@ -105,7 +105,7 @@ struct TrackRow: View {
                     if isCurrent || isHovered {
                         RoundedRectangle(cornerRadius: OrbitTokens.Radius.artworkSmall, style: .continuous)
                             .fill(.black.opacity(0.38))
-                        leadingGlyph(isCurrent: isCurrent)
+                        leadingGlyph(isCurrent: isCurrent, tint: .white)
                             .foregroundStyle(.white)
                     }
                 }
@@ -124,9 +124,9 @@ struct TrackRow: View {
     }
 
     @ViewBuilder
-    private func leadingGlyph(isCurrent: Bool) -> some View {
+    private func leadingGlyph(isCurrent: Bool, tint: Color? = nil) -> some View {
         if isCurrent {
-            PlayingIndicator(isPlaying: playback.snapshot.isPlaying)
+            PlayingIndicator(isPlaying: playback.snapshot.isPlaying, tint: tint)
         } else {
             Image(systemName: "play.fill")
                 .font(.system(size: OrbitTokens.Icon.small))

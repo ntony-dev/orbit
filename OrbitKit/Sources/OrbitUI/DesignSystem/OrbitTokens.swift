@@ -55,7 +55,7 @@ enum OrbitTokens {
         static let pillControlRegular: CGFloat = 30
         static let playingIndicator: CGFloat = 20
         // Width over which a title too long for its space fades out instead of ending in an ellipsis.
-        static let truncationFade: CGFloat = 18
+        static let truncationFade: CGFloat = 30
 
         // Bounds for screens that size to their content: short enough that five liked songs leave no hole, tall
         // enough that a long library still shows ten rows.
@@ -75,10 +75,6 @@ enum OrbitTokens {
             }
         }
 
-        static func pillArtwork(_ size: PillSize) -> CGFloat {
-            size == .compact ? pillArtworkCompact : pillArtworkRegular
-        }
-
         static func canvas(for surface: CGSize) -> CGSize {
             CGSize(width: surface.width + canvasMargin * 2, height: surface.height + canvasMargin * 2)
         }
@@ -90,6 +86,8 @@ enum OrbitTokens {
         static let transport: CGFloat = 16
         static let primaryTransport: CGFloat = 22
         static let indicator: CGFloat = 14
+        // Every glyph in the panel's top bar (back, settings, collapse), so the chrome reads as one set.
+        static let chrome: CGFloat = 12
     }
 
     enum Typography {
@@ -119,9 +117,7 @@ enum OrbitTokens {
         // The pill fades out before the surface has grown much, and the expanded content fades in once there is
         // room for it, so neither ever floats inside a surface of the wrong size.
         static let pillFadeOut = Animation.easeOut(duration: 0.1)
-        static let pillFadeIn = Animation.easeOut(duration: 0.2).delay(0.1)
         static let surfaceFadeIn = Animation.easeOut(duration: 0.24).delay(0.08)
-        static let surfaceFadeOut = Animation.easeIn(duration: 0.12)
         static let screenFadeOut = Animation.easeOut(duration: 0.14)
         // When a morph has visibly finished, so the canvas can shrink without clipping the spring's tail.
         static let settle: Duration = .milliseconds(560)
@@ -138,6 +134,7 @@ enum OrbitTokens {
         static let collapsePillFadeIn = Animation.easeOut(duration: 0.18).delay(0.05)
         static let fit = Animation.smooth(duration: 0.3)
         static let selection = Animation.easeOut(duration: 0.1)
+        static let loadingPulse = Animation.easeInOut(duration: 0.9)
     }
 }
 

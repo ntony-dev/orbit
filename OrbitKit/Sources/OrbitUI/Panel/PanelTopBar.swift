@@ -3,38 +3,30 @@ import OrbitEngine
 import SwiftUI
 
 // The strip across the top of every expanded screen. Its empty space drags the panel, and it always ends with
-// the collapse button, so leaving the expanded surface is in the same place on every screen.
-struct PanelTopBar<Leading: View>: View {
+// the collapse button, so leaving the expanded surface is in the same place on every screen. One accessory (the
+// player's settings, the browsing screens' play/pause) sits beside it at the same spacing everywhere.
+struct PanelTopBar<Leading: View, Accessory: View>: View {
     @ViewBuilder let leading: Leading
+    @ViewBuilder let accessory: Accessory
 
     @Environment(PanelState.self) private var panel
-    @Environment(PanelNavigator.self) private var navigator
 
     var body: some View {
         HStack(spacing: OrbitTokens.Spacing.m) {
             leading
             Spacer(minLength: 0)
-            // Settings sits on the player, the screen Orbit opens to, beside the way out, where popover utilities
-            // keep theirs; Command-comma reaches it from every screen.
-            if navigator.section == .player, navigator.detail == nil {
-                Button(action: OrbitSettings.open) {
-                    Image(systemName: "gearshape")
+            HStack(spacing: OrbitTokens.Spacing.xxs) {
+                accessory
+                Button {
+                    panel.collapse()
+                } label: {
+                    Image(systemName: "chevron.down")
                 }
-                .iconButton(glyph: OrbitTokens.Icon.small + 1)
-                .padding(.trailing, -OrbitTokens.Spacing.s)
-                .help("Settings (⌘,)")
-                .accessibilityLabel("Settings")
-                .accessibilityIdentifier("orbit.settings")
+                .iconButton(glyph: OrbitTokens.Icon.chrome)
+                .help("Collapse")
+                .accessibilityLabel("Collapse")
+                .accessibilityIdentifier("orbit.collapse")
             }
-            Button {
-                panel.collapse()
-            } label: {
-                Image(systemName: "chevron.down")
-            }
-            .iconButton(glyph: OrbitTokens.Icon.small)
-            .help("Collapse")
-            .accessibilityLabel("Collapse")
-            .accessibilityIdentifier("orbit.collapse")
         }
         .frame(height: OrbitTokens.Size.stripArtwork + OrbitTokens.Spacing.xs)
         .padding(.leading, OrbitTokens.Spacing.xl)
@@ -42,6 +34,26 @@ struct PanelTopBar<Leading: View>: View {
         .padding(.top, OrbitTokens.Spacing.l + OrbitTokens.Spacing.xxs)
         .contentShape(.rect)
         .panelDraggable()
+    }
+}
+
+extension PanelTopBar where Accessory == EmptyView {
+    init(@ViewBuilder leading: () -> Leading) {
+        self.init(leading: leading, accessory: { EmptyView() })
+    }
+}
+
+// Settings sits on the player, the screen Orbit opens to, beside the way out, where popover utilities keep theirs;
+// Command-comma reaches it from every screen.
+struct SettingsButton: View {
+    var body: some View {
+        Button(action: OrbitSettings.open) {
+            Image(systemName: "gearshape")
+        }
+        .iconButton(glyph: OrbitTokens.Icon.chrome)
+        .help("Settings (⌘,)")
+        .accessibilityLabel("Settings")
+        .accessibilityIdentifier("orbit.settings")
     }
 }
 
@@ -59,7 +71,7 @@ struct BackTitle: View {
             } label: {
                 Image(systemName: "chevron.left")
             }
-            .iconButton(glyph: OrbitTokens.Icon.regular)
+            .iconButton(glyph: OrbitTokens.Icon.chrome)
             .padding(.leading, -OrbitTokens.Spacing.m)
             .help("Back")
             .accessibilityLabel("Back")
@@ -117,10 +129,18 @@ struct NowPlayingStrip: View {
             .help("Show Now Playing")
             .accessibilityLabel(snapshot.track.map { "Now playing: \($0.name) by \($0.artistLine)" } ?? "Not playing")
             .accessibilityHint("Shows the player")
-            if snapshot.track != nil {
+        }
+        .animation(theme.animation(OrbitTokens.Motion.content), value: snapshot.track?.id)
+    }
+
+    // The strip's play/pause, placed in the top bar's accessory slot beside the collapse button.
+    struct PlayPause: View {
+        @Environment(PlaybackCoordinator.self) private var playback
+
+        var body: some View {
+            if playback.snapshot.track != nil {
                 PlayPauseButton(diameter: OrbitTokens.Size.iconButton, glyph: OrbitTokens.Icon.regular, isProminent: false)
             }
         }
-        .animation(theme.animation(OrbitTokens.Motion.content), value: snapshot.track?.id)
     }
 }

@@ -97,3 +97,11 @@ struct ArtworkView: View {
         Int((points * scale).rounded(.up))
     }
 }
+
+extension View {
+    // Paused artwork loses some colour and light, the same in the pill and the player, so "paused" reads alike in
+    // both without relying on the play/pause glyph alone.
+    func pausedArtwork(_ isPaused: Bool) -> some View {
+        saturation(isPaused ? 0.6 : 1).opacity(isPaused ? 0.88 : 1)
+    }
+}

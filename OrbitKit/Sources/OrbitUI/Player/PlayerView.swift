@@ -14,6 +14,8 @@ struct PlayerView: View {
         VStack(spacing: 0) {
             PanelTopBar {
                 ContextLabel(snapshot: snapshot)
+            } accessory: {
+                SettingsButton()
             }
             if status.hasTrack {
                 VStack(spacing: 0) {
@@ -149,7 +151,7 @@ private struct NowPlayingHeader: View {
                     keepsPrevious: true
                 )
                 .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
-                .saturation(playback.snapshot.isPlaying ? 1 : 0.7)
+                .pausedArtwork(!playback.snapshot.isPlaying)
                 .animation(theme.animation(OrbitTokens.Motion.content), value: playback.snapshot.isPlaying)
             }
             VStack(alignment: .leading, spacing: OrbitTokens.Spacing.xxs) {
@@ -425,7 +427,7 @@ private struct DeviceChip: View {
             }
             .foregroundStyle(isHovered ? .primary : .secondary)
             .padding(.horizontal, OrbitTokens.Spacing.m)
-            .frame(height: 24)
+            .frame(height: OrbitTokens.Size.chipHeight)
             .background {
                 Capsule().fill(isHovered ? OrbitPalette.hoverFill(contrast: theme.contrast) : OrbitPalette.quietFill(contrast: theme.contrast))
             }

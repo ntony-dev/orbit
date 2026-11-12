@@ -100,7 +100,7 @@ private struct RowButtonBody: View {
                 if isFocused { shape.strokeBorder(theme.accent, lineWidth: 1.5) }
             }
             .environment(\.isRowHovered, isHovered)
-            .opacity(isEnabled ? 1 : 0.45)
+            .opacity(isEnabled ? 1 : OrbitPalette.disabledRowOpacity(contrast: theme.contrast))
             .onHover { hovering in isHovered = hovering && isEnabled }
             .animation(theme.animation(OrbitTokens.Motion.hover), value: isHovered)
             .animation(theme.animation(OrbitTokens.Motion.press), value: configuration.isPressed)

@@ -8,13 +8,15 @@ import SwiftUI
 // a quarter of a core while the app sat idle.
 struct PlayingIndicator: View {
     let isPlaying: Bool
+    // Over artwork the bars are drawn in white on a scrim, where the accent could vanish.
+    var tint: Color?
 
     @Environment(\.orbitTheme) private var theme
 
     var body: some View {
         ZStack {
             if isPlaying {
-                EqualizerBars(color: theme.accent, animates: !theme.reducesMotion)
+                EqualizerBars(color: tint ?? theme.accent, animates: !theme.reducesMotion)
             } else {
                 Image(systemName: "pause.fill")
                     .font(.system(size: OrbitTokens.Icon.small, weight: .semibold))

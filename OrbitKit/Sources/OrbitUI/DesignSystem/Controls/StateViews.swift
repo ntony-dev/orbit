@@ -171,7 +171,7 @@ struct SkeletonRows: View {
         .opacity(isDimmed ? 0.55 : 1)
         .onAppear {
             guard !theme.reducesMotion else { return }
-            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { isDimmed = true }
+            withAnimation(theme.animation(OrbitTokens.Motion.loadingPulse).repeatForever(autoreverses: true)) { isDimmed = true }
         }
         .accessibilityElement()
         .accessibilityLabel("Loading")

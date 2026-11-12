@@ -14,7 +14,17 @@ struct FadingTruncation: ViewModifier {
                 .mask {
                     HStack(spacing: 0) {
                         Rectangle()
-                        LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                        // Long and eased, so the last two or three letters dissolve; a short linear ramp reads
+                        // as a hard clip mid-letter.
+                        LinearGradient(
+                            stops: [
+                                .init(color: .black, location: 0),
+                                .init(color: .black.opacity(0.55), location: 0.45),
+                                .init(color: .clear, location: 1),
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
                             .frame(width: OrbitTokens.Size.truncationFade)
                     }
                 }

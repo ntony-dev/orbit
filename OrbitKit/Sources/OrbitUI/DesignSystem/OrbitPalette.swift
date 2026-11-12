@@ -34,7 +34,6 @@ public enum OrbitPalette {
     static let prominentGlyph = adaptive(light: 0xFFFFFF, dark: 0x111214)
 
     static let warning = adaptive(light: 0xB25D00, dark: 0xF2B26B)
-    static let danger = adaptive(light: 0xC0392B, dark: 0xFF8A80)
 
     // The fill Orbit draws beneath the native glass: the user's background opacity over a legibility floor.
     static let backing = adaptive(light: 0xF7F8FA, dark: 0x16181C)
@@ -44,6 +43,11 @@ public enum OrbitPalette {
     static func disabledOpacity(_ scheme: ColorScheme, contrast: ColorSchemeContrast) -> Double {
         let base = scheme == .dark ? 0.34 : 0.42
         return contrast == .increased ? base + 0.14 : base
+    }
+
+    // A disabled row still carries the reason it is unavailable, so it dims less than a lone glyph.
+    static func disabledRowOpacity(contrast: ColorSchemeContrast) -> Double {
+        contrast == .increased ? 0.62 : 0.48
     }
 
     static func hoverFill(contrast: ColorSchemeContrast) -> Color {

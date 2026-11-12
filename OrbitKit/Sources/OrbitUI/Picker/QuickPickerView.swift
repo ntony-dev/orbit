@@ -21,7 +21,7 @@ struct QuickPickerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PanelTopBar { NowPlayingStrip() }
+            PanelTopBar { NowPlayingStrip() } accessory: { NowPlayingStrip.PlayPause() }
             AccountGate {
                 let content = content
                 VStack(spacing: 0) {
