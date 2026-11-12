@@ -43,27 +43,12 @@ struct OrbitTheme {
         }
     }
 
-    // Opacity of Orbit's own backing layer under the glass. The user's setting scales it within a ceiling per
-    // preset, so even 100% never hides the glass completely; accessibility settings raise the floor for legibility.
-    var backingOpacity: Double {
-        if reducesTransparency { return 0.94 }
-        let ceiling: Double = switch glassPreset {
-        // Lower than Balanced because Clear also carries the legibility floor below.
-        case .clear: 0.5
-        case .balanced: 0.58
-        case .tinted: 0.34
-        }
-        let value = min(1, max(0, backgroundOpacity)) * ceiling
-        return isHighContrast ? max(value, 0.6) : value
-    }
-
     // Native glass keeps the tone of whatever is behind it, so white text over a bright page or dark text over a
-    // terminal can fall below 3:1. Apple pairs clear glass with a dimming layer for exactly this; Orbit's is a floor
-    // under the user's backing, so 0% still shows the desktop's shapes and colors but never at the cost of the
+    // terminal can fall below 3:1. Apple pairs clear glass with a dimming layer for exactly this; Orbit's backing
+    // never drops below this floor, so 0% still shows the desktop's shapes and colors but never at the cost of the
     // text. Regular glass already pulls toward a mid tone and needs less.
     func legibilityFloor(for scheme: ColorScheme) -> Double {
-        if reducesTransparency { return 0 }
-        return switch (glassPreset, scheme) {
+        switch (glassPreset, scheme) {
         case (.clear, .dark): 0.56
         case (.clear, _): 0.46
         case (_, .dark): 0.45
@@ -71,10 +56,18 @@ struct OrbitTheme {
         }
     }
 
-    // Opacity of the single fill drawn under the glass: the user's backing composited over the legibility floor.
+    // Opacity of Orbit's own fill under the glass, the only thing the background opacity setting changes. It runs
+    // in a straight line from the preset's legibility floor to one shared ceiling, so the setting spans a wide,
+    // even range in every preset instead of being squeezed into what the floor leaves over. The ceiling stops
+    // short of opaque so the glass still reads as glass; Reduce Transparency goes past it.
     func surfaceFill(for scheme: ColorScheme) -> Double {
-        1 - (1 - backingOpacity) * (1 - legibilityFloor(for: scheme))
+        if reducesTransparency { return 0.94 }
+        let floor = legibilityFloor(for: scheme)
+        let value = floor + min(1, max(0, backgroundOpacity)) * (Self.maximumFill - floor)
+        return isHighContrast ? max(value, 0.8) : value
     }
+
+    static let maximumFill = 0.88
 }
 
 extension EnvironmentValues {

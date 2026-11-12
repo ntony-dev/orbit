@@ -138,18 +138,19 @@ struct ThemeTests {
         for preset in GlassPreset.allCases {
             theme.glassPreset = preset
             theme.backgroundOpacity = 1
-            #expect(theme.backingOpacity < 0.7)
+            #expect(theme.surfaceFill(for: .light) < 0.9)
+            #expect(theme.surfaceFill(for: .dark) < 0.9)
         }
         theme.reducesTransparency = true
-        #expect(theme.backingOpacity > 0.9)
+        #expect(theme.surfaceFill(for: .dark) > 0.9)
     }
 
     @Test func increasedContrastRaisesTheFloor() {
         var theme = OrbitTheme.standard
         theme.backgroundOpacity = 0
-        #expect(theme.backingOpacity == 0)
+        #expect(theme.surfaceFill(for: .light) < 0.5)
         theme.contrast = .increased
-        #expect(theme.backingOpacity >= 0.6)
+        #expect(theme.surfaceFill(for: .light) >= 0.8)
     }
 }
 

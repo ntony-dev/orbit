@@ -59,10 +59,25 @@ struct PlayerKeyCommandTests {
 struct LegibilityTests {
     @Test func clearGlassKeepsADimmingFloorAtZeroBacking() {
         var theme = OrbitTheme.standard
+        theme.glassPreset = .clear
         theme.backgroundOpacity = 0
         for scheme in [ColorScheme.light, .dark] {
-            #expect(theme.backingOpacity == 0)
+            #expect(theme.surfaceFill(for: scheme) == theme.legibilityFloor(for: scheme))
             #expect(theme.surfaceFill(for: scheme) >= 0.4)
+        }
+    }
+
+    // The setting has to visibly change every preset, Clear included, rather than only what a floor leaves over.
+    @Test func backgroundOpacitySpansAWideRangeInEveryPreset() {
+        for preset in GlassPreset.allCases {
+            var theme = OrbitTheme.standard
+            theme.glassPreset = preset
+            for scheme in [ColorScheme.light, .dark] {
+                theme.backgroundOpacity = 0
+                let lowest = theme.surfaceFill(for: scheme)
+                theme.backgroundOpacity = 1
+                #expect(theme.surfaceFill(for: scheme) - lowest >= 0.3)
+            }
         }
     }
 
@@ -75,8 +90,8 @@ struct LegibilityTests {
                 for step in 0...10 {
                     theme.backgroundOpacity = Double(step) / 10
                     let fill = theme.surfaceFill(for: scheme)
-                    #expect(fill >= previous)
-                    #expect(fill < 0.8)
+                    #expect(fill > previous)
+                    #expect(fill < 0.9)
                     previous = fill
                 }
             }
