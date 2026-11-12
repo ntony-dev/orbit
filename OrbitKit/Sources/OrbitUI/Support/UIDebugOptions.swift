@@ -8,7 +8,8 @@ import SwiftUI
 //   --ui-query <text>              the library search query, so search results can be captured
 //   --ui-hover                     show the pill's hover controls
 //   --ui-scenario <name>           with --demo only, read by the shell, which builds the scenario's stores:
-//                                  signed-out, automation-denied, spotify-closed, idle, rate-limited,
+//                                  signed-out, automation-denied, automation-not-asked,
+//                                  automation-not-asked-playing, spotify-closed, idle, paused, rate-limited,
 //                                  empty-library, switch-fails
 //   --ui-glass clear|balanced|tinted, --ui-opacity 0...1, --ui-accent neutral|mint|ice|amber|lavender,
 //   --ui-pill compact|regular, --ui-no-artwork
@@ -19,8 +20,10 @@ import SwiftUI
 //   --ui-switch <playlist-id>      two seconds after launch, switch to that playlist without collapsing
 //   --ui-shelf                     with --demo only, pin two playlists and add three recents, so the picker's
 //                                  sections can be captured (the demo keeps no shelf file)
-//   --ui-backdrop                  draw a stand-in wallpaper inside the canvas, because a capture of Orbit's
-//                                  window alone cannot include what the glass refracts from behind it
+//   --ui-backdrop [gradient|bright|busy]
+//                                  draw a stand-in desktop inside the canvas, because a capture of Orbit's
+//                                  window alone cannot include what the glass refracts from behind it: a
+//                                  colored gradient (the default), a white page, or a dense, high-contrast mix
 struct UIDebugOptions {
     var screen: String?
     var searchQuery: String?
@@ -33,7 +36,7 @@ struct UIDebugOptions {
     var reducesTransparency = false
     var increasesContrast = false
     var reducesMotion = false
-    var showsBackdrop = false
+    var backdrop: DebugBackdrop.Style?
     var runsTour = false
     var switchPlaylistID: String?
     var seedsShelf = false
@@ -65,7 +68,9 @@ struct UIDebugOptions {
         reducesTransparency = arguments.contains("--ui-reduce-transparency")
         increasesContrast = arguments.contains("--ui-increase-contrast")
         reducesMotion = arguments.contains("--ui-reduce-motion")
-        showsBackdrop = arguments.contains("--ui-backdrop")
+        if arguments.contains("--ui-backdrop") {
+            backdrop = value("--ui-backdrop").flatMap(DebugBackdrop.Style.init(rawValue:)) ?? .gradient
+        }
         runsTour = arguments.contains("--ui-tour")
         switchPlaylistID = value("--ui-switch")
         seedsShelf = arguments.contains("--ui-shelf") && arguments.contains("--demo")
@@ -73,23 +78,104 @@ struct UIDebugOptions {
     }
 }
 
-// Busy, high-contrast stand-in for a desktop so glass presets and opacity differences are visible in captures.
+// Stand-ins for a desktop, so glass presets, opacity and text legibility can be judged in captures: a colored
+// gradient, a white document page (the hardest case for light text and light glass), and a dense mix of photos,
+// icons and black and white text (the hardest case for reading anything at all).
 struct DebugBackdrop: View {
+    enum Style: String {
+        case gradient, bright, busy
+    }
+
+    let style: Style
+
     var body: some View {
+        switch style {
+        case .gradient: gradient
+        case .bright: bright
+        case .busy: busy
+        }
+    }
+
+    private var gradient: some View {
         ZStack {
             LinearGradient(
                 colors: [Color(red: 0.95, green: 0.62, blue: 0.35), Color(red: 0.27, green: 0.45, blue: 0.85), Color(red: 0.12, green: 0.14, blue: 0.2)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(0..<14, id: \.self) { index in
-                    Text("The quick brown fox jumps over the lazy dog \(index)")
-                        .font(.system(size: 15, weight: index.isMultiple(of: 3) ? .bold : .regular))
-                        .foregroundStyle(index.isMultiple(of: 2) ? Color.white : Color.black)
+            sampleText(count: 14, size: 15, colors: [.white, .black])
+                .rotationEffect(.degrees(-8))
+        }
+    }
+
+    private var bright: some View {
+        ZStack(alignment: .topLeading) {
+            Color.white
+            VStack(alignment: .leading, spacing: 9) {
+                ForEach(0..<24, id: \.self) { index in
+                    if index.isMultiple(of: 7) {
+                        Text("Heading \(index / 7 + 1)")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(Color(white: 0.1))
+                    } else {
+                        Text("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor \(index)")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color(white: 0.25))
+                    }
                 }
             }
-            .rotationEffect(.degrees(-8))
+            .padding(24)
         }
+    }
+
+    private var busy: some View {
+        let colors: [Color] = [.red, .orange, .yellow, .green, .mint, .teal, .cyan, .blue, .indigo, .purple, .pink, .brown, .white, .black]
+        return ZStack {
+            Color(white: 0.5)
+            Canvas { context, size in
+                var generator = SplitMix(seed: 7)
+                for _ in 0..<160 {
+                    let rect = CGRect(
+                        x: generator.next(in: -40...size.width),
+                        y: generator.next(in: -40...size.height),
+                        width: generator.next(in: 12...90),
+                        height: generator.next(in: 12...90)
+                    )
+                    let color = colors[Int(generator.next(in: 0...Double(colors.count - 1)).rounded())]
+                    let shape = generator.next(in: 0...1) < 0.5 ? Path(ellipseIn: rect) : Path(roundedRect: rect, cornerRadius: 6)
+                    context.fill(shape, with: .color(color.opacity(generator.next(in: 0.6...1))))
+                }
+            }
+            sampleText(count: 30, size: 12, colors: [.white, .black, .yellow])
+                .rotationEffect(.degrees(4))
+        }
+    }
+
+    private func sampleText(count: Int, size: CGFloat, colors: [Color]) -> some View {
+        VStack(alignment: .leading, spacing: size * 0.6) {
+            ForEach(0..<count, id: \.self) { index in
+                Text("The quick brown fox jumps over the lazy dog \(index)")
+                    .font(.system(size: size, weight: index.isMultiple(of: 3) ? .bold : .regular))
+                    .foregroundStyle(colors[index % colors.count])
+            }
+        }
+    }
+}
+
+// A fixed sequence, so the busy backdrop is the same in every capture.
+private struct SplitMix {
+    var state: UInt64
+
+    init(seed: UInt64) {
+        state = seed
+    }
+
+    mutating func next(in range: ClosedRange<Double>) -> Double {
+        state &+= 0x9E37_79B9_7F4A_7C15
+        var z = state
+        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+        z ^= z >> 31
+        return range.lowerBound + Double(z >> 11) / Double(1 << 53) * (range.upperBound - range.lowerBound)
     }
 }

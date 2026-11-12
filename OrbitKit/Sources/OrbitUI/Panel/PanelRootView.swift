@@ -52,7 +52,7 @@ public struct PanelRootView: View {
         .padding(OrbitTokens.Size.canvasMargin)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: Alignment(panel.anchor))
         .background {
-            if debug.showsBackdrop { DebugBackdrop() }
+            if let backdrop = debug.backdrop { DebugBackdrop(style: backdrop) }
         }
         .modifier(PanelEnvironment(
             stores: stores, panel: panel, host: host, preferences: preferences,
@@ -158,8 +158,7 @@ public struct PanelRootView: View {
     }
 
     private func expandFromPill() {
-        let isIdle = stores.playback.snapshot.track == nil && stores.account.authState.isSignedIn
-        panel.expand(to: isIdle ? .playlistPicker : .player)
+        panel.expand(to: PlaybackStatus(account: stores.account, snapshot: stores.playback.snapshot).pillDestination)
     }
 
     private func expand() {
