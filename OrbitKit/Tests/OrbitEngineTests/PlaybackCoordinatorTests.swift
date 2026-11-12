@@ -36,12 +36,14 @@ struct PlaybackCoordinatorTests {
         #expect(await eventually { coordinator.snapshot.track?.uri != first.uri })
         var seen = [coordinator.snapshot.track?.artworkURL]
         let syncs = await rig.webRequests("playbackState")
-        for _ in 0..<3 {
-            rig.clock.advance(by: 1)
-            await settle()
+        // The Web API read Orbit makes about a second after each track change.
+        #expect(await eventually {
             if coordinator.snapshot.track?.artworkURL != seen.last { seen.append(coordinator.snapshot.track?.artworkURL) }
-        }
-        #expect(await rig.webRequests("playbackState") > syncs)
+            rig.clock.advance(by: 0.1)
+            return await rig.webRequests("playbackState") > syncs
+        })
+        await settle()
+        if coordinator.snapshot.track?.artworkURL != seen.last { seen.append(coordinator.snapshot.track?.artworkURL) }
         #expect(seen.count == 1)
         #expect(seen.first??.fragment == "640")
         #expect(coordinator.snapshot.context?.uri == MockFixtures.startingPlaylist.uri)
