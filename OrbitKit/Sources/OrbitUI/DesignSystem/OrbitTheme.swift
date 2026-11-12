@@ -18,7 +18,7 @@ struct OrbitTheme {
 
     static let standard = OrbitTheme(
         accent: OrbitPalette.accent(.neutral),
-        glassPreset: .clear,
+        glassPreset: .balanced,
         backgroundOpacity: 0.5,
         showsArtwork: true,
         reducesMotion: false,

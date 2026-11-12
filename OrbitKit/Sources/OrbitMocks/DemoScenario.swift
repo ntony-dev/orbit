@@ -36,9 +36,9 @@ public enum DemoScenario: String, CaseIterable, Sendable {
         case .automationNotAsked, .automationNotAskedPlaying: await spotify.setAutomationPermission(.notDetermined)
         case .spotifyClosed: await spotify.simulateQuit()
         case .paused: await spotify.setPlaying(false)
-        // The desktop app is this Mac's active device, so a switch goes over AppleScript first. Spotify accepts the
-        // command and never starts the playlist, the way it silently refuses a context, so the switch fails on
-        // confirmation; a Web API switch fails outright below.
+        // A switch goes through the Web API first, which fails outright below, then falls back to AppleScript.
+        // Spotify accepts that command and never starts the playlist, the way it silently refuses a context, so
+        // the switch fails on confirmation.
         case .switchFails: await spotify.ignorePlayCommands(true)
         default: break
         }
