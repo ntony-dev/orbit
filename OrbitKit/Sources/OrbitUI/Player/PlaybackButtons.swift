@@ -46,7 +46,8 @@ private struct PlaybackButtonStyle: ButtonStyle {
 }
 
 // The one solid control in the player: a label-colored disc with the glyph knocked out, neutral in either
-// appearance so the accent stays reserved for state.
+// appearance so the accent stays reserved for state. Unavailable, it becomes a quiet outline-free disc with a
+// secondary glyph, since a faded solid disc reads as a rendering glitch on light glass.
 private struct ProminentDisc: View {
     let configuration: ButtonStyleConfiguration
     let diameter: CGFloat
@@ -60,27 +61,35 @@ private struct ProminentDisc: View {
     var body: some View {
         configuration.label
             .font(.system(size: glyph, weight: .semibold))
-            .foregroundStyle(OrbitPalette.prominentGlyph)
+            .foregroundStyle(isEnabled ? AnyShapeStyle(OrbitPalette.prominentGlyph) : AnyShapeStyle(.secondary))
             .frame(width: diameter, height: diameter)
             .background {
-                Circle().fill(OrbitPalette.prominentFill.opacity(configuration.isPressed ? 0.72 : (isHovered ? 0.86 : 1)))
+                Circle().fill(fill)
             }
             .overlay {
                 if isFocused { Circle().strokeBorder(theme.accent, lineWidth: 2).padding(-3) }
             }
             .contentShape(Circle())
             .scaleEffect(configuration.isPressed && !theme.reducesMotion ? 0.93 : (isHovered && !theme.reducesMotion ? 1.04 : 1))
-            .opacity(isEnabled ? 1 : 0.3)
             .onHover { hovering in isHovered = hovering && isEnabled }
             .animation(theme.animation(OrbitTokens.Motion.hover), value: isHovered)
             .animation(theme.animation(OrbitTokens.Motion.press), value: configuration.isPressed)
+            .animation(theme.animation(OrbitTokens.Motion.hover), value: isEnabled)
+    }
+
+    private var fill: Color {
+        guard isEnabled else { return OrbitPalette.quietFill(contrast: theme.contrast) }
+        return OrbitPalette.prominentFill.opacity(configuration.isPressed ? 0.72 : (isHovered ? 0.86 : 1))
     }
 }
 
 struct TransportButton: View {
     let symbol: String
     let label: String
+    var help: String?
+    var isToggle = false
     var isOn = false
+    var accessibilityValue: String?
     var isEnabled = true
     let action: () async -> Void
 
@@ -91,10 +100,11 @@ struct TransportButton: View {
             Image(systemName: symbol)
                 .contentTransition(.symbolEffect(.replace))
         }
-        .iconButton(diameter: OrbitTokens.Size.transportButton, glyph: OrbitTokens.Icon.transport, isOn: isOn)
+        .iconButton(diameter: OrbitTokens.Size.transportButton, glyph: OrbitTokens.Icon.transport, isOn: isOn, isToggle: isToggle)
         .disabled(!isEnabled)
-        .help(label)
+        .help(help ?? label)
         .accessibilityLabel(label)
-        .accessibilityValue(isOn ? "On" : "")
+        .accessibilityValue(accessibilityValue ?? (isToggle ? (isOn ? "On" : "Off") : ""))
+        .accessibilityAddTraits(isToggle ? .isToggle : [])
     }
 }

@@ -10,15 +10,12 @@ struct PlayerView: View {
 
     var body: some View {
         let snapshot = playback.snapshot
+        let status = PlaybackStatus(account: account, snapshot: snapshot)
         VStack(spacing: 0) {
             PanelTopBar {
-                contextLabel(snapshot)
+                ContextLabel(snapshot: snapshot)
             }
-            if let unavailable = PlayerAvailability(account: account, snapshot: snapshot).blockingState {
-                Spacer(minLength: 0)
-                blockingMessage(unavailable)
-                Spacer(minLength: 0)
-            } else {
+            if status.hasTrack {
                 VStack(spacing: 0) {
                     NowPlayingHeader()
                         .padding(.top, OrbitTokens.Spacing.m)
@@ -34,40 +31,21 @@ struct PlayerView: View {
                     .padding(.horizontal, OrbitTokens.Spacing.l)
                     .padding(.top, OrbitTokens.Spacing.m)
                 Spacer(minLength: 0)
+            } else {
+                Spacer(minLength: 0)
+                blockingMessage(status)
+                    .padding(.horizontal, OrbitTokens.Spacing.xl)
+                    .transition(.opacity)
+                Spacer(minLength: 0)
             }
         }
+        .animation(theme.animation(OrbitTokens.Motion.content), value: status)
+        .modifier(PlayerKeyboard())
     }
 
     @ViewBuilder
-    private func contextLabel(_ snapshot: PlaybackSnapshot) -> some View {
-        if let context = snapshot.context, snapshot.track != nil {
-            Button {
-                withAnimation(theme.animation(OrbitTokens.Motion.navigate)) { navigator.show(.picker) }
-            } label: {
-                HStack(spacing: OrbitTokens.Spacing.s) {
-                    Image(systemName: "music.note.list")
-                        .font(.system(size: OrbitTokens.Icon.small, weight: .semibold))
-                        .foregroundStyle(.tertiary)
-                    Text(context.name ?? "Playing from Spotify")
-                        .font(OrbitTokens.Typography.captionEmphasized)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .help("Switch playlists")
-            .accessibilityLabel("Playing from \(context.name ?? "Spotify"). Switch playlists")
-        } else {
-            Text("Orbit")
-                .font(OrbitTokens.Typography.captionEmphasized)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    @ViewBuilder
-    private func blockingMessage(_ state: PlayerAvailability.Blocking) -> some View {
-        switch state {
+    private func blockingMessage(_ status: PlaybackStatus) -> some View {
+        switch status {
         case .spotifyNotInstalled:
             StatusMessage(
                 symbol: "arrow.down.app",
@@ -80,6 +58,13 @@ struct PlayerView: View {
                 title: "Spotify is closed",
                 message: "Open it in the background to start listening.",
                 actions: [StateAction(title: "Open Spotify", symbol: "play.fill") { SpotifyApp.launchInBackground() }]
+            )
+        case .automationNeeded:
+            StatusMessage(
+                symbol: "hand.raised",
+                title: "Allow Orbit to control Spotify",
+                message: "Spotify is open, but Orbit needs your permission to see what's playing and control it. macOS asks once.",
+                actions: [StateAction(title: "Allow…") { Task { await account.requestAutomationPermission() } }]
             )
         case .automationDenied:
             StatusMessage(
@@ -99,30 +84,53 @@ struct PlayerView: View {
                     }]
                     : [StateAction(title: "Connect Spotify") { Task { await account.signIn() } }]
             )
+        case .playing, .paused:
+            EmptyView()
         }
     }
 }
 
-// What the player can honestly show. Anything that makes transport controls meaningless replaces them; softer
-// problems become a notice beneath working controls.
-@MainActor
-struct PlayerAvailability {
-    enum Blocking: Equatable {
-        case spotifyNotInstalled
-        case spotifyClosed
-        case automationDenied
-        case idle(canBrowse: Bool)
-    }
-
-    let account: AccountStore
+// The playing context names where the music comes from and doubles as the way into the playlist picker, so it
+// brightens and shows a chevron on hover like any other link.
+private struct ContextLabel: View {
     let snapshot: PlaybackSnapshot
 
-    var blockingState: Blocking? {
-        guard snapshot.track == nil else { return nil }
-        if !account.isSpotifyInstalled { return .spotifyNotInstalled }
-        if !account.isSpotifyRunning { return .spotifyClosed }
-        if account.automationPermission == .denied { return .automationDenied }
-        return .idle(canBrowse: account.authState.isSignedIn)
+    @Environment(PanelNavigator.self) private var navigator
+    @Environment(\.orbitTheme) private var theme
+    @State private var isHovered = false
+
+    var body: some View {
+        if let context = snapshot.context, snapshot.track != nil {
+            Button {
+                withAnimation(theme.animation(OrbitTokens.Motion.navigate)) { navigator.show(.picker) }
+            } label: {
+                HStack(spacing: OrbitTokens.Spacing.s) {
+                    Image(systemName: "music.note.list")
+                        .font(.system(size: OrbitTokens.Icon.small, weight: .semibold))
+                        .foregroundStyle(isHovered ? .secondary : .tertiary)
+                    Text(context.name ?? "Playing from Spotify")
+                        .font(OrbitTokens.Typography.captionEmphasized)
+                        .foregroundStyle(isHovered ? .primary : .secondary)
+                        .lineLimit(1)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: OrbitTokens.Icon.small - 2, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                        .opacity(isHovered ? 1 : 0)
+                        .offset(x: isHovered || theme.reducesMotion ? 0 : -OrbitTokens.Spacing.xs)
+                }
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .onHover { isHovered = $0 }
+            .animation(theme.animation(OrbitTokens.Motion.hover), value: isHovered)
+            .help("Switch playlists")
+            .accessibilityLabel("Playing from \(context.name ?? "Spotify")")
+            .accessibilityHint("Opens the playlist picker")
+        } else {
+            Text("Orbit")
+                .font(OrbitTokens.Typography.captionEmphasized)
+                .foregroundStyle(.secondary)
+        }
     }
 }
 
@@ -141,6 +149,8 @@ private struct NowPlayingHeader: View {
                     keepsPrevious: true
                 )
                 .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
+                .saturation(playback.snapshot.isPlaying ? 1 : 0.7)
+                .animation(theme.animation(OrbitTokens.Motion.content), value: playback.snapshot.isPlaying)
             }
             VStack(alignment: .leading, spacing: OrbitTokens.Spacing.xxs) {
                 Text(track?.name ?? "")
@@ -151,59 +161,93 @@ private struct NowPlayingHeader: View {
                     if track?.isExplicit == true {
                         Image(systemName: "e.square.fill")
                             .font(.system(size: OrbitTokens.Icon.small))
-                            .foregroundStyle(.tertiary)
-                            .accessibilityLabel("Explicit")
+                            .foregroundStyle(.secondary)
                     }
                     Text(track?.artistLine ?? "")
                         .font(OrbitTokens.Typography.subheadline)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .fadingTruncation()
                 }
                 Text(track?.album ?? "")
                     .font(OrbitTokens.Typography.caption)
                     .foregroundStyle(.tertiary)
-                    .lineLimit(1)
+                    .fadingTruncation()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .id(track?.id)
-            .transition(.opacity)
+            .transition(trackTransition)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(trackDescription(track))
+            .accessibilityAddTraits(.isHeader)
             LikeButton()
         }
         .frame(minHeight: theme.showsArtwork ? OrbitTokens.Size.nowPlayingArtwork : 0)
         .animation(theme.animation(OrbitTokens.Motion.content), value: track?.id)
-        .accessibilityElement(children: .contain)
+    }
+
+    // The new title rises a few points into place while the old one fades, the same direction the pill uses.
+    private var trackTransition: AnyTransition {
+        guard !theme.reducesMotion else { return .opacity }
+        return .asymmetric(
+            insertion: .opacity.combined(with: .offset(y: OrbitTokens.Spacing.s)),
+            removal: .opacity.animation(theme.animation(OrbitTokens.Motion.screenFadeOut))
+        )
+    }
+
+    private func trackDescription(_ track: Track?) -> String {
+        guard let track else { return "" }
+        let explicit = track.isExplicit ? "Explicit" : nil
+        return [track.name, track.artistLine, track.album, explicit].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
     }
 }
 
 private struct LikeButton: View {
     @Environment(PlaybackCoordinator.self) private var playback
     @Environment(AccountStore.self) private var account
+    @Environment(\.orbitTheme) private var theme
 
     var body: some View {
         let saved = playback.isCurrentTrackSaved
         let isPending = playback.pendingIntents.contains(.toggleSaved)
+        let isSignedIn = account.authState.isSignedIn
         Button {
             Task { await playback.toggleSaved() }
         } label: {
             Image(systemName: saved == true ? "heart.fill" : "heart")
                 .contentTransition(.symbolEffect(.replace))
+                .symbolEffect(.bounce, value: theme.reducesMotion ? false : saved == true)
         }
-        .iconButton(diameter: OrbitTokens.Size.iconButton + 2, glyph: OrbitTokens.Icon.transport - 1, isOn: saved == true, showsOnIndicator: false)
-        .disabled(saved == nil || isPending || !account.authState.isSignedIn)
-        .help(saved == true ? "Remove from Liked Songs" : "Save to Liked Songs")
-        .accessibilityLabel(saved == true ? "Remove from Liked Songs" : "Save to Liked Songs")
+        .iconButton(
+            diameter: OrbitTokens.Size.iconButton + 2,
+            glyph: OrbitTokens.Icon.transport - 1,
+            isOn: saved == true,
+            isToggle: true,
+            showsOnIndicator: false
+        )
+        .disabled(saved == nil || isPending || !isSignedIn)
+        .help(help(saved: saved, isSignedIn: isSignedIn))
+        .accessibilityLabel("Liked Songs")
+        .accessibilityValue(saved == true ? "Saved" : "Not saved")
+        .accessibilityAddTraits(.isToggle)
+    }
+
+    private func help(saved: Bool?, isSignedIn: Bool) -> String {
+        if !isSignedIn { return "Connect Spotify to save songs" }
+        return saved == true ? "Remove from Liked Songs" : "Save to Liked Songs"
     }
 }
 
 private struct SeekBar: View {
     @Environment(PlaybackCoordinator.self) private var playback
+    @Environment(\.orbitTheme) private var theme
     @State private var scrubFraction: Double?
 
     var body: some View {
         let snapshot = playback.snapshot
         let duration = max(0, snapshot.track?.duration ?? 0)
         let canSeek = duration > 0 && snapshot.allows(.seek)
-        TimelineView(.animation(minimumInterval: OrbitTokens.Motion.progressInterval, paused: !snapshot.isPlaying || scrubFraction != nil)) { context in
+        let isScrubbing = scrubFraction != nil
+        TimelineView(.animation(minimumInterval: OrbitTokens.Motion.progressInterval, paused: !snapshot.isPlaying || isScrubbing)) { context in
             let position = scrubFraction.map { $0 * duration } ?? snapshot.position(at: context.date)
             let fraction = duration > 0 ? position / duration : 0
             VStack(spacing: OrbitTokens.Spacing.xxs) {
@@ -211,24 +255,37 @@ private struct SeekBar: View {
                     value: fraction,
                     onScrub: { scrubFraction = $0 },
                     onCommit: { committed in
-                        scrubFraction = nil
-                        Task { await playback.seek(to: committed * duration) }
+                        // Cleared in the same main-actor turn that applies the coordinator's optimistic position, so
+                        // the knob never snaps back to the old time for a frame.
+                        Task {
+                            scrubFraction = nil
+                            await playback.seek(to: committed * duration)
+                        }
                     },
                     accessibilityLabel: "Playback position",
-                    accessibilityValue: "\(Formatting.time(position)) of \(Formatting.time(duration))",
-                    step: duration > 0 ? 10 / duration : 0.05
+                    accessibilityValue: "\(Self.spoken(position)) of \(Self.spoken(duration))",
+                    step: duration > 0 ? PlayerKeyCommand.seekStep / duration : 0.05
                 )
                 .disabled(!canSeek)
+                // While scrubbing, the time being chosen brightens so the eye has one number to follow.
                 HStack {
                     Text(Formatting.time(position))
+                        .font(isScrubbing ? OrbitTokens.Typography.timecodeEmphasized : OrbitTokens.Typography.timecode)
+                        .foregroundStyle(isScrubbing ? .primary : .secondary)
                     Spacer()
                     Text("-" + Formatting.time(max(0, duration - position)))
+                        .font(OrbitTokens.Typography.timecode)
+                        .foregroundStyle(.secondary)
                 }
-                .font(OrbitTokens.Typography.timecode)
-                .foregroundStyle(.secondary)
+                .animation(theme.animation(OrbitTokens.Motion.hover), value: isScrubbing)
                 .accessibilityHidden(true)
             }
         }
+    }
+
+    static func spoken(_ interval: TimeInterval) -> String {
+        Duration.seconds(max(0, Int(interval.rounded(.down))))
+            .formatted(.units(allowed: [.hours, .minutes, .seconds], width: .wide))
     }
 }
 
@@ -239,7 +296,7 @@ private struct TransportRow: View {
         let snapshot = playback.snapshot
         let canRepeat = snapshot.allows(.toggleRepeatContext) || snapshot.allows(.toggleRepeatTrack)
         HStack(spacing: 0) {
-            TransportButton(symbol: "shuffle", label: "Shuffle", isOn: snapshot.shuffle, isEnabled: snapshot.allows(.toggleShuffle)) {
+            TransportButton(symbol: "shuffle", label: "Shuffle", isToggle: true, isOn: snapshot.shuffle, isEnabled: snapshot.allows(.toggleShuffle)) {
                 await playback.toggleShuffle()
             }
             Spacer(minLength: 0)
@@ -255,8 +312,11 @@ private struct TransportRow: View {
             Spacer(minLength: 0)
             TransportButton(
                 symbol: snapshot.repeatMode == .track ? "repeat.1" : "repeat",
-                label: repeatLabel(snapshot.repeatMode),
+                label: "Repeat",
+                help: repeatHelp(snapshot.repeatMode),
+                isToggle: true,
                 isOn: snapshot.repeatMode != .off,
+                accessibilityValue: repeatValue(snapshot.repeatMode),
                 isEnabled: canRepeat
             ) {
                 await playback.cycleRepeat()
@@ -265,11 +325,19 @@ private struct TransportRow: View {
         .padding(.horizontal, OrbitTokens.Spacing.xs)
     }
 
-    private func repeatLabel(_ mode: RepeatMode) -> String {
+    private func repeatValue(_ mode: RepeatMode) -> String {
+        switch mode {
+        case .off: "Off"
+        case .context: "All"
+        case .track: "One"
+        }
+    }
+
+    private func repeatHelp(_ mode: RepeatMode) -> String {
         switch mode {
         case .off: "Repeat"
-        case .context: "Repeat All"
-        case .track: "Repeat One"
+        case .context: "Repeating all · Click to repeat one"
+        case .track: "Repeating one · Click to turn off"
         }
     }
 }
@@ -292,12 +360,14 @@ private struct VolumeRow: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 16)
                 .contentTransition(.symbolEffect(.replace))
+                .accessibilityHidden(true)
             OrbitSlider(
                 value: shown,
                 onScrub: scrub,
                 onCommit: commit,
                 accessibilityLabel: "Volume",
-                accessibilityValue: canSetVolume ? "\(Int(shown * 100)) percent" : "Unavailable on this device"
+                accessibilityValue: canSetVolume ? shown.formatted(.percent.precision(.fractionLength(0))) : "Unavailable on this device",
+                step: Double(PlayerKeyCommand.volumeStep) / 100
             )
             .disabled(!canSetVolume)
             .help(canSetVolume ? "Volume" : "This device doesn't support volume control")
@@ -353,7 +423,7 @@ private struct DeviceChip: View {
                     .frame(maxWidth: 92, alignment: .leading)
                     .fixedSize(horizontal: true, vertical: false)
             }
-            .foregroundStyle(.secondary)
+            .foregroundStyle(isHovered ? .primary : .secondary)
             .padding(.horizontal, OrbitTokens.Spacing.m)
             .frame(height: 24)
             .background {
@@ -361,11 +431,85 @@ private struct DeviceChip: View {
             }
             .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DeviceChipStyle())
+        .focusEffectDisabled()
         .onHover { isHovered = $0 }
         .animation(theme.animation(OrbitTokens.Motion.hover), value: isHovered)
         .help("Choose where Spotify plays")
-        .accessibilityLabel("Playing on \(device?.name ?? "unknown device"). Choose device")
+        .accessibilityLabel("Playing on \(device?.name ?? "an unknown device")")
+        .accessibilityHint("Shows Spotify Connect devices")
+    }
+}
+
+// Plain content with a press dip and the shared accent focus ring, since `.plain` draws neither.
+private struct DeviceChipStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        DeviceChipBody(configuration: configuration)
+    }
+}
+
+private struct DeviceChipBody: View {
+    let configuration: ButtonStyleConfiguration
+
+    @Environment(\.orbitTheme) private var theme
+    @Environment(\.isFocused) private var isFocused
+
+    var body: some View {
+        configuration.label
+            .overlay {
+                if isFocused { Capsule().strokeBorder(theme.accent, lineWidth: 2).padding(-2) }
+            }
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .animation(theme.animation(OrbitTokens.Motion.press), value: configuration.isPressed)
+    }
+}
+
+// Spotify's desktop shortcuts on the expanded player. An invisible key catcher behind the controls takes focus when
+// the player appears, so Space works at once. It is a sibling of the controls rather than their container, because
+// a focused container would make every button inside it report focus and draw its ring. The handler sits above
+// both, so keys a focused control ignores still arrive, while Space on a focused button presses that button.
+private struct PlayerKeyboard: ViewModifier {
+    @Environment(PlaybackCoordinator.self) private var playback
+    @FocusState private var isFocused: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                Color.clear
+                    .focusable(interactions: .edit)
+                    .focused($isFocused)
+                    .focusEffectDisabled()
+                    .accessibilityHidden(true)
+            }
+            .onAppear { isFocused = true }
+            .onKeyPress(phases: [.down, .repeat]) { press in
+                guard let command = PlayerKeyCommand.command(for: press.key, modifiers: press.modifiers) else { return .ignored }
+                if press.phase == .repeat, command == .togglePlayback { return .handled }
+                perform(command)
+                return .handled
+            }
+    }
+
+    private func perform(_ command: PlayerKeyCommand) {
+        let snapshot = playback.snapshot
+        switch command {
+        case .togglePlayback:
+            guard snapshot.track != nil, snapshot.allows(snapshot.isPlaying ? .pause : .resume) else { return }
+            Task { await playback.togglePlayPause() }
+        case .seek(let delta):
+            guard let duration = snapshot.track?.duration, snapshot.allows(.seek) else { return }
+            let target = min(duration, max(0, snapshot.position(at: .now) + delta))
+            Task { await playback.seek(to: target) }
+        case .previousTrack:
+            guard snapshot.allows(.skipPrevious) else { return }
+            Task { await playback.previous() }
+        case .nextTrack:
+            guard snapshot.allows(.skipNext) else { return }
+            Task { await playback.next() }
+        case .changeVolume(let delta):
+            guard let volume = snapshot.volume, snapshot.allows(.setVolume) else { return }
+            Task { await playback.setVolume(volume + delta) }
+        }
     }
 }
 
@@ -411,7 +555,7 @@ private struct PlayerNotice: View {
         case .automationDenied:
             Callout(
                 symbol: "lock.shield",
-                message: "Orbit can't control Spotify on this Mac",
+                message: "Orbit can't control Spotify",
                 detail: "Allow it in Privacy & Security › Automation.",
                 action: StateAction(title: "Open Settings") { SpotifyApp.openAutomationSettings() }
             )

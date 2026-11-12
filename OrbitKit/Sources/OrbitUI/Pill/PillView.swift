@@ -12,25 +12,26 @@ struct PillView: View {
 
     @Environment(PlaybackCoordinator.self) private var playback
     @Environment(AccountStore.self) private var account
-    @Environment(Preferences.self) private var preferences
     @Environment(\.orbitTheme) private var theme
     @State private var isHovered = false
 
     private var isCompact: Bool { size.height < OrbitTokens.Size.pill(.regular).height }
     private var artworkSize: CGFloat { isCompact ? OrbitTokens.Size.pillArtworkCompact : OrbitTokens.Size.pillArtworkRegular }
     private var inset: CGFloat { (size.height - artworkSize) / 2 }
-    private var showsControls: Bool { (isHovered || forcesHover) && playback.snapshot.track != nil }
+    private var controlDiameter: CGFloat { isCompact ? OrbitTokens.Size.pillControlCompact : OrbitTokens.Size.pillControlRegular }
 
     var body: some View {
         let snapshot = playback.snapshot
+        let status = PlaybackStatus(account: account, snapshot: snapshot)
+        let showsControls = (isHovered || forcesHover) && status.hasTrack
         HStack(spacing: isCompact ? OrbitTokens.Spacing.m : OrbitTokens.Spacing.l - 2) {
-            leadingTile(snapshot)
-            titles(snapshot)
+            leadingTile(snapshot, status: status)
+            titles(snapshot, status: status)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            trailing(snapshot)
+            trailing(snapshot, status: status, showsControls: showsControls)
         }
         .padding(.leading, inset)
-        .padding(.trailing, inset + (showsControls ? 0 : OrbitTokens.Spacing.xs))
+        .padding(.trailing, trailingInset(status: status, showsControls: showsControls))
         .frame(width: size.width, height: size.height)
         .contentShape(.capsule)
         .onTapGesture(perform: onExpand)
@@ -38,51 +39,70 @@ struct PillView: View {
         .onHover { hovering in isHovered = hovering }
         .animation(theme.animation(OrbitTokens.Motion.hover), value: showsControls)
         .animation(theme.animation(OrbitTokens.Motion.content), value: snapshot.track?.id)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(accessibilitySummary(snapshot))
+        .animation(theme.animation(OrbitTokens.Motion.content), value: status)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilitySummary(snapshot, status: status))
+        .accessibilityHint("Opens the player")
         .accessibilityAddTraits(.isButton)
-        .accessibilityAction(named: "Expand", onExpand)
+        .accessibilityAction(.default, onExpand)
+        .modifier(PillAccessibilityActions(status: status, snapshot: snapshot))
         .accessibilityIdentifier("orbit.pill")
     }
 
+    // The capsule button and the hover controls are centred in the pill's end cap, so both ends of the pill stay
+    // concentric with its curve.
+    private func trailingInset(status: PlaybackStatus, showsControls: Bool) -> CGFloat {
+        if status == .automationNeeded { return (size.height - OrbitTokens.Size.capsuleButton) / 2 }
+        if showsControls { return (size.height - controlDiameter) / 2 }
+        return inset + OrbitTokens.Spacing.xs
+    }
+
     @ViewBuilder
-    private func leadingTile(_ snapshot: PlaybackSnapshot) -> some View {
+    private func leadingTile(_ snapshot: PlaybackSnapshot, status: PlaybackStatus) -> some View {
         if theme.showsArtwork, let track = snapshot.track {
             ArtworkView(url: track.artworkURL, size: artworkSize, cornerRadius: artworkSize / 2, keepsPrevious: true)
-                .saturation(snapshot.isPlaying ? 1 : 0.6)
+                .saturation(snapshot.isPlaying ? 1 : 0.55)
+                .opacity(snapshot.isPlaying ? 1 : 0.85)
                 .animation(theme.animation(OrbitTokens.Motion.content), value: snapshot.isPlaying)
         } else {
             Circle()
                 .fill(OrbitPalette.quietFill(contrast: theme.contrast))
                 .frame(width: artworkSize, height: artworkSize)
                 .overlay {
-                    Image(systemName: "music.note")
+                    Image(systemName: tileSymbol(status))
                         .font(.system(size: artworkSize * 0.42, weight: .semibold))
                         .foregroundStyle(.secondary)
+                        .contentTransition(.symbolEffect(.replace))
                 }
         }
     }
 
-    private func titles(_ snapshot: PlaybackSnapshot) -> some View {
+    private func titles(_ snapshot: PlaybackSnapshot, status: PlaybackStatus) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(title(snapshot))
+            Text(title(snapshot, status: status))
                 .font(isCompact ? OrbitTokens.Typography.pillTitleCompact : OrbitTokens.Typography.pillTitleRegular)
-                .foregroundStyle(snapshot.track == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
-                .lineLimit(1)
-            if !isCompact, let subtitle = subtitle(snapshot) {
+                .fadingTruncation()
+            if !isCompact, let subtitle = subtitle(snapshot, status: status) {
                 Text(subtitle)
                     .font(OrbitTokens.Typography.pillSubtitle)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .fadingTruncation()
             }
         }
-        .id(snapshot.track?.id)
+        .id(snapshot.track?.id ?? "\(status)")
         .transition(theme.reducesMotion ? .opacity : .push(from: .bottom).combined(with: .opacity))
     }
 
     @ViewBuilder
-    private func trailing(_ snapshot: PlaybackSnapshot) -> some View {
-        if showsControls {
+    private func trailing(_ snapshot: PlaybackSnapshot, status: PlaybackStatus, showsControls: Bool) -> some View {
+        if status == .automationNeeded {
+            Button("Allow") {
+                Task { await account.requestAutomationPermission() }
+            }
+            .capsuleButton()
+            .help("Let Orbit see and control what Spotify is playing on this Mac")
+            .transition(.opacity)
+        } else if showsControls {
             HStack(spacing: 0) {
                 if !isCompact {
                     pillButton("backward.fill", label: "Previous", enabled: snapshot.allows(.skipPrevious)) {
@@ -95,14 +115,12 @@ struct PillView: View {
                 }
             }
             .transition(.opacity.combined(with: .scale(scale: 0.85, anchor: .trailing)))
-        } else if snapshot.track != nil {
+        } else if status.hasTrack {
             PlayingIndicator(isPlaying: snapshot.isPlaying)
-                .frame(width: controlDiameter * 0.7)
+                .frame(width: OrbitTokens.Size.playingIndicator)
                 .transition(.opacity)
         }
     }
-
-    private var controlDiameter: CGFloat { isCompact ? 26 : 30 }
 
     private func pillButton(_ symbol: String, label: String, enabled: Bool, action: @escaping () async -> Void) -> some View {
         Button {
@@ -116,38 +134,102 @@ struct PillView: View {
         .accessibilityLabel(label)
     }
 
-    private func title(_ snapshot: PlaybackSnapshot) -> String {
+    private func tileSymbol(_ status: PlaybackStatus) -> String {
+        switch status {
+        case .automationNeeded, .automationDenied: "hand.raised.fill"
+        case .spotifyClosed: "moon.zzz.fill"
+        default: "music.note"
+        }
+    }
+
+    private func title(_ snapshot: PlaybackSnapshot, status: PlaybackStatus) -> String {
         if let track = snapshot.track { return track.name }
-        if !account.isSpotifyInstalled { return "Spotify not installed" }
-        if !account.isSpotifyRunning { return "Spotify is closed" }
-        return "Not playing"
+        return switch status {
+        case .spotifyNotInstalled: "Spotify isn't installed"
+        case .spotifyClosed: "Spotify is closed"
+        case .automationNeeded, .automationDenied: "Spotify is open"
+        default: "Not playing"
+        }
     }
 
-    private func subtitle(_ snapshot: PlaybackSnapshot) -> String? {
+    private func subtitle(_ snapshot: PlaybackSnapshot, status: PlaybackStatus) -> String? {
         if let track = snapshot.track { return track.artistLine }
-        if account.authState.isSignedIn { return "Click to pick a playlist" }
-        return "Click to open Orbit"
+        return switch status {
+        case .spotifyNotInstalled: "Orbit works with the desktop app"
+        case .spotifyClosed: "Click to start listening"
+        case .automationNeeded: "Orbit needs permission"
+        case .automationDenied: "Orbit isn't allowed to control it"
+        case .idle(let canBrowse): canBrowse ? "Click to pick a playlist" : "Click to open Orbit"
+        case .playing, .paused: nil
+        }
     }
 
-    private func accessibilitySummary(_ snapshot: PlaybackSnapshot) -> String {
-        guard let track = snapshot.track else { return "Orbit, \(title(snapshot))" }
+    private func accessibilitySummary(_ snapshot: PlaybackSnapshot, status: PlaybackStatus) -> String {
+        guard let track = snapshot.track else {
+            return ["Orbit", title(snapshot, status: status), subtitle(snapshot, status: status)].compactMap { $0 }.joined(separator: ", ")
+        }
         return "Orbit, \(track.name) by \(track.artistLine), \(snapshot.isPlaying ? "playing" : "paused")"
     }
 }
 
-// Breathing bars while playing, a still pause glyph otherwise. A symbol effect keeps this on the render server,
-// so the always-visible pill does not tick the main thread.
+// The hover controls are invisible to VoiceOver until the pointer arrives, so the pill offers the same commands
+// as actions, plus the permission request when that is the next step.
+private struct PillAccessibilityActions: ViewModifier {
+    let status: PlaybackStatus
+    let snapshot: PlaybackSnapshot
+
+    @Environment(PlaybackCoordinator.self) private var playback
+    @Environment(AccountStore.self) private var account
+
+    func body(content: Content) -> some View {
+        content
+            .accessibilityActions {
+                if status == .automationNeeded {
+                    Button("Allow Orbit to Control Spotify") { Task { await account.requestAutomationPermission() } }
+                }
+                if status.hasTrack, snapshot.allows(snapshot.isPlaying ? .pause : .resume) {
+                    Button(snapshot.isPlaying ? "Pause" : "Play") { Task { await playback.togglePlayPause() } }
+                }
+                if status.hasTrack, snapshot.allows(.skipNext) {
+                    Button("Next Track") { Task { await playback.next() } }
+                }
+                if status.hasTrack, snapshot.allows(.skipPrevious) {
+                    Button("Previous Track") { Task { await playback.previous() } }
+                }
+            }
+    }
+}
+
+// A waveform whose bars light in turn while playing, over a dimmer copy of itself so the shape stays readable on
+// any glass; a still pause glyph otherwise. A symbol effect keeps this on the render server, so the always-visible
+// pill does not tick the main thread.
 struct PlayingIndicator: View {
     let isPlaying: Bool
 
     @Environment(\.orbitTheme) private var theme
 
     var body: some View {
-        Image(systemName: isPlaying ? "waveform" : "pause.fill")
-            .font(.system(size: isPlaying ? OrbitTokens.Icon.regular : OrbitTokens.Icon.small, weight: .semibold))
-            .foregroundStyle(isPlaying ? AnyShapeStyle(theme.accent) : AnyShapeStyle(.tertiary))
-            .symbolEffect(.variableColor.iterative.dimInactiveLayers.nonReversing, options: .repeat(.continuous), isActive: isPlaying && !theme.reducesMotion)
-            .contentTransition(.symbolEffect(.replace))
-            .accessibilityHidden(true)
+        ZStack {
+            if isPlaying {
+                Image(systemName: "waveform")
+                    .foregroundStyle(theme.accent.opacity(theme.isHighContrast ? 0.85 : 0.7))
+                Image(systemName: "waveform")
+                    .foregroundStyle(theme.accent)
+                    .symbolEffect(
+                        .variableColor.iterative.hideInactiveLayers.nonReversing,
+                        options: .repeat(.continuous),
+                        isActive: !theme.reducesMotion
+                    )
+            } else {
+                Image(systemName: "pause.fill")
+                    .font(.system(size: OrbitTokens.Icon.small, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        // Heavy, so the bars stay at least two pixels wide on a 1x display instead of anti-aliasing to grey.
+        .font(.system(size: OrbitTokens.Icon.indicator, weight: .heavy))
+        .transition(.opacity)
+        .animation(theme.animation(OrbitTokens.Motion.hover), value: isPlaying)
+        .accessibilityHidden(true)
     }
 }
