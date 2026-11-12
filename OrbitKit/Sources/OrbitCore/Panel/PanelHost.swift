@@ -14,9 +14,10 @@ public protocol PanelHost: AnyObject {
     func updateDrag()
     func endDrag()
 
-    // Popover model: the shell makes the panel key whenever the user opens it and hands key status back to the
-    // user's app when it collapses; the collapsed pill never takes key, so its playback controls leave focus where
-    // it was. Asking for true makes an open but unfocused panel key (a click into a search field). False is
-    // ignored while expanded, so Escape still reaches Orbit after a field gives up focus.
+    // The shell makes the panel key whenever the user opens it, and hands key status back to the user's app when
+    // it collapses or the user turns to another app, which by default leaves it open; the collapsed pill never
+    // takes key, so its playback controls leave focus where it was. Asking for true makes an open but unfocused
+    // panel key (a click into a search field). False is ignored while expanded, so Escape still reaches Orbit after
+    // a field gives up focus.
     func setAcceptsKeyboardInput(_ accepts: Bool)
 }

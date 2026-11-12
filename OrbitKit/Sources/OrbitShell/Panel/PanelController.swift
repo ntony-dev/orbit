@@ -6,10 +6,12 @@ import SwiftUI
 
 // Owns the floating canvas: where it sits, when it is on screen, and when it holds keyboard focus.
 //
-// Focus follows the popover model. Opening Orbit (clicking the pill, a shortcut, the menu bar) makes the
-// non-activating panel key without activating the app, so Escape, arrow keys and typing reach Orbit while it is
-// visibly open. Collapsing hands key status straight back to the user's app. The collapsed pill never takes key,
-// so its playback buttons leave focus where it was, and Orbit never listens for keys it does not visibly own.
+// Opening Orbit (clicking the pill, a shortcut, the menu bar) makes the non-activating panel key without
+// activating the app, so Escape, arrow keys and typing reach Orbit while it is visibly open. Open does not imply
+// key: by default a click in another app, or switching apps, leaves the panel open and on top and hands key status
+// to the app the user went to, and a click on the panel makes it key again (PanelFocusPolicy). Collapsing hands key
+// status straight back to the user's app. The collapsed pill never takes key, so its playback buttons leave focus
+// where it was, and Orbit never holds key status for keys it does not visibly own.
 @MainActor
 final class PanelController: PanelHost {
     let state = PanelState()
@@ -160,8 +162,9 @@ final class PanelController: PanelHost {
         scheduleFullscreenCheck()
     }
 
-    // While Orbit is open the panel keeps key status whatever the UI asks, so Escape still reaches it after a
-    // search field gives up focus; key status goes back to the user's app when the panel collapses.
+    // While Orbit is open and key it stays key whatever the UI asks, so Escape still reaches it after a search
+    // field gives up focus; key status goes back to the user's app when the panel collapses or the user turns to
+    // another app.
     func setAcceptsKeyboardInput(_ accepts: Bool) {
         if accepts {
             takeKeyboardFocus()
@@ -177,6 +180,10 @@ final class PanelController: PanelHost {
     // Collapsed and no longer animating, so the canvas is exactly the pill plus its margin.
     private var isCollapsedAtRest: Bool {
         !state.isExpanded && panel.frame.size == collapsedCanvasSize
+    }
+
+    private var focusPolicy: PanelFocusPolicy {
+        PanelFocusPolicy(collapsesOnOutsideClick: preferences.collapsesOnOutsideClick)
     }
 
     private var placementOptions: PlacementOptions {
@@ -286,11 +293,15 @@ final class PanelController: PanelHost {
             if panel.contentView !== hostingView { panel.contentView = hostingView }
             if !panel.isVisible { panel.orderFrontRegardless() }
         } else if panel.isVisible || panel.contentView != nil {
-            state.collapse()
+            let collapses = focusPolicy.collapsesWhenHidden(byHidingThePill: !preferences.isPillVisible)
+            if collapses { state.collapse() }
             panel.orderOut(nil)
             panel.contentView = nil
-            // A collapse animation does not run in a hidden window, so the canvas is shrunk here instead.
-            panel.setFrame(PanelGeometry.resize(panel.frame, to: collapsedCanvasSize, keeping: state.anchor), display: false)
+            // A collapse animation does not run in a hidden window, so the canvas is shrunk here instead. An open
+            // panel that is only hidden keeps its canvas and comes back open.
+            if !state.isExpanded {
+                panel.setFrame(PanelGeometry.resize(panel.frame, to: collapsedCanvasSize, keeping: state.anchor), display: false)
+            }
         }
         reportInterfaceVisibility()
     }
@@ -322,11 +333,21 @@ final class PanelController: PanelHost {
 
     private func returnKeyboardFocus() {
         panel.acceptsKey = false
+        handKeyStatusBack(clickedAt: nil)
+    }
+
+    // Orbit is never the active app, so dropping the panel out of the window list hands key status straight back
+    // to the frontmost app's window; re-ordering it in the same pass avoids any flicker. A panel kept at the normal
+    // level goes back just below the window the user clicked, so that window still comes to the front.
+    private func handKeyStatusBack(clickedAt point: NSPoint?) {
         guard panel.isKeyWindow else { return }
-        // Orbit is never the active app, so dropping the panel out of the window list hands key status straight
-        // back to the frontmost app's window; re-ordering it in the same pass avoids any flicker.
         panel.orderOut(nil)
-        panel.orderFrontRegardless()
+        let clicked = point.map { NSWindow.windowNumber(at: $0, belowWindowWithWindowNumber: 0) } ?? 0
+        if panel.level == .normal, clicked > 0 {
+            panel.order(.below, relativeTo: clicked)
+        } else {
+            panel.orderFrontRegardless()
+        }
     }
 
     private func observe() {
@@ -415,11 +436,8 @@ final class PanelController: PanelHost {
 
     private func keyStatusChanged() {
         state.isKeyWindow = panel.isKeyWindow
-        // Focus moved to another app (Cmd-Tab, a click the outside-click monitor did not see) while Orbit was
-        // open for typing: close like a popover. Focus moving to another Orbit window, such as Settings, does not.
-        if !panel.isKeyWindow, state.isExpanded, panel.acceptsKey, NSApp.keyWindow == nil {
-            state.collapse()
-        }
+        guard !panel.isKeyWindow, state.isExpanded, panel.acceptsKey, NSApp.keyWindow == nil else { return }
+        if focusPolicy.keyMovedToAnotherApp() == .collapse { state.collapse() }
     }
 
     private func expansionChanged(_ expanded: Bool) {
@@ -434,13 +452,22 @@ final class PanelController: PanelHost {
         reportInterfaceVisibility()
     }
 
-    // Clicks in other apps collapse the expanded panel. Clicks in Orbit's own windows (Settings, the menu bar
-    // item) do not, so appearance changes can be watched live. Transparent canvas areas pass clicks through to
-    // the app below, so they count as outside clicks too. Mouse monitors need no permission.
+    // Clicks in other apps hand key status back, or collapse the panel when the user chose that. Clicks in Orbit's
+    // own windows (Settings, the menu bar item) are not seen here, so appearance changes can be watched live.
+    // Transparent canvas areas pass clicks through to the app below, so they count as outside clicks too. Mouse
+    // monitors need no permission.
     private func installClickMonitor() {
         guard clickMonitor == nil, !suppressesFocus else { return }
         clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
-            MainActor.assumeIsolated { self?.state.collapse() }
+            MainActor.assumeIsolated { self?.outsideClick(at: NSEvent.mouseLocation) }
+        }
+    }
+
+    private func outsideClick(at point: NSPoint) {
+        switch focusPolicy.outsideClick(panelIsKey: panel.isKeyWindow) {
+        case .collapse: state.collapse()
+        case .resignKey: handKeyStatusBack(clickedAt: point)
+        case .none: break
         }
     }
 

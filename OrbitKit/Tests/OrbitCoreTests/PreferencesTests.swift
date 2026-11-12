@@ -15,6 +15,8 @@ struct PreferencesTests {
         let preferences = Preferences(defaults: makeDefaults())
         #expect(preferences.appearance == .system)
         #expect(preferences.glassPreset == .balanced)
+        #expect(!preferences.collapsesOnOutsideClick)
+        #expect(preferences.collapsesAfterAction)
         #expect(preferences.accent == .neutral)
         #expect(preferences.alwaysOnTop)
         #expect(preferences.clientIDOverride == nil)
@@ -33,6 +35,7 @@ struct PreferencesTests {
         preferences.preferredDevice = DeviceReference(id: "dev", name: "Speaker")
         preferences.clientIDOverride = "abc"
         preferences.syncFrequency = .whileOpen
+        preferences.collapsesOnOutsideClick = true
 
         let reloaded = Preferences(defaults: defaults)
         #expect(reloaded.appearance == .dark)
@@ -43,6 +46,7 @@ struct PreferencesTests {
         #expect(reloaded.preferredDevice == DeviceReference(id: "dev", name: "Speaker"))
         #expect(reloaded.clientIDOverride == "abc")
         #expect(reloaded.syncFrequency == .whileOpen)
+        #expect(reloaded.collapsesOnOutsideClick)
     }
 
     // Changing the default must not change the look of an install that already chose a preset.

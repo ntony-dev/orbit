@@ -23,6 +23,8 @@ public final class Preferences {
     public var hidesInFullscreen: Bool { didSet { store(hidesInFullscreen, .hidesInFullscreen) } }
     public var hidesWhenSpotifyQuits: Bool { didSet { store(hidesWhenSpotifyQuits, .hidesWhenSpotifyQuits) } }
     public var collapsesAfterAction: Bool { didSet { store(collapsesAfterAction, .collapsesAfterAction) } }
+    // Off by default: the open panel stays open, and only gives keyboard focus back, until the user collapses it.
+    public var collapsesOnOutsideClick: Bool { didSet { store(collapsesOnOutsideClick, .collapsesOnOutsideClick) } }
     public var syncFrequency: SyncFrequency { didSet { store(syncFrequency, .syncFrequency) } }
     public var preferredDevice: DeviceReference? { didSet { store(preferredDevice, .preferredDevice) } }
     // Takes precedence over the SpotifyClientID Info.plist key when it is not blank.
@@ -49,6 +51,7 @@ public final class Preferences {
         hidesInFullscreen = Self.load(.hidesInFullscreen, from: defaults) ?? true
         hidesWhenSpotifyQuits = Self.load(.hidesWhenSpotifyQuits, from: defaults) ?? false
         collapsesAfterAction = Self.load(.collapsesAfterAction, from: defaults) ?? true
+        collapsesOnOutsideClick = Self.load(.collapsesOnOutsideClick, from: defaults) ?? false
         syncFrequency = Self.load(.syncFrequency, from: defaults) ?? .standard
         preferredDevice = Self.load(.preferredDevice, from: defaults) ?? nil
         clientIDOverride = Self.load(.clientIDOverride, from: defaults) ?? nil
@@ -58,7 +61,7 @@ public final class Preferences {
         case appearance, glassPreset, backgroundOpacity, accent, pillSize, showsArtwork, reducesAnimation
         case alwaysOnTop, isPillVisible, snapsToEdges, docksAtTopCenter, remembersPosition, savedPositions, panelDisplayID
         case hidesInFullscreen, hidesWhenSpotifyQuits, collapsesAfterAction, preferredDevice, clientIDOverride
-        case syncFrequency
+        case syncFrequency, collapsesOnOutsideClick
 
         var defaultsKey: String { "orbit.preferences.\(rawValue)" }
     }

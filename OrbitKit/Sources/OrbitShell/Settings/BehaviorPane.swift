@@ -12,10 +12,11 @@ struct BehaviorPane: View {
                 Toggle("Show the pill", isOn: $preferences.isPillVisible)
                 Toggle("Keep above other windows", isOn: $preferences.alwaysOnTop)
                 Toggle("Collapse after choosing music", isOn: $preferences.collapsesAfterAction)
+                Toggle("Collapse when clicking outside", isOn: $preferences.collapsesOnOutsideClick)
             } header: {
                 Text("Pill")
             } footer: {
-                Text("With the pill hidden, open Orbit from its menu bar item or a global shortcut.")
+                Text("Otherwise Orbit stays open until you collapse it, and clicking another app only gives it back the keyboard. With the pill hidden, open Orbit from its menu bar item or a global shortcut.")
                     .settingsFootnote()
             }
 
