@@ -51,6 +51,17 @@ enum OrbitTokens {
         static let sliderHitHeight: CGFloat = 18
         static let sliderKnob: CGFloat = 12
 
+        // Bounds for screens that size to their content: short enough that five liked songs leave no hole, tall
+        // enough that a long library still shows ten rows.
+        static let fittedMinHeight: CGFloat = 248
+        static let fittedMaxHeight: CGFloat = 548
+        // What a gated screen (signed out, not allowlisted) needs for its message and one action.
+        static let gatedHeight: CGFloat = 330
+        // Room an empty, loading or error state keeps inside a fitted list, so the message never looks cramped.
+        static let listStateHeight: CGFloat = 196
+        static let listEdgeFade: CGFloat = 20
+        static let chipHeight: CGFloat = 24
+
         static func pill(_ size: PillSize) -> CGSize {
             switch size {
             case .compact: CGSize(width: 212, height: 40)
@@ -112,6 +123,13 @@ enum OrbitTokens {
         static let volumeThrottle: Duration = .milliseconds(120)
         static let progressInterval: TimeInterval = 0.5
         static let navigationOffset: CGFloat = 18
+        // Collapsing is a return to rest: a firmer spring with no visible overshoot, the card's content gone
+        // almost at once and the pill arriving while the surface is still closing in, so there is no empty beat.
+        static let collapse = Animation.spring(duration: 0.36, bounce: 0.04)
+        static let collapseContentFadeOut = Animation.easeOut(duration: 0.09)
+        static let collapsePillFadeIn = Animation.easeOut(duration: 0.18).delay(0.05)
+        static let fit = Animation.smooth(duration: 0.3)
+        static let selection = Animation.easeOut(duration: 0.1)
     }
 }
 

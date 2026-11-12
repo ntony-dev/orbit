@@ -5,6 +5,7 @@ import SwiftUI
 // Debug-only launch arguments that put the UI into a known state for screenshots without simulated input, and
 // without writing to the user's Preferences:
 //   --ui-screen player|picker|library|liked|queue|search|devices|playlist:<id>
+//   --ui-query <text>              the library search query, so search results can be captured
 //   --ui-hover                     show the pill's hover controls
 //   --ui-scenario <name>           with --demo only, read by the shell, which builds the scenario's stores:
 //                                  signed-out, automation-denied, spotify-closed, idle, rate-limited,
@@ -12,13 +13,17 @@ import SwiftUI
 //   --ui-glass clear|balanced|tinted, --ui-opacity 0...1, --ui-accent neutral|mint|ice|amber|lavender,
 //   --ui-pill compact|regular, --ui-no-artwork
 //   --ui-reduce-transparency, --ui-increase-contrast, --ui-reduce-motion
-//   --ui-tour                      expand, visit picker, library and player, then collapse, on a timer
+//   --ui-tour                      visit picker, library and player, then collapse, on a timer; pair it with
+//                                  --expanded, since expanding from the pill makes the panel key
 //   --ui-slow <factor>             play every animation at this speed (0.1 is ten times slower)
 //   --ui-switch <playlist-id>      two seconds after launch, switch to that playlist without collapsing
+//   --ui-shelf                     with --demo only, pin two playlists and add three recents, so the picker's
+//                                  sections can be captured (the demo keeps no shelf file)
 //   --ui-backdrop                  draw a stand-in wallpaper inside the canvas, because a capture of Orbit's
 //                                  window alone cannot include what the glass refracts from behind it
 struct UIDebugOptions {
     var screen: String?
+    var searchQuery: String?
     var forcesPillHover = false
     var glassPreset: GlassPreset?
     var backgroundOpacity: Double?
@@ -31,6 +36,7 @@ struct UIDebugOptions {
     var showsBackdrop = false
     var runsTour = false
     var switchPlaylistID: String?
+    var seedsShelf = false
     var animationSpeed: Double = 1
 
     #if DEBUG
@@ -47,6 +53,7 @@ struct UIDebugOptions {
             return arguments[index + 1]
         }
         screen = value("--ui-screen")
+        searchQuery = value("--ui-query")
         forcesPillHover = arguments.contains("--ui-hover")
         glassPreset = value("--ui-glass").flatMap(GlassPreset.init(rawValue:))
         backgroundOpacity = value("--ui-opacity").flatMap(Double.init)
@@ -61,6 +68,7 @@ struct UIDebugOptions {
         showsBackdrop = arguments.contains("--ui-backdrop")
         runsTour = arguments.contains("--ui-tour")
         switchPlaylistID = value("--ui-switch")
+        seedsShelf = arguments.contains("--ui-shelf") && arguments.contains("--demo")
         animationSpeed = value("--ui-slow").flatMap(Double.init).map { min(1, max(0.02, $0)) } ?? 1
     }
 }

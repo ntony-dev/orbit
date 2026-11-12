@@ -80,6 +80,7 @@ public struct PanelRootView: View {
             await loadArtworkTint()
         }
         .task {
+            await seedDebugShelf()
             await openPendingDebugPlaylist()
             await runDebugTour()
             await runDebugSwitch()
@@ -100,8 +101,9 @@ public struct PanelRootView: View {
         )
     }
 
+    // Through PanelMetrics, as the shell does, so a debug pill size reaches both sides.
     private var pillSize: CGSize {
-        OrbitTokens.Size.pill(debug.pillSize ?? preferences.pillSize)
+        PanelMetrics.pillSize(preferences.pillSize)
     }
 
     private var expandedSize: CGSize {
@@ -109,6 +111,13 @@ public struct PanelRootView: View {
         if navigator.section == .player, navigator.detail == nil,
            PlayerNoticeKind.current(account: stores.account, playback: stores.playback) != nil {
             size.height += PlayerNoticeKind.height
+        }
+        // The account gate replaces every screen but the player and devices with one short message and an action.
+        if navigator.section != .player || navigator.detail != nil, navigator.detail != .devices {
+            switch stores.account.authState {
+            case .signedOut, .authorizing: size.height = OrbitTokens.Size.gatedHeight
+            case .unknown, .signedIn: break
+            }
         }
         return size
     }
@@ -118,10 +127,11 @@ public struct PanelRootView: View {
     }
 
     // The pill fades out quickly so it never floats inside a growing card; the expanded content scales up from
-    // the anchored corner as the surface reveals it. Reduced motion keeps only the fades.
+    // the anchored corner as the surface reveals it. Collapsing overlaps the two fades, so the closing surface is
+    // never empty for a beat. Reduced motion keeps only the fades.
     private func expandedTransition(_ theme: OrbitTheme) -> AnyTransition {
         let fadeIn = AnyTransition.opacity.animation(theme.animation(OrbitTokens.Motion.surfaceFadeIn))
-        let fadeOut = AnyTransition.opacity.animation(theme.animation(OrbitTokens.Motion.surfaceFadeOut))
+        let fadeOut = AnyTransition.opacity.animation(theme.animation(OrbitTokens.Motion.collapseContentFadeOut))
         guard !theme.reducesMotion else { return .asymmetric(insertion: fadeIn, removal: fadeOut) }
         return .asymmetric(
             insertion: fadeIn.combined(with: .scale(scale: 0.94, anchor: UnitPoint(panel.anchor))),
@@ -131,7 +141,7 @@ public struct PanelRootView: View {
 
     private func pillTransition(_ theme: OrbitTheme) -> AnyTransition {
         .asymmetric(
-            insertion: .opacity.animation(theme.animation(OrbitTokens.Motion.pillFadeIn)),
+            insertion: .opacity.animation(theme.animation(OrbitTokens.Motion.collapsePillFadeIn)),
             removal: .opacity.animation(theme.animation(OrbitTokens.Motion.pillFadeOut))
         )
     }
@@ -159,7 +169,7 @@ public struct PanelRootView: View {
     }
 
     private func collapse() {
-        withAnimation(resolvedTheme.animation(OrbitTokens.Motion.morph)) { isShowingExpanded = false }
+        withAnimation(resolvedTheme.animation(OrbitTokens.Motion.collapse)) { isShowingExpanded = false }
     }
 
     // Grows the canvas before the surface starts moving and shrinks it once the motion has settled. A newer
@@ -195,6 +205,7 @@ public struct PanelRootView: View {
     }
 
     private func applyDebugScreen() {
+        if let query = debug.searchQuery { navigator.searchQuery = query }
         guard let screen = debug.screen else { return }
         switch screen {
         case "picker": navigator.show(.picker)
@@ -227,19 +238,36 @@ public struct PanelRootView: View {
         #endif
     }
 
-    // Expands, walks the sections and collapses on a timer, so transitions can be captured with no input.
+    // Walks the sections and collapses on a timer, so transitions can be captured with no input. It expands only
+    // when the launch did not: an expansion from the pill is a user opening Orbit, which makes the panel key.
     private func runDebugTour() async {
         #if DEBUG
         guard debug.runsTour else { return }
         let step = Duration.seconds(2.5)
         try? await Task.sleep(for: step)
-        expandFromPill()
+        if !panel.isExpanded { expandFromPill() }
         for section in [PanelSection.picker, .library, .player] {
             try? await Task.sleep(for: step)
             withAnimation(resolvedTheme.animation(OrbitTokens.Motion.navigate)) { navigator.show(section) }
         }
         try? await Task.sleep(for: step)
         panel.collapse()
+        #endif
+    }
+
+    private func seedDebugShelf() async {
+        #if DEBUG
+        guard debug.seedsShelf else { return }
+        for _ in 0..<40 where stores.library.playlists.value == nil {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        let playlists = stores.library.playlists.value ?? []
+        for id in ["pl-coding", "pl-synthwave", "pl-indie-pulse", "pl-gym"] {
+            if let playlist = playlists.first(where: { $0.id == id }) { stores.library.recordRecent(playlist) }
+        }
+        for id in ["pl-gym", "pl-lofi-rain"] {
+            if let playlist = playlists.first(where: { $0.id == id }) { stores.library.pin(playlist) }
+        }
         #endif
     }
 

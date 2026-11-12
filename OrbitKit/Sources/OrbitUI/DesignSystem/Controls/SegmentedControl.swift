@@ -54,8 +54,16 @@ private struct SegmentButton<Value: Hashable>: View {
         Button(action: action) {
             Group {
                 if showsTitle {
-                    Label(segment.title, systemImage: segment.symbol)
-                        .labelStyle(SegmentLabelStyle())
+                    // A navigation label never truncates: the glyph gives way first, then the title would.
+                    ViewThatFits(in: .horizontal) {
+                        Label(segment.title, systemImage: segment.symbol)
+                            .labelStyle(SegmentLabelStyle())
+                            .fixedSize()
+                        Text(segment.title)
+                            .fixedSize()
+                        Image(systemName: segment.symbol)
+                            .font(.system(size: OrbitTokens.Icon.regular, weight: .medium))
+                    }
                 } else {
                     Image(systemName: segment.symbol)
                         .font(.system(size: OrbitTokens.Icon.regular, weight: .medium))

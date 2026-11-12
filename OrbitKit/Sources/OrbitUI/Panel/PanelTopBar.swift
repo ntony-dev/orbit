@@ -8,11 +8,24 @@ struct PanelTopBar<Leading: View>: View {
     @ViewBuilder let leading: Leading
 
     @Environment(PanelState.self) private var panel
+    @Environment(PanelNavigator.self) private var navigator
 
     var body: some View {
         HStack(spacing: OrbitTokens.Spacing.m) {
             leading
             Spacer(minLength: 0)
+            // Settings sits on the player, the screen Orbit opens to, beside the way out, where popover utilities
+            // keep theirs; Command-comma reaches it from every screen.
+            if navigator.section == .player, navigator.detail == nil {
+                Button(action: OrbitSettings.open) {
+                    Image(systemName: "gearshape")
+                }
+                .iconButton(glyph: OrbitTokens.Icon.small + 1)
+                .padding(.trailing, -OrbitTokens.Spacing.s)
+                .help("Settings (⌘,)")
+                .accessibilityLabel("Settings")
+                .accessibilityIdentifier("orbit.settings")
+            }
             Button {
                 panel.collapse()
             } label: {

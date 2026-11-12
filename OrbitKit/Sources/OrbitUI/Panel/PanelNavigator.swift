@@ -83,8 +83,33 @@ final class PanelNavigator {
         }
     }
 
+    // Natural heights reported by fitted screens, keyed by what they show, so revisiting a screen morphs straight
+    // to its size instead of passing through the fallback first.
+    private var fittedHeights: [FitKey: CGFloat] = [:]
+    // Everything the expanded surface draws below the active screen (the section switcher and its padding).
+    var footerHeight: CGFloat = 0
+
+    var fitKey: FitKey {
+        FitKey(section: section, detail: detail, libraryTab: section == .library && detail == nil ? libraryTab : nil)
+    }
+
+    func recordFit(_ height: CGFloat, for key: FitKey) {
+        guard fittedHeights[key] != height else { return }
+        fittedHeights[key] = height
+    }
+
+    // The surface size for the current screen: its fitted height when it has reported one, otherwise the
+    // fixed height of the first pass, which is also the ceiling for screens that cannot fit (player, devices).
     var screenSize: CGSize {
-        CGSize(width: OrbitTokens.Size.expandedWidth, height: Self.height(section: section, detail: detail))
+        CGSize(width: OrbitTokens.Size.expandedWidth, height: Self.fittedHeight(
+            natural: fittedHeights[fitKey].map { $0 + footerHeight },
+            fallback: Self.height(section: section, detail: detail)
+        ))
+    }
+
+    static func fittedHeight(natural: CGFloat?, fallback: CGFloat) -> CGFloat {
+        guard let natural else { return fallback }
+        return min(OrbitTokens.Size.fittedMaxHeight, max(OrbitTokens.Size.fittedMinHeight, natural.rounded(.up)))
     }
 
     static func height(section: PanelSection, detail: PanelDetail?) -> CGFloat {
@@ -99,4 +124,10 @@ final class PanelNavigator {
         case .library: return 540
         }
     }
+}
+
+struct FitKey: Hashable {
+    let section: PanelSection
+    let detail: PanelDetail?
+    let libraryTab: LibraryTab?
 }
