@@ -39,9 +39,11 @@ struct OrbitSlider: View {
                         if isFocused { Circle().strokeBorder(theme.accent, lineWidth: 2).padding(-3) }
                     }
                     .frame(width: knob, height: knob)
-                    .offset(x: min(max(0, width * displayed - knob / 2), width - knob))
+                    // Scaled before it is moved: a scale applied after the offset would scale the offset too and
+                    // carry the knob ahead of the pointer while dragging.
                     .scaleEffect(isActive ? (dragValue != nil && !theme.reducesMotion ? 1.15 : 1) : 0.4)
                     .opacity(isActive ? 1 : 0)
+                    .offset(x: min(max(0, width * displayed - knob / 2), width - knob))
             }
             .frame(height: proxy.size.height)
             .contentShape(.rect)
