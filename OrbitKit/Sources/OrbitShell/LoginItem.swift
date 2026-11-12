@@ -3,6 +3,7 @@ import ServiceManagement
 
 // Launch at login is whatever the system says it is: the user can change it in System Settings › General ›
 // Login Items at any time, so nothing is cached in Preferences and the status is re-read whenever it is shown.
+// Nothing reads it before Settings opens, so launch never waits on ServiceManagement.
 @MainActor
 @Observable
 final class LoginItem {
@@ -10,10 +11,11 @@ final class LoginItem {
     private(set) var lastError: String?
     // Demo builds are throwaway copies; registering one would leave a stale login item behind.
     let isAvailable: Bool
+    private let readStatus: () -> SMAppService.Status
 
-    init(isAvailable: Bool) {
+    init(isAvailable: Bool, readStatus: @escaping () -> SMAppService.Status = { SMAppService.mainApp.status }) {
         self.isAvailable = isAvailable
-        refresh()
+        self.readStatus = readStatus
     }
 
     var isEnabled: Bool { status == .enabled || status == .requiresApproval }
@@ -21,7 +23,7 @@ final class LoginItem {
 
     func refresh() {
         guard isAvailable else { return }
-        status = SMAppService.mainApp.status
+        status = readStatus()
     }
 
     func setEnabled(_ enabled: Bool) {

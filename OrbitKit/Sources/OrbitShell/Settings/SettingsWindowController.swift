@@ -44,6 +44,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         if !shell.isDemo { window.setFrameAutosaveName("OrbitSettings") }
         super.init(window: window)
         window.delegate = self
+        // The --settings capture never becomes key, so the status is read here as well as on every return.
+        shell.loginItem.refresh()
         for pane in SettingsPane.allCases {
             let controller = NSHostingController(rootView: content(for: pane))
             controller.sizingOptions = .preferredContentSize

@@ -55,3 +55,19 @@ struct LaunchOptionsTests {
         #expect(LaunchOptions(arguments: ["Orbit"]).settingsPane == nil)
     }
 }
+
+@MainActor
+struct LoginItemTests {
+    // Settings reads the status when it opens; launch must not block on ServiceManagement first.
+    @Test func theStatusIsReadOnlyWhenAsked() {
+        var reads = 0
+        let item = LoginItem(isAvailable: true) {
+            reads += 1
+            return .enabled
+        }
+        #expect(reads == 0)
+        item.refresh()
+        #expect(reads == 1)
+        #expect(item.isEnabled)
+    }
+}
