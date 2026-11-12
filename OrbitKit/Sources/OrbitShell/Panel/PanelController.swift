@@ -440,7 +440,8 @@ final class PanelController: PanelHost {
         fullscreenCheck?.cancel()
         guard preferences.hidesInFullscreen,
               let layout = PanelPlacement.display(for: pillSurface, in: NSScreen.layouts),
-              let displayID = NSScreen.screen(for: layout)?.displayID
+              let screen = NSScreen.screen(for: layout),
+              let displayID = screen.displayID
         else {
             fullscreenChanged(false)
             return
@@ -451,8 +452,18 @@ final class PanelController: PanelHost {
             for delay in [Duration.zero, .milliseconds(800)] {
                 try? await Task.sleep(for: delay)
                 guard !Task.isCancelled else { return }
+                // Read after the delay, because the presentation options and insets change as the Space settles.
+                // _HIHideMenuBar is the global default behind "Automatically hide and show the menu bar".
+                let context = FullscreenContext(
+                    displayBounds: displayBounds,
+                    fullscreenTopInset: max(screen.safeAreaInsets.top, screen.frame.maxY - screen.visibleFrame.maxY),
+                    menuBarAutoHidesOnDesktop: UserDefaults.standard.bool(forKey: "_HIHideMenuBar"),
+                    frontmostFullscreenPID: NSApp.currentSystemPresentationOptions.contains(.fullScreen)
+                        ? NSWorkspace.shared.frontmostApplication?.processIdentifier
+                        : nil
+                )
                 let windows = await Task.detached(priority: .utility) { FullscreenDetection.onScreenWindows() }.value
-                self?.fullscreenChanged(FullscreenDetection.isCovered(displayBounds: displayBounds, by: windows, excluding: ownPID))
+                self?.fullscreenChanged(FullscreenDetection.isCovered(context, by: windows, excluding: ownPID))
             }
         }
     }

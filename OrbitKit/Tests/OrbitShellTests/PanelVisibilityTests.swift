@@ -57,16 +57,67 @@ struct PanelVisibilityTests {
 struct FullscreenDetectionTests {
     private let display = CGRect(x: 0, y: 0, width: 3440, height: 1440)
     private let ownPID: pid_t = 42
+    private let app: pid_t = 7
+
+    private func context(
+        _ display: CGRect? = nil,
+        topInset: CGFloat = 0,
+        menuBarAutoHides: Bool = false,
+        fullscreenApp: pid_t? = nil
+    ) -> FullscreenContext {
+        FullscreenContext(
+            displayBounds: display ?? self.display,
+            fullscreenTopInset: topInset,
+            menuBarAutoHidesOnDesktop: menuBarAutoHides,
+            frontmostFullscreenPID: fullscreenApp
+        )
+    }
+
+    private func window(_ bounds: CGRect, pid: pid_t = 7, layer: Int = 0, alpha: Double = 1) -> [WindowSnapshot] {
+        [WindowSnapshot(ownerPID: pid, layer: layer, bounds: bounds, alpha: alpha)]
+    }
 
     @Test func aWindowCoveringTheWholeDisplayIsFullscreen() {
-        let windows = [WindowSnapshot(ownerPID: 7, layer: 0, bounds: display, alpha: 1)]
-        #expect(FullscreenDetection.isCovered(displayBounds: display, by: windows, excluding: ownPID))
+        #expect(FullscreenDetection.isCovered(context(), by: window(display), excluding: ownPID))
     }
 
     @Test func aZoomedWindowBelowTheMenuBarIsNot() {
-        let zoomed = CGRect(x: 0, y: 24, width: 3440, height: 1346)
-        let windows = [WindowSnapshot(ownerPID: 7, layer: 0, bounds: zoomed, alpha: 1)]
-        #expect(!FullscreenDetection.isCovered(displayBounds: display, by: windows, excluding: ownPID))
+        let zoomed = CGRect(x: 0, y: 30, width: 3440, height: 1410)
+        #expect(!FullscreenDetection.isCovered(context(), by: window(zoomed), excluding: ownPID))
+    }
+
+    // With the menu bar hidden on the desktop and no Dock on this display, zooming fills the whole display.
+    @Test func aZoomedWindowUnderAnAutoHidingMenuBarIsNot() {
+        #expect(!FullscreenDetection.isCovered(context(menuBarAutoHides: true), by: window(display), excluding: ownPID))
+    }
+
+    @Test func theActiveFullscreenAppCountsWhateverTheMenuBarSetting() {
+        let covered = context(menuBarAutoHides: true, fullscreenApp: app)
+        #expect(FullscreenDetection.isCovered(covered, by: window(display), excluding: ownPID))
+    }
+
+    // Full screen windows on a display with a notch start below the camera housing.
+    @Test func aFullscreenWindowBelowTheNotchCounts() {
+        let laptop = CGRect(x: 0, y: 0, width: 1512, height: 982)
+        let belowNotch = CGRect(x: 0, y: 32, width: 1512, height: 950)
+        #expect(FullscreenDetection.isCovered(context(laptop, topInset: 32, fullscreenApp: app), by: window(belowNotch), excluding: ownPID))
+        #expect(!FullscreenDetection.isCovered(context(laptop, topInset: 32), by: window(belowNotch), excluding: ownPID))
+    }
+
+    @Test func aFullscreenWindowBelowAMenuBarKeptVisibleCounts() {
+        let belowMenuBar = CGRect(x: 0, y: 30, width: 3440, height: 1410)
+        #expect(FullscreenDetection.isCovered(context(topInset: 30, fullscreenApp: app), by: window(belowMenuBar), excluding: ownPID))
+    }
+
+    @Test func theActiveFullscreenAppMustSpanThisDisplay() {
+        let smaller = CGRect(x: 0, y: 30, width: 1720, height: 1410)
+        let tooLow = CGRect(x: 0, y: 200, width: 3440, height: 1240)
+        let fullscreen = context(topInset: 30, fullscreenApp: app)
+        #expect(!FullscreenDetection.isCovered(fullscreen, by: window(smaller), excluding: ownPID))
+        #expect(!FullscreenDetection.isCovered(fullscreen, by: window(tooLow), excluding: ownPID))
+        // Only the full screen app gets the inset; another app's zoomed window does not.
+        let zoomed = CGRect(x: 0, y: 30, width: 3440, height: 1410)
+        #expect(!FullscreenDetection.isCovered(fullscreen, by: window(zoomed, pid: 8), excluding: ownPID))
     }
 
     @Test func systemLayersOwnWindowsAndInvisibleWindowsAreIgnored() {
@@ -75,13 +126,14 @@ struct FullscreenDetectionTests {
             WindowSnapshot(ownerPID: ownPID, layer: 0, bounds: display, alpha: 1),
             WindowSnapshot(ownerPID: 8, layer: 0, bounds: display, alpha: 0),
         ]
-        #expect(!FullscreenDetection.isCovered(displayBounds: display, by: windows, excluding: ownPID))
+        #expect(!FullscreenDetection.isCovered(context(), by: windows, excluding: ownPID))
+        #expect(!FullscreenDetection.isCovered(context(fullscreenApp: ownPID), by: windows, excluding: ownPID))
     }
 
     @Test func onlyTheGivenDisplayCounts() {
         let other = CGRect(x: 3440, y: 0, width: 1512, height: 982)
-        let windows = [WindowSnapshot(ownerPID: 7, layer: 0, bounds: other, alpha: 1)]
-        #expect(!FullscreenDetection.isCovered(displayBounds: display, by: windows, excluding: ownPID))
+        #expect(!FullscreenDetection.isCovered(context(), by: window(other), excluding: ownPID))
+        #expect(!FullscreenDetection.isCovered(context(fullscreenApp: app), by: window(other), excluding: ownPID))
     }
 }
 

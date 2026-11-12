@@ -40,18 +40,39 @@ struct WindowSnapshot: Equatable, Sendable {
     var alpha: Double
 }
 
+// What the fullscreen rule needs to know about one display, read on the main actor before the window list is.
+struct FullscreenContext: Equatable, Sendable {
+    // Quartz global coordinates, like WindowSnapshot.bounds.
+    var displayBounds: CGRect
+    // How far below the display's top edge a full screen window may start: the camera housing on displays with
+    // a notch, or the menu bar when the user keeps it shown in full screen. Zero otherwise.
+    var fullscreenTopInset: CGFloat
+    // With the menu bar set to hide on the desktop, an ordinary zoomed window can cover the whole display.
+    var menuBarAutoHidesOnDesktop: Bool
+    // The active app, when the system reports its presentation as full screen.
+    var frontmostFullscreenPID: pid_t?
+}
+
 enum FullscreenDetection {
-    // A full screen app, in its own Space or as a borderless full-display window, puts an ordinary-level window
-    // exactly over the display, menu bar area included, which no regular window can do.
-    static func isCovered(displayBounds: CGRect, by windows: [WindowSnapshot], excluding ownPID: pid_t) -> Bool {
-        windows.contains { window in
-            window.ownerPID != ownPID
-                && window.layer == 0
-                && window.alpha > 0
-                && abs(window.bounds.minX - displayBounds.minX) <= 1
-                && abs(window.bounds.minY - displayBounds.minY) <= 1
-                && abs(window.bounds.width - displayBounds.width) <= 1
-                && abs(window.bounds.height - displayBounds.height) <= 1
+    // Two independent signals, because neither alone covers every setup:
+    // - The active app is in full screen (NSApp.currentSystemPresentationOptions) and one of its windows spans
+    //   this display, allowing for a notch or a menu bar kept visible above it.
+    // - Some ordinary-level window covers the whole display, menu bar strip included, which no regular window
+    //   can do unless the menu bar auto-hides on the desktop. This catches a full screen app on a display other
+    //   than the active one, and borderless full-display windows.
+    static func isCovered(_ context: FullscreenContext, by windows: [WindowSnapshot], excluding ownPID: pid_t) -> Bool {
+        let display = context.displayBounds
+        return windows.contains { window in
+            guard window.ownerPID != ownPID, window.layer == 0, window.alpha > 0 else { return false }
+            let bounds = window.bounds
+            let spansWidth = abs(bounds.minX - display.minX) <= 1 && abs(bounds.width - display.width) <= 1
+            let reachesBottom = abs(bounds.maxY - display.maxY) <= 1
+            guard spansWidth, reachesBottom else { return false }
+            let topGap = bounds.minY - display.minY
+            if window.ownerPID == context.frontmostFullscreenPID {
+                return topGap >= -1 && topGap <= context.fullscreenTopInset + 1
+            }
+            return abs(topGap) <= 1 && !context.menuBarAutoHidesOnDesktop
         }
     }
 
