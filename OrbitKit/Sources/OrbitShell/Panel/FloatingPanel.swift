@@ -27,6 +27,12 @@ final class FloatingPanel: NSPanel {
     override var canBecomeKey: Bool { acceptsKey }
     override var canBecomeMain: Bool { false }
 
+    // Placement already keeps the glass inside the visible frame; AppKit would also push the transparent margin
+    // below the menu bar, which left a docked pill lower than its edge gap.
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+        frameRect
+    }
+
     override func sendEvent(_ event: NSEvent) {
         if event.type == .leftMouseDown {
             lastMouseDownLocation = NSEvent.mouseLocation
