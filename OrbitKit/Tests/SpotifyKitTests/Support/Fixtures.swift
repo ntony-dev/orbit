@@ -157,6 +157,12 @@ enum Fixtures {
     {"currently_playing": \(track), "queue": [\(episode), null, \(restrictedTrack)]}
     """
 
+    // Player 404s as Spotify sends them: the no-device body is the one community reports show with a reason; the
+    // stale device_id and missing-context bodies carry no reason, and the play reference documents none of them.
+    static let noActiveDevice404 = #"{"error":{"status":404,"message":"Player command failed: No active device found","reason":"NO_ACTIVE_DEVICE"}}"#
+    static let deviceNotFound404 = #"{"error":{"status":404,"message":"Device not found"}}"#
+    static let contextNotFound404 = #"{"error":{"status":404,"message":"Not found."}}"#
+
     static func error(status: Int, message: String, reason: String? = nil) -> String {
         let reasonField = reason.map { #","reason":"\#($0)""# } ?? ""
         return #"{"error":{"status":\#(status),"message":"\#(message)"\#(reasonField)}}"#

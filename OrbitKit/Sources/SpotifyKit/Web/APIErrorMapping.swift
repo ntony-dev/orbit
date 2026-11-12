@@ -31,7 +31,7 @@ enum APIErrorMapping {
         case 403:
             return forbidden(reason: reason, message: message, kind: kind)
         case 404:
-            return kind == .player || reason == "NO_ACTIVE_DEVICE" ? .noActiveDevice : .notFound
+            return notFound(reason: reason, message: message, kind: kind)
         case 429:
             let wait = RetryAfter.parse(retryAfter, now: now)
             return reason == "QUOTA_EXCEEDED" ? .quotaExceeded(retryAfter: wait) : .rateLimited(retryAfter: wait)
@@ -39,6 +39,17 @@ enum APIErrorMapping {
             return .network(detail: "Spotify returned HTTP \(status).")
         default:
             return .unexpected(detail: detail?.message.map { "HTTP \(status): \($0)" } ?? "HTTP \(status)")
+        }
+    }
+
+    // The play reference documents no 404 at all. Spotify's device failures carry reason NO_ACTIVE_DEVICE ("No
+    // active device found") or name the device ("Device not found" for a stale device_id); a missing context
+    // carries neither, so only a context play without a device signal is read as the item being gone.
+    private static func notFound(reason: String?, message: String, kind: APIRequest.Kind) -> OrbitError {
+        if reason == "NO_ACTIVE_DEVICE" || message.contains("device") { return .noActiveDevice }
+        switch kind {
+        case .player: return .noActiveDevice
+        case .playContext, .playlistItems, .other: return .notFound
         }
     }
 
@@ -54,7 +65,7 @@ enum APIErrorMapping {
         switch kind {
         case .playlistItems: return .playlistItemsUnavailable
         // "Restriction violated" and other unspecific player refusals come from the device declining the command.
-        case .player: return .deviceRestricted
+        case .player, .playContext: return .deviceRestricted
         // Read endpoints have no per-item 403s left, so a bare 403 there means the account isn't allowlisted.
         case .other: return .notAllowlisted
         }

@@ -391,6 +391,50 @@ struct WebClientErrorTests {
         #expect(try await failure(status: 404, json: Fixtures.error(status: 404, message: "Resource not found"), route: "GET /playlists/p/items") == .notFound)
     }
 
+    private func playFailure(_ target: PlayTarget, json: String) async throws -> OrbitError? {
+        let harness = try await Harness()
+        harness.router.on("PUT /me/player/play", status: 404, json: json)
+        do {
+            try await harness.client.play(target, deviceID: "dev-gone")
+            return nil
+        } catch {
+            return error
+        }
+    }
+
+    @Test func playingADeletedPlaylistIsNotFoundNotNoActiveDevice() async throws {
+        let deleted = PlayTarget.context("spotify:playlist:deleted")
+        #expect(try await playFailure(deleted, json: Fixtures.contextNotFound404) == .notFound)
+        #expect(try await playFailure(deleted, json: Fixtures.noActiveDevice404) == .noActiveDevice)
+        #expect(try await playFailure(deleted, json: Fixtures.deviceNotFound404) == .noActiveDevice)
+    }
+
+    @Test func playerCommandsWithoutAContextStillReadA404AsNoDevice() async throws {
+        #expect(try await playFailure(.tracks(["spotify:track:a"]), json: Fixtures.contextNotFound404) == .noActiveDevice)
+        #expect(try await playFailure(.tracks(["spotify:track:a"]), json: Fixtures.noActiveDevice404) == .noActiveDevice)
+        let harness = try await Harness()
+        harness.router.on("PUT /me/player/pause", status: 404, json: Fixtures.contextNotFound404)
+        await #expect(throws: OrbitError.noActiveDevice) { try await harness.client.pause(deviceID: nil) }
+    }
+
+    @Test func likedSongsIsNeverReportedDeleted() async throws {
+        let harness = try await Harness()
+        harness.router.on("PUT /me/player/play", status: 404, json: Fixtures.contextNotFound404)
+        harness.router.on("PUT /me/player/play", status: 204)
+        harness.router.on("GET /me/tracks", json: Fixtures.savedTracks)
+        try await harness.client.play(.context(.likedSongs(userID: "tony")), deviceID: nil)
+        let body = HTTP.jsonBody(try #require(harness.lastRequest("PUT /me/player/play")))
+        #expect(body["uris"] as? [String] == ["spotify:track:trk1"])
+    }
+
+    @Test func likedSongsWithNoDeviceReportsTheDevice() async throws {
+        let harness = try await Harness()
+        harness.router.on("PUT /me/player/play", status: 404, json: Fixtures.noActiveDevice404)
+        await #expect(throws: OrbitError.noActiveDevice) {
+            try await harness.client.play(.context(.likedSongs(userID: "tony")), deviceID: nil)
+        }
+    }
+
     @Test func rateLimitHonorsRetryAfterAndFailsFastWhileWaiting() async throws {
         let harness = try await Harness()
         harness.router.on("GET /me/player/devices", status: 429, headers: ["Retry-After": "12"])

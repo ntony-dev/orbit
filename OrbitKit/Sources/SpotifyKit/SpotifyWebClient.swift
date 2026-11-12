@@ -204,7 +204,10 @@ public actor SpotifyWebClient: SpotifyAPI {
             let request = Self.playRequest(.context(context, offset: offset), deviceID: deviceID)
             let response = try await perform(request)
             if (200..<300).contains(response.status) { return }
-            guard response.status == 400 else { throw mappedError(response, request) }
+            // Spotify has answered unsupported contexts with 400; a 404 that isn't about the device is read the same
+            // way, so Liked Songs is never reported as deleted.
+            let error = mappedError(response, request)
+            guard response.status == 400 || error == .notFound else { throw error }
             Self.logger.notice("Spotify rejected Liked Songs as a context; falling back to a track list.")
             likedSongsContextRejected = true
         }
@@ -320,7 +323,8 @@ public actor SpotifyWebClient: SpotifyAPI {
         case .context(let uri, let offset): Body(contextUri: uri.rawValue, uris: nil, offset: encode(offset))
         case .tracks(let uris, let offset): Body(contextUri: nil, uris: uris.map(\.rawValue), offset: encode(offset))
         }
-        return APIRequest(.put, "/me/player/play", query: [("device_id", deviceID)], json: body, kind: .player)
+        let kind: APIRequest.Kind = if case .context = target { .playContext } else { .player }
+        return APIRequest(.put, "/me/player/play", query: [("device_id", deviceID)], json: body, kind: kind)
     }
 
     private static func paging(_ page: PageRequest, maximum: Int) -> [(String, String?)] {

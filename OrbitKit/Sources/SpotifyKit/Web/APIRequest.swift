@@ -6,8 +6,9 @@ struct APIRequest: Sendable {
     }
 
     // Decides how an ambiguous 403 or 404 is read, because Spotify reuses those codes for unrelated causes.
+    // `playContext` is a player command naming a context that may no longer exist.
     enum Kind: Sendable {
-        case player, playlistItems, other
+        case player, playContext, playlistItems, other
     }
 
     static let baseURL = URL(string: "https://api.spotify.com/v1")!
