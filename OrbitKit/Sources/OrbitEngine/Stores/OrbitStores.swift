@@ -56,9 +56,7 @@ public final class OrbitStores {
                 switch state {
                 case .signedIn:
                     playback.setWebAPIAvailable(true)
-                    async let playlists: Void = library.loadPlaylists()
-                    async let devices: Void = library.loadDevices()
-                    _ = await (playlists, devices)
+                    await Self.loadPlaylistsAndDevices(library)
                 case .signedOut:
                     playback.setWebAPIAvailable(false)
                     library.reset()
@@ -98,9 +96,13 @@ public final class OrbitStores {
         Task {
             await account.refreshLocalStatus()
             guard account.authState.isSignedIn else { return }
-            async let playlists: Void = library.loadPlaylists()
-            async let devices: Void = library.loadDevices()
-            _ = await (playlists, devices)
+            await Self.loadPlaylistsAndDevices(library)
         }
+    }
+
+    private static func loadPlaylistsAndDevices(_ library: LibraryStore) async {
+        async let playlists: Void = library.loadPlaylists()
+        async let devices: Void = library.loadDevices()
+        _ = await (playlists, devices)
     }
 }

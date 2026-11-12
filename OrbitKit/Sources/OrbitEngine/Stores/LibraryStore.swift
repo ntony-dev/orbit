@@ -95,13 +95,6 @@ public final class LibraryStore {
         return .missing(reference)
     }
 
-    public func playlists(matching filter: String) -> [Playlist] {
-        let all = playlists.value ?? []
-        let trimmed = filter.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return all }
-        return all.filter { $0.name.localizedStandardContains(trimmed) }
-    }
-
     public func playlist(for uri: SpotifyURI) -> Playlist? {
         if let likedSongs, LikedSongs.isLikedSongs(uri) { return likedSongs }
         return (playlists.value ?? []).first { $0.uri == uri }
@@ -176,20 +169,7 @@ public final class LibraryStore {
 
     // Runs immediately; views bound to a text field should use `updateSearch(_:)` instead.
     public func search(_ query: String) async {
-        searchQuery = query
-        let key = Self.searchKey(query)
-        guard !key.isEmpty else {
-            searchResults = .idle
-            isSearching = false
-            return
-        }
-        if let cached = searchCache[key], clock.now().timeIntervalSince(cached.at) < timing.searchLifetime {
-            searchResults = .loaded(cached.results)
-            isSearching = false
-            return
-        }
-        if searchResults.value == nil { searchResults = .loading }
-        isSearching = true
+        guard let key = beginSearch(query) else { return }
         let started = generation
         let result: LoadState<SearchResults>
         do {
@@ -210,20 +190,7 @@ public final class LibraryStore {
     // Debounced and cancellable: each keystroke replaces the pending search, and only the last one is sent.
     public func updateSearch(_ query: String) {
         searchTask?.cancel()
-        searchQuery = query
-        let key = Self.searchKey(query)
-        guard !key.isEmpty else {
-            searchResults = .idle
-            isSearching = false
-            return
-        }
-        if let cached = searchCache[key], clock.now().timeIntervalSince(cached.at) < timing.searchLifetime {
-            searchResults = .loaded(cached.results)
-            isSearching = false
-            return
-        }
-        if searchResults.value == nil { searchResults = .loading }
-        isSearching = true
+        guard beginSearch(query) != nil else { return }
         searchTask = Task { [weak self, clock, timing] in
             do { try await clock.sleep(timing.searchDebounce) } catch { return }
             await self?.search(query)
@@ -328,7 +295,7 @@ public final class LibraryStore {
             likedSongs = nil
             return
         }
-        guard likedSongs?.uri != LikedSongs.contextURI(userID: profile.id) else { return }
+        guard likedSongs?.uri != .likedSongs(userID: profile.id) else { return }
         likedSongs = LikedSongs.playlist(userID: profile.id, ownerName: profile.displayName, itemCount: savedTracks.value?.count)
     }
 
@@ -405,8 +372,23 @@ public final class LibraryStore {
         Task { await shelfFile.save(shelf, revision: revision) }
     }
 
-    private static func searchKey(_ query: String) -> String {
-        query.trimmingCharacters(in: .whitespacesAndNewlines)
+    // Settles an empty or cached query at once; otherwise marks the search in flight and returns the query to send.
+    private func beginSearch(_ query: String) -> String? {
+        searchQuery = query
+        let key = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else {
+            searchResults = .idle
+            isSearching = false
+            return nil
+        }
+        if let cached = searchCache[key], clock.now().timeIntervalSince(cached.at) < timing.searchLifetime {
+            searchResults = .loaded(cached.results)
+            isSearching = false
+            return nil
+        }
+        if searchResults.value == nil { searchResults = .loading }
+        isSearching = true
+        return key
     }
 
     private func loadAll<Item: Sendable>(

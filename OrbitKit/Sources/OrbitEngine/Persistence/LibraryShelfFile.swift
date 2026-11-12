@@ -3,11 +3,11 @@ import OrbitCore
 
 // Pinned and recent playlists, stored as full playlist values so they still show after a restart even when the
 // playlist has since been deleted or unfollowed.
-public struct LibraryShelf: Hashable, Codable, Sendable {
-    public var pinned: [Playlist]
-    public var recents: [Playlist]
+struct LibraryShelf: Hashable, Codable, Sendable {
+    var pinned: [Playlist]
+    var recents: [Playlist]
 
-    public init(pinned: [Playlist] = [], recents: [Playlist] = []) {
+    init(pinned: [Playlist] = [], recents: [Playlist] = []) {
         self.pinned = pinned
         self.recents = recents
     }
@@ -15,7 +15,7 @@ public struct LibraryShelf: Hashable, Codable, Sendable {
 
 // A small JSON file written atomically off the main thread.
 public actor LibraryShelfFile {
-    public nonisolated let url: URL
+    nonisolated let url: URL
     private var savedRevision = -1
 
     public init(url: URL) {
@@ -28,7 +28,7 @@ public actor LibraryShelfFile {
             .appending(path: "Library.json", directoryHint: .notDirectory)
     }
 
-    public func load() -> LibraryShelf? {
+    func load() -> LibraryShelf? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         return try? JSONDecoder().decode(LibraryShelf.self, from: data)
     }

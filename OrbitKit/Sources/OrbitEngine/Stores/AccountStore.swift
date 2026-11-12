@@ -46,11 +46,6 @@ public final class AccountStore {
         })
     }
 
-    public func stop() {
-        tasks.forEach { $0.cancel() }
-        tasks.removeAll()
-    }
-
     public func dismissError() {
         lastError = nil
     }

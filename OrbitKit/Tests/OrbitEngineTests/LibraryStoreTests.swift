@@ -77,14 +77,6 @@ struct LibraryStoreTests {
         #expect(library.playlists.value?.count == 12)
     }
 
-    @Test func filtersPlaylistsLocallyByName() async {
-        await library.loadPlaylists()
-        let requests = await rig.spotify.webRequests.count
-        #expect(library.playlists(matching: "night").map(\.name) == ["Night Drive", "Late Night Jazz"])
-        #expect(library.playlists(matching: "  ").count == 12)
-        #expect(await rig.spotify.webRequests.count == requests)
-    }
-
     @Test func unreadablePlaylistReportsItemsUnavailableWithoutARequest() async {
         let hidden = MockFixtures.playlists.first { !$0.canReadItems }!
         await library.loadItems(for: hidden)
