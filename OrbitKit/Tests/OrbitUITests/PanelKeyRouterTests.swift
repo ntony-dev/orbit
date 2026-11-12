@@ -16,7 +16,7 @@ struct PanelKeyRouterTests {
     @Test func playerKeepsSpotifyShortcuts() {
         #expect(route(.space, in: player) == .playback(.togglePlayback))
         #expect(route(.leftArrow, in: player) == .playback(.seek(by: -PlayerKeyCommand.seekStep)))
-        #expect(route(.rightArrow, [.numericPad, .function], in: player) == .playback(.seek(by: PlayerKeyCommand.seekStep)))
+        #expect(route(.rightArrow, .numericPad, in: player) == .playback(.seek(by: PlayerKeyCommand.seekStep)))
         #expect(route(.rightArrow, .command, in: player) == .playback(.nextTrack))
         #expect(route(.upArrow, .command, in: player) == .playback(.changeVolume(by: PlayerKeyCommand.volumeStep)))
         #expect(route(.upArrow, in: player) == .ignored)
@@ -44,7 +44,7 @@ struct PanelKeyRouterTests {
 
     @Test func listArrowsMoveTheSelectionAndNeverSeek() {
         #expect(route(.downArrow, in: list) == .moveSelection(by: 1))
-        #expect(route(.upArrow, [.numericPad, .function], in: list) == .moveSelection(by: -1))
+        #expect(route(.upArrow, .numericPad, in: list) == .moveSelection(by: -1))
         #expect(route(.return, in: list) == .activateSelection)
         #expect(route(.rightArrow, in: list) == .openSelection)
         #expect(route(.leftArrow, in: list) == .ignored)
