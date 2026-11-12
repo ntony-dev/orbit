@@ -145,7 +145,7 @@ struct LibraryStoreTests {
         ]
         #expect(await eventually { rig.clock.pendingSleepers == 1 })
         rig.clock.advance(by: 1)
-        #expect(await eventually { await rig.spotify.heldCommandCount == 6 })
+        #expect(await eventually { await rig.spotify.heldRequestCount == 6 })
         #expect(library.searchResults.value == night)
         #expect(library.playlists.value != nil)
         #expect(library.savedTracks.value != nil)
@@ -153,7 +153,7 @@ struct LibraryStoreTests {
         #expect(library.queue.value != nil)
         #expect(library.items(for: MockFixtures.playlists[0]).value != nil)
 
-        await rig.spotify.releaseCommands()
+        await rig.spotify.releaseHeld()
         for reload in reloads { await reload.value }
         #expect(await eventually { !library.isSearching })
         #expect(library.searchResults.value?.playlists.contains { $0.name == "Late Night Jazz" } == true)
@@ -261,9 +261,9 @@ struct LibraryStoreTests {
         ]
         #expect(await eventually { rig.clock.pendingSleepers == 1 })
         rig.clock.advance(by: 1)
-        #expect(await eventually { await rig.spotify.heldCommandCount == 6 })
+        #expect(await eventually { await rig.spotify.heldRequestCount == 6 })
         library.reset()
-        await rig.spotify.releaseCommands()
+        await rig.spotify.releaseHeld()
         for load in loads { await load.value }
         await settle()
         #expect(library.playlists == .idle)

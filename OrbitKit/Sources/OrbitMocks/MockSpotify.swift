@@ -29,13 +29,13 @@ public actor MockSpotify {
 
     private var playlists = MockFixtures.playlists
     private var commandsHeld = false
-    // Names of the Web API reads that wait for `releaseCommands()`; nil holds none, an empty set holds all.
+    // Names of the Web API reads that wait for `releaseHeld()`; nil holds none, an empty set holds all.
     private var heldReads: Set<String>?
-    private var heldCommands: [CheckedContinuation<Void, Never>] = []
+    private var heldRequests: [CheckedContinuation<Void, Never>] = []
     private var webFailure: OrbitError?
     private var localFailure: OrbitError?
     private var ignoresPlayCommands = false
-    var rejectsLikedSongsContext = false
+    private(set) var rejectsLikedSongsContext = false
     private var pageSizeLimit: Int?
     private var droppedFromPages: Set<String> = []
     // Every Web API request and AppleScript command, in order, so tests can assert routing and request counts.
@@ -67,11 +67,6 @@ public actor MockSpotify {
         }
     }
 
-    public func stopClock() {
-        clockTask?.cancel()
-        clockTask = nil
-    }
-
     public func tick() {
         guard isPlaying, let track = nowPlaying, position >= track.duration else { return }
         if repeatMode == .track {
@@ -99,26 +94,26 @@ public actor MockSpotify {
         automationPermission = permission
     }
 
-    // Commands wait here until released, so tests can interleave notifications with commands in flight.
+    // Commands wait here until `releaseHeld()`, so tests can interleave notifications with commands in flight.
     public func holdCommands() {
         commandsHeld = true
     }
 
-    // Web API reads wait too, until `releaseCommands()`, so tests can act while a load is in flight. Pass names
+    // Web API reads wait too, until `releaseHeld()`, so tests can act while a load is in flight. Pass names
     // such as "playlists" to hold only those requests.
     public func holdReads(_ names: Set<String> = []) {
         heldReads = names
     }
 
-    public func releaseCommands() {
+    public func releaseHeld() {
         commandsHeld = false
         heldReads = nil
-        let held = heldCommands
-        heldCommands.removeAll()
+        let held = heldRequests
+        heldRequests.removeAll()
         held.forEach { $0.resume() }
     }
 
-    public var heldCommandCount: Int { heldCommands.count }
+    public var heldRequestCount: Int { heldRequests.count }
 
     // Every Web API call throws this until cleared, e.g. `.rateLimited(retryAfter: 30)` or `.network(detail:)`.
     public func failWebAPI(with error: OrbitError?) {
@@ -189,7 +184,7 @@ public actor MockSpotify {
         } else {
             await simulateLatency()
             if let heldReads, heldReads.isEmpty || heldReads.contains(name) {
-                await withCheckedContinuation { heldCommands.append($0) }
+                await withCheckedContinuation { heldRequests.append($0) }
             }
         }
         if let webFailure { throw webFailure }
@@ -206,7 +201,7 @@ public actor MockSpotify {
     private func awaitCommandTurn() async {
         await simulateLatency()
         guard commandsHeld else { return }
-        await withCheckedContinuation { heldCommands.append($0) }
+        await withCheckedContinuation { heldRequests.append($0) }
     }
 
     nonisolated func eventStream() -> AsyncStream<LocalPlayerEvent> {

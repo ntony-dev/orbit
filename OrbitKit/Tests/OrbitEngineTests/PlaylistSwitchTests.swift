@@ -38,7 +38,7 @@ struct PlaylistSwitchTests {
         #expect(playback.snapshot.context?.uri == MockFixtures.startingPlaylist.uri)
         #expect(stores.library.recentPlaylists.isEmpty)
 
-        await rig.spotify.releaseCommands()
+        await rig.spotify.releaseHeld()
         #expect(await switching.value)
         #expect(playback.snapshot.context?.uri == target.uri)
         #expect(playback.snapshot.context?.name == target.name)
@@ -95,10 +95,10 @@ struct PlaylistSwitchTests {
         let playback = playback
         let target = target
         let older = Task { await playback.play(playlist: first) }
-        #expect(await eventually { await rig.spotify.heldCommandCount == 1 })
+        #expect(await eventually { await rig.spotify.heldRequestCount == 1 })
         let newer = Task { await playback.play(playlist: target) }
         #expect(await eventually { playback.pendingIntents.contains(.playContext(target.uri)) })
-        await rig.spotify.releaseCommands()
+        await rig.spotify.releaseHeld()
         #expect(await older.value == false)
         #expect(await newer.value)
         #expect(playback.lastError == nil)
@@ -111,7 +111,7 @@ struct PlaylistSwitchTests {
         let playback = playback
         let target = target
         let switching = Task { await playback.play(playlist: target) }
-        #expect(await eventually { await rig.spotify.heldCommandCount == 1 })
+        #expect(await eventually { await rig.spotify.heldRequestCount == 1 })
 
         var stale = try #require(await rig.spotify.currentLocalState())
         stale.track = MockFixtures.playlistTracks[MockFixtures.startingPlaylist.id]?[1]
@@ -121,7 +121,7 @@ struct PlaylistSwitchTests {
         #expect(playback.pendingIntents.contains(.playContext(target.uri)))
         #expect(playback.snapshot.context?.uri == MockFixtures.startingPlaylist.uri)
 
-        await rig.spotify.releaseCommands()
+        await rig.spotify.releaseHeld()
         #expect(await switching.value)
         #expect(playback.snapshot.context?.uri == target.uri)
 
@@ -191,7 +191,7 @@ struct SignInTests {
         stores.start()
         #expect(await eventually { stores.playback.snapshot.context != nil })
         #expect(stores.playback.snapshot.context?.name == nil)
-        await rig.spotify.releaseCommands()
+        await rig.spotify.releaseHeld()
         #expect(await eventually { stores.library.playlists.value != nil })
         #expect(await eventually { stores.playback.snapshot.context?.name == MockFixtures.startingPlaylist.name })
     }

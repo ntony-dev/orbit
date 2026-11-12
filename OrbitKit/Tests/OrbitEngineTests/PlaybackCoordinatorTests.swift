@@ -60,9 +60,9 @@ struct PlaybackCoordinatorTests {
         await rig.spotify.holdCommands()
         let coordinator = coordinator
         let skips = (0..<3).map { _ in Task { await coordinator.next() } }
-        #expect(await eventually { await rig.spotify.heldCommandCount == 1 })
+        #expect(await eventually { await rig.spotify.heldRequestCount == 1 })
         #expect(coordinator.pendingIntents.contains(.next))
-        await rig.spotify.releaseCommands()
+        await rig.spotify.releaseHeld()
         for skip in skips { await skip.value }
         #expect(await rig.localCommands("next track") == 3)
         #expect(coordinator.snapshot.track?.id == MockFixtures.playlistTracks[MockFixtures.startingPlaylist.id]?[1].id)
@@ -75,7 +75,7 @@ struct PlaybackCoordinatorTests {
         await rig.spotify.holdCommands()
         let coordinator = coordinator
         let seek = Task { await coordinator.seek(to: 100) }
-        #expect(await eventually { await rig.spotify.heldCommandCount == 1 })
+        #expect(await eventually { await rig.spotify.heldRequestCount == 1 })
         #expect(coordinator.snapshot.position(at: rig.clock.now()) == 100)
 
         var stale = try #require(await rig.spotify.currentLocalState())
@@ -84,7 +84,7 @@ struct PlaybackCoordinatorTests {
         await settle()
         #expect(coordinator.snapshot.position(at: rig.clock.now()) == 100)
 
-        await rig.spotify.releaseCommands()
+        await rig.spotify.releaseHeld()
         await seek.value
         await rig.spotify.emitLocalState(stale)
         await settle()
@@ -102,9 +102,9 @@ struct PlaybackCoordinatorTests {
         await rig.spotify.holdCommands()
         let coordinator = coordinator
         let seek = Task { await coordinator.seek(to: 100) }
-        #expect(await eventually { await rig.spotify.heldCommandCount == 1 })
+        #expect(await eventually { await rig.spotify.heldRequestCount == 1 })
         #expect(coordinator.snapshot.position(at: rig.clock.now()) == 100)
-        await rig.spotify.releaseCommands()
+        await rig.spotify.releaseHeld()
         await seek.value
         #expect(coordinator.snapshot.position(at: rig.clock.now()) == 100)
     }
@@ -115,9 +115,9 @@ struct PlaybackCoordinatorTests {
         await rig.spotify.holdCommands()
         let coordinator = coordinator
         let skip = Task { await coordinator.next() }
-        #expect(await eventually { await rig.spotify.heldCommandCount == 1 })
+        #expect(await eventually { await rig.spotify.heldRequestCount == 1 })
         let seek = Task { await coordinator.seek(to: 42) }
-        await rig.spotify.releaseCommands()
+        await rig.spotify.releaseHeld()
         await skip.value
         await seek.value
         #expect(coordinator.snapshot.track?.id != first)
@@ -132,7 +132,7 @@ struct PlaybackCoordinatorTests {
         let coordinator = coordinator
         let changes = [10, 20, 30].map { value in Task { await coordinator.setVolume(value) } }
         #expect(await eventually { coordinator.snapshot.volume == 30 })
-        await rig.spotify.releaseCommands()
+        await rig.spotify.releaseHeld()
         for change in changes { await change.value }
         #expect(coordinator.snapshot.volume == 30)
         #expect(await rig.localCommands("set sound volume") <= 2)
