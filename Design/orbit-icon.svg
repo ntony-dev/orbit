@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>Orbit app icon</title>
+  <defs>
+    <linearGradient id="ringGrad" gradientUnits="userSpaceOnUse" x1="0" y1="250" x2="0" y2="760">
+      <stop offset="0" stop-color="#DADDE3"/>
+      <stop offset="1" stop-color="#C0C5CD"/>
+    </linearGradient>
+    <linearGradient id="pillGrad" gradientUnits="userSpaceOnUse" x1="0" y1="382" x2="0" y2="642">
+      <stop offset="0" stop-color="#4A4A4F"/>
+      <stop offset="1" stop-color="#2C2C2E"/>
+    </linearGradient>
+    <linearGradient id="albumGrad" gradientUnits="userSpaceOnUse" x1="0" y1="450" x2="0" y2="574">
+      <stop offset="0" stop-color="#C4B0F4"/>
+      <stop offset="1" stop-color="#AD94EB"/>
+    </linearGradient>
+    <linearGradient id="dotGrad" gradientUnits="userSpaceOnUse" x1="0" y1="222" x2="0" y2="331">
+      <stop offset="0" stop-color="#76DFC0"/>
+      <stop offset="1" stop-color="#4CC6A1"/>
+    </linearGradient>
+
+    <filter id="blur5" filterUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <feGaussianBlur stdDeviation="5"/>
+    </filter>
+    <filter id="blur9" filterUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <feGaussianBlur stdDeviation="9"/>
+    </filter>
+    <filter id="blur13" filterUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <feGaussianBlur stdDeviation="13"/>
+    </filter>
+    <filter id="blur16" filterUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <feGaussianBlur stdDeviation="16"/>
+    </filter>
+
+    <clipPath id="pillClip">
+      <rect x="172" y="382" width="680" height="260" rx="130"/>
+    </clipPath>
+
+    <!-- The half of the ring that passes in front of the pill -->
+    <mask id="frontArc" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <path d="M861.566 372.769 A372 200 -20 0 1 162.434 627.231" fill="none" stroke="#fff" stroke-width="56"/>
+    </mask>
+    <mask id="frontArcHi" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <path d="M861.566 372.769 A372 200 -20 0 1 162.434 627.231" fill="none" stroke="#fff" stroke-width="56" transform="translate(0 -2.5)"/>
+    </mask>
+  </defs>
+
+  <!--BG-->
+  <rect id="background" width="1024" height="1024" fill="#F5F5F2"/>
+  <!--/BG-->
+
+  <!--SYMBOL-->
+  <g id="symbol" transform="translate(0 16)">
+    <!-- Floor shadow -->
+    <ellipse cx="512" cy="806" rx="260" ry="15" fill="#000" opacity="0.15" filter="url(#blur16)"/>
+
+    <!-- Ring, full loop (the back half stays visible behind the pill) -->
+    <g fill="none" stroke-width="56">
+      <path d="M162.434 627.231 A372 200 -20 0 1 861.566 372.769 A372 200 -20 0 1 162.434 627.231 Z" stroke="#AEB3BC" transform="translate(0 2.5)"/>
+      <path d="M162.434 627.231 A372 200 -20 0 1 861.566 372.769 A372 200 -20 0 1 162.434 627.231 Z" stroke="#FBFBFC" transform="translate(0 -2.5)"/>
+      <path d="M162.434 627.231 A372 200 -20 0 1 861.566 372.769 A372 200 -20 0 1 162.434 627.231 Z" stroke="url(#ringGrad)"/>
+    </g>
+
+    <!-- Pill -->
+    <rect x="172" y="382" width="680" height="260" rx="130" fill="#000" opacity="0.22" transform="translate(0 10)" filter="url(#blur13)"/>
+    <rect x="172" y="382" width="680" height="260" rx="130" fill="#85858B" transform="translate(0 -2)"/>
+    <rect x="172" y="382" width="680" height="260" rx="130" fill="url(#pillGrad)"/>
+
+    <!-- Album square -->
+    <rect x="258" y="450" width="124" height="124" rx="32" fill="#DDD1FB" transform="translate(0 -2)"/>
+    <rect x="258" y="450" width="124" height="124" rx="32" fill="url(#albumGrad)"/>
+
+    <!-- Play triangle -->
+    <path d="M570 474 L634 512 L570 550 Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="14" stroke-linejoin="round"/>
+
+    <!-- Shadow the front of the ring casts on the pill -->
+    <g clip-path="url(#pillClip)">
+      <path d="M861.566 372.769 A372 200 -20 0 1 162.434 627.231" fill="none" stroke="#000" stroke-opacity="0.45" stroke-width="56" transform="translate(0 4)" filter="url(#blur9)"/>
+    </g>
+
+    <!-- Front half of the ring: frosted, with the pill showing faintly through -->
+    <g clip-path="url(#pillClip)">
+      <g mask="url(#frontArcHi)">
+        <rect x="0" y="-32" width="1024" height="1088" fill="#F3F4F7"/>
+      </g>
+    </g>
+    <g mask="url(#frontArc)">
+      <rect x="0" y="-32" width="1024" height="1088" fill="url(#ringGrad)"/>
+      <rect x="172" y="382" width="680" height="260" rx="130" fill="#2C2C2E" opacity="0.3" filter="url(#blur13)"/>
+    </g>
+
+    <!-- Orbiting dot -->
+    <circle cx="705.62" cy="276.43" r="54" fill="#000" opacity="0.18" transform="translate(0 5)" filter="url(#blur5)"/>
+    <circle cx="705.62" cy="276.43" r="54" fill="#A9EDD8" transform="translate(0 -2)"/>
+    <circle cx="705.62" cy="276.43" r="54" fill="url(#dotGrad)"/>
+  </g>
+  <!--/SYMBOL-->
+</svg>
