@@ -4,7 +4,7 @@ import OrbitCore
 import Synchronization
 import Testing
 
-// Every test binds a kernel-assigned free port, never 8888, so a real sign-in on this Mac is unaffected.
+// Every test binds a free port from LocalPorts, never 8888, so a real sign-in on this Mac is unaffected.
 @Suite(.serialized)
 struct LoopbackCallbackListenerTests {
     private func listener(port: UInt16, timeout: Duration = .seconds(10)) -> LoopbackCallbackListener {

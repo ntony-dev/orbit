@@ -27,7 +27,6 @@ public protocol SpotifyAPI: Sendable {
     func queue() async throws(OrbitError) -> PlaybackQueue
     func addToQueue(_ uri: SpotifyURI, deviceID: String?) async throws(OrbitError)
 
-    // Returns the subset of `uris` that is saved in the user's library.
     func libraryContains(_ uris: [SpotifyURI]) async throws(OrbitError) -> Set<SpotifyURI>
     func saveToLibrary(_ uris: [SpotifyURI]) async throws(OrbitError)
     func removeFromLibrary(_ uris: [SpotifyURI]) async throws(OrbitError)
