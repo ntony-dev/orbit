@@ -62,6 +62,21 @@ public enum OrbitPalette {
         .primary.opacity(contrast == .increased ? 0.12 : 0.055)
     }
 
+    // The navigation's glass highlight takes only a breath of the accent: enough to carry a colored accent, not
+    // enough to stop the glass from reading as glass.
+    static func selectionTint(accent: Color) -> Color {
+        accent.opacity(0.12)
+    }
+
+    // The same highlight without glass, for Reduce Transparency.
+    static func selectionFill(accent: Color, contrast: ColorSchemeContrast) -> Color {
+        accent.opacity(contrast == .increased ? 0.32 : 0.2)
+    }
+
+    static func selectionStroke(contrast: ColorSchemeContrast) -> Color {
+        .primary.opacity(contrast == .increased ? 0.45 : 0.1)
+    }
+
     static func sliderTrack(contrast: ColorSchemeContrast) -> Color {
         .primary.opacity(contrast == .increased ? 0.34 : 0.16)
     }
