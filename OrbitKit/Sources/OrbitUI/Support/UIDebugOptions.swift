@@ -20,10 +20,12 @@ import SwiftUI
 //   --ui-switch <playlist-id>      two seconds after launch, switch to that playlist without collapsing
 //   --ui-shelf                     with --demo only, pin two playlists and add three recents, so the picker's
 //                                  sections can be captured (the demo keeps no shelf file)
-//   --ui-backdrop [gradient|bright|busy]
+//   --ui-backdrop [gradient|bright|busy|plain]
 //                                  draw a stand-in desktop inside the canvas, because a capture of Orbit's
 //                                  window alone cannot include what the glass refracts from behind it: a
-//                                  colored gradient (the default), a white page, or a dense, high-contrast mix
+//                                  colored gradient (the default), a white page, a dense, high-contrast mix, or
+//                                  a calm wallpaper with no text or shapes, toned to the appearance, for
+//                                  public screenshots
 struct UIDebugOptions {
     var screen: String?
     var searchQuery: String?
@@ -79,20 +81,43 @@ struct UIDebugOptions {
 }
 
 // Stand-ins for a desktop, so glass presets, opacity and text legibility can be judged in captures: a colored
-// gradient, a white document page (the hardest case for light text and light glass), and a dense mix of photos,
-// icons and black and white text (the hardest case for reading anything at all).
+// gradient, a white document page (the hardest case for light text and light glass), a dense mix of photos,
+// icons and black and white text (the hardest case for reading anything at all), and a plain wallpaper whose
+// lettering-free tones cannot be mistaken for a rendering fault in published screenshots.
 struct DebugBackdrop: View {
     enum Style: String {
-        case gradient, bright, busy
+        case gradient, bright, busy, plain
     }
 
     let style: Style
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         switch style {
         case .gradient: gradient
         case .bright: bright
         case .busy: busy
+        case .plain: plain
+        }
+    }
+
+    // Soft color fields blended over a diagonal base, so the glass has varied tone to refract but no edges.
+    private var plain: some View {
+        let isDark = colorScheme == .dark
+        let base: [Color] = isDark
+            ? [Color(red: 0.13, green: 0.16, blue: 0.27), Color(red: 0.20, green: 0.17, blue: 0.30), Color(red: 0.08, green: 0.18, blue: 0.22)]
+            : [Color(red: 0.86, green: 0.89, blue: 0.96), Color(red: 0.94, green: 0.88, blue: 0.90), Color(red: 0.86, green: 0.93, blue: 0.91)]
+        let glows: [(Color, UnitPoint)] = isDark
+            ? [(Color(red: 0.36, green: 0.30, blue: 0.62), .topLeading), (Color(red: 0.14, green: 0.42, blue: 0.48), .bottomTrailing), (Color(red: 0.52, green: 0.28, blue: 0.40), .trailing)]
+            : [(Color(red: 0.70, green: 0.78, blue: 0.97), .topLeading), (Color(red: 0.98, green: 0.80, blue: 0.74), .bottomTrailing), (Color(red: 0.78, green: 0.90, blue: 0.84), .trailing)]
+        return GeometryReader { proxy in
+            let radius = max(proxy.size.width, proxy.size.height) * 0.75
+            ZStack {
+                LinearGradient(colors: base, startPoint: .topLeading, endPoint: .bottomTrailing)
+                ForEach(glows.indices, id: \.self) { index in
+                    RadialGradient(colors: [glows[index].0.opacity(0.85), glows[index].0.opacity(0)], center: glows[index].1, startRadius: 0, endRadius: radius)
+                }
+            }
         }
     }
 
