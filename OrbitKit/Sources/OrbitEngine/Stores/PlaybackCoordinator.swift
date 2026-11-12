@@ -55,6 +55,11 @@ public final class PlaybackCoordinator {
     // Which side `snapshot` comes from; nil when nothing is playing anywhere Orbit can see.
     public private(set) var authority: PlaybackRoute?
     public private(set) var interfaceVisibility: InterfaceVisibility = .collapsed
+    // The user's synchronization setting, which scales the regular Web API sync interval.
+    public var syncFrequency: SyncFrequency = .standard {
+        // A shorter interval applies at once; a longer one from the next sync, which is already scheduled.
+        didSet { if syncFrequency != oldValue { scheduleSync(after: nil) } }
+    }
     // Set while Spotify rate limits Orbit or the quota is spent; local controls keep working meanwhile.
     public private(set) var webAPIPausedUntil: Date?
     // The last failure of background syncing, kept apart from `lastError` so polling never interrupts the user.
@@ -343,9 +348,11 @@ public final class PlaybackCoordinator {
     static func syncDelay(
         visibility: InterfaceVisibility,
         authority: PlaybackRoute?,
-        untilTrackEnds: TimeInterval?
+        untilTrackEnds: TimeInterval?,
+        frequency: SyncFrequency = .standard
     ) -> Duration? {
-        let base: TimeInterval? = switch (visibility, authority) {
+        if frequency == .whileOpen, visibility == .collapsed { return nil }
+        let standard: TimeInterval? = switch (visibility, authority) {
         case (.hidden, _): nil
         case (.expanded, .webAPI): 5
         case (.collapsed, .webAPI): 15
@@ -354,7 +361,8 @@ public final class PlaybackCoordinator {
         case (.expanded, nil): 10
         case (.collapsed, nil): 60
         }
-        guard let base else { return nil }
+        guard let standard else { return nil }
+        let base = frequency == .reduced ? standard * 3 : standard
         guard authority == .webAPI, let remaining = untilTrackEnds else { return .seconds(base) }
         return .seconds(max(1, min(base, remaining + 1)))
     }
@@ -771,7 +779,8 @@ extension PlaybackCoordinator {
         let regular = Self.syncDelay(
             visibility: interfaceVisibility,
             authority: authority,
-            untilTrackEnds: snapshot.isPlaying ? snapshot.track.map { $0.duration - snapshot.position(at: clock.now()) } : nil
+            untilTrackEnds: snapshot.isPlaying ? snapshot.track.map { $0.duration - snapshot.position(at: clock.now()) } : nil,
+            frequency: syncFrequency
         )
         guard webSignedIn, var delay = [requested, regular].compactMap({ $0 }).min() else {
             cancelScheduledSync()

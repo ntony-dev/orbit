@@ -9,6 +9,7 @@ struct SpotifyPane: View {
     @Bindable var preferences: Preferences
     // Re-read when a Web API pause ends, so the pause row goes away on time.
     @State private var now = Date()
+    @State private var isRefreshingLibrary = false
 
     private var account: AccountStore { stores.account }
     private var library: LibraryStore { stores.library }
@@ -19,6 +20,7 @@ struct SpotifyPane: View {
             localAppSection
             devicesSection
             pinnedSection
+            syncSection
             problemsSection
             ClientIDSection(preferences: preferences)
         }
@@ -195,6 +197,46 @@ struct SpotifyPane: View {
             }
         } header: {
             Text("Pinned playlists")
+        }
+    }
+
+    private var syncSection: some View {
+        Section {
+            Picker("Check Spotify's servers", selection: $preferences.syncFrequency) {
+                ForEach(SyncFrequency.allCases, id: \.self) { frequency in
+                    Text(frequency.title).tag(frequency)
+                }
+            }
+            LabeledContent("Library") {
+                HStack(spacing: SettingsLayout.spacing) {
+                    if isRefreshingLibrary { ProgressView().controlSize(.small) }
+                    Button("Refresh Now") { Task { await refreshLibrary() } }
+                        .disabled(!account.authState.isSignedIn || isRefreshingLibrary)
+                }
+            }
+        } header: {
+            Text("Synchronization")
+        } footer: {
+            Text("Playback in the Spotify app on this Mac shows up instantly either way. This sets how soon Orbit notices playback on your other devices; it never checks while hidden. Playlists refresh when you open Orbit, at most every few minutes.")
+                .settingsFootnote()
+        }
+    }
+
+    // Forced, because cached library data counts as fresh for a few minutes. Playlists the user has opened are
+    // refetched too, so a change made in Spotify shows up without waiting for their cache to expire.
+    private func refreshLibrary() async {
+        isRefreshingLibrary = true
+        defer { isRefreshingLibrary = false }
+        let library = library
+        let opened = (library.playlists.value ?? []).filter { library.playlistItems[$0.id]?.value != nil }
+        let refetchesLikedSongs = library.savedTracks.value != nil
+        await withDiscardingTaskGroup { group in
+            group.addTask { await library.loadPlaylists(force: true) }
+            group.addTask { await library.loadDevices(force: true) }
+            if refetchesLikedSongs { group.addTask { await library.loadSavedTracks(force: true) } }
+            for playlist in opened {
+                group.addTask { await library.loadItems(for: playlist, force: true) }
+            }
         }
     }
 
@@ -395,6 +437,16 @@ private struct PinnedRow: View {
                 .accessibilityLabel("Unpin \(playlist.name)")
         }
         .buttonStyle(.borderless)
+    }
+}
+
+extension SyncFrequency {
+    var title: String {
+        switch self {
+        case .standard: "Automatically"
+        case .reduced: "Less often"
+        case .whileOpen: "Only while Orbit is open"
+        }
     }
 }
 

@@ -7,6 +7,16 @@ public enum GlassPreset: String, CaseIterable, Codable, Sendable {
     case clear, balanced, tinted
 }
 
+// How often Orbit asks Spotify's servers for playback state. Playback in the Spotify app on this Mac is
+// reported instantly by the app itself whatever this is set to.
+public enum SyncFrequency: String, CaseIterable, Codable, Sendable {
+    case standard
+    // Three times the standard intervals, for less battery and Web API quota.
+    case reduced
+    // Never while only the pill shows; the open panel still syncs.
+    case whileOpen
+}
+
 public enum PillSize: String, CaseIterable, Codable, Sendable {
     case compact, regular
 }

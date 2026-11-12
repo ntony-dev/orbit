@@ -14,6 +14,7 @@ final class Shell {
     let loginItem: LoginItem
     private var statusItem: StatusItemController?
     private var settingsWindow: SettingsWindowController?
+    private var syncFrequencyObservation: Task<Void, Never>?
 
     init(isDemo: Bool, preferences: Preferences, services: Services) {
         self.isDemo = isDemo
@@ -27,6 +28,7 @@ final class Shell {
     func start(options: LaunchOptions) {
         // Both flags exist only with --demo, whose Preferences and Spotify are throwaway.
         if options.startsWithPillHidden { preferences.isPillVisible = false }
+        observeSyncFrequency()
         stores.start()
         if options.startsPaused {
             let playback = stores.playback
@@ -39,6 +41,18 @@ final class Shell {
         statusItem = StatusItemController(shell: self)
         shortcuts.start { [unowned self] in perform($0) }
         if let pane = options.settingsPane { showSettingsInBackground(pane, near: options.anchorPoint) }
+    }
+
+    // Set before the stores start, so the first sync already follows the user's setting.
+    private func observeSyncFrequency() {
+        let playback = stores.playback
+        let preferences = preferences
+        playback.syncFrequency = preferences.syncFrequency
+        syncFrequencyObservation = Task {
+            for await frequency in Observations({ preferences.syncFrequency }) {
+                playback.syncFrequency = frequency
+            }
+        }
     }
 
     func perform(_ action: ShortcutAction) {

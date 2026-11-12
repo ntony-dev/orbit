@@ -373,4 +373,38 @@ struct PlaybackCoordinatorTests {
         #expect(PlaybackCoordinator.syncDelay(visibility: .collapsed, authority: .webAPI, untilTrackEnds: 3) == .seconds(4))
         #expect(PlaybackCoordinator.syncDelay(visibility: .expanded, authority: .local, untilTrackEnds: 3) == .seconds(30))
     }
+
+    @Test func syncFrequencyScalesOrStopsCollapsedPolling() {
+        func delay(_ visibility: InterfaceVisibility, _ frequency: SyncFrequency, untilTrackEnds: TimeInterval? = 100) -> Duration? {
+            PlaybackCoordinator.syncDelay(visibility: visibility, authority: .webAPI, untilTrackEnds: untilTrackEnds, frequency: frequency)
+        }
+        #expect(delay(.collapsed, .reduced) == .seconds(45))
+        #expect(delay(.expanded, .reduced) == .seconds(15))
+        // The end of a remote track is still caught on time.
+        #expect(delay(.collapsed, .reduced, untilTrackEnds: 3) == .seconds(4))
+        #expect(delay(.collapsed, .whileOpen) == nil)
+        #expect(delay(.expanded, .whileOpen) == .seconds(5))
+        #expect(PlaybackCoordinator.syncDelay(visibility: .collapsed, authority: nil, untilTrackEnds: nil, frequency: .whileOpen) == nil)
+    }
+
+    @Test func syncingOnlyWhileOpenLeavesThePillUnpolled() async {
+        await rig.spotify.simulateRemotePlayback(on: "dev-kitchen")
+        coordinator.syncFrequency = .whileOpen
+        coordinator.start()
+        await coordinator.refresh()
+        coordinator.setInterfaceVisibility(.collapsed)
+        await settle()
+        let base = await rig.webRequests("playbackState")
+        for _ in 0..<4 {
+            rig.clock.advance(by: 20)
+            await settle()
+        }
+        #expect(await rig.webRequests("playbackState") == base)
+
+        coordinator.syncFrequency = .standard
+        #expect(await eventually {
+            rig.clock.advance(by: 15)
+            return await rig.webRequests("playbackState") > base
+        })
+    }
 }

@@ -19,6 +19,7 @@ struct PreferencesTests {
         #expect(preferences.alwaysOnTop)
         #expect(preferences.clientIDOverride == nil)
         #expect(preferences.savedPositions.isEmpty)
+        #expect(preferences.syncFrequency == .standard)
     }
 
     @Test func persistsEveryKindOfValue() {
@@ -31,6 +32,7 @@ struct PreferencesTests {
         preferences.savedPositions = ["display-1": SavedPanelPosition(x: 0.9, y: 0.1)]
         preferences.preferredDevice = DeviceReference(id: "dev", name: "Speaker")
         preferences.clientIDOverride = "abc"
+        preferences.syncFrequency = .whileOpen
 
         let reloaded = Preferences(defaults: defaults)
         #expect(reloaded.appearance == .dark)
@@ -40,6 +42,7 @@ struct PreferencesTests {
         #expect(reloaded.savedPositions["display-1"] == SavedPanelPosition(x: 0.9, y: 0.1))
         #expect(reloaded.preferredDevice == DeviceReference(id: "dev", name: "Speaker"))
         #expect(reloaded.clientIDOverride == "abc")
+        #expect(reloaded.syncFrequency == .whileOpen)
     }
 
     @Test func clearingAnOptionalPersistsNil() {
