@@ -1,7 +1,8 @@
 import SwiftUI
 
-// A thin track that thickens and shows a knob on hover or drag. Used for seeking and volume. The value is a
-// fraction in 0...1; the caller owns what it means and decides when to commit.
+// A thin track that thickens and shows a knob on hover, drag or keyboard focus. Used for seeking and volume. The
+// value is a fraction in 0...1; the caller owns what it means and decides when to commit. Arrow keys and
+// VoiceOver adjust it by `step`, and assistive technologies see a real slider with the caller's spoken value.
 struct OrbitSlider: View {
     let value: Double
     var onScrub: (Double) -> Void = { _ in }
@@ -12,11 +13,12 @@ struct OrbitSlider: View {
 
     @Environment(\.orbitTheme) private var theme
     @Environment(\.isEnabled) private var isEnabled
+    @FocusState private var isFocused: Bool
     @State private var isHovered = false
     @State private var dragValue: Double?
 
-    private var isActive: Bool { isEnabled && (isHovered || dragValue != nil) }
-    private var displayed: Double { min(1, max(0, dragValue ?? value)) }
+    private var isActive: Bool { isEnabled && (isHovered || dragValue != nil || isFocused) }
+    private var displayed: Double { clamp(dragValue ?? value) }
 
     var body: some View {
         GeometryReader { proxy in
@@ -33,9 +35,12 @@ struct OrbitSlider: View {
                 Circle()
                     .fill(.white)
                     .shadow(color: .black.opacity(0.28), radius: 2, y: 0.5)
+                    .overlay {
+                        if isFocused { Circle().strokeBorder(theme.accent, lineWidth: 2).padding(-3) }
+                    }
                     .frame(width: knob, height: knob)
                     .offset(x: min(max(0, width * displayed - knob / 2), width - knob))
-                    .scaleEffect(isActive ? 1 : 0.4)
+                    .scaleEffect(isActive ? (dragValue != nil && !theme.reducesMotion ? 1.15 : 1) : 0.4)
                     .opacity(isActive ? 1 : 0)
             }
             .frame(height: proxy.size.height)
@@ -43,13 +48,12 @@ struct OrbitSlider: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { gesture in
-                        let fraction = min(1, max(0, gesture.location.x / max(1, width)))
+                        let fraction = clamp(gesture.location.x / max(1, width))
                         dragValue = fraction
                         onScrub(fraction)
                     }
                     .onEnded { gesture in
-                        let fraction = min(1, max(0, gesture.location.x / max(1, width)))
-                        onCommit(fraction)
+                        onCommit(clamp(gesture.location.x / max(1, width)))
                         dragValue = nil
                     },
                 isEnabled: isEnabled
@@ -58,15 +62,28 @@ struct OrbitSlider: View {
         .frame(height: OrbitTokens.Size.sliderHitHeight)
         .onHover { hovering in isHovered = hovering }
         .animation(theme.animation(OrbitTokens.Motion.hover), value: isActive)
-        .accessibilityElement()
-        .accessibilityLabel(accessibilityLabel)
-        .accessibilityValue(accessibilityValue)
-        .accessibilityAdjustableAction { direction in
-            switch direction {
-            case .increment: onCommit(min(1, value + step))
-            case .decrement: onCommit(max(0, value - step))
-            @unknown default: break
-            }
+        .animation(theme.animation(OrbitTokens.Motion.press), value: dragValue != nil)
+        // Focusable through keyboard navigation like a system slider, so a mouse drag never leaves a focus ring.
+        .focusable(isEnabled, interactions: .activate)
+        .focused($isFocused)
+        .focusEffectDisabled()
+        .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { press in
+            // Command-arrows belong to the panel's track and volume shortcuts.
+            guard isEnabled, !press.modifiers.contains(.command) else { return .ignored }
+            let direction: Double = press.key == .leftArrow || press.key == .downArrow ? -1 : 1
+            onCommit(clamp(value + direction * step))
+            return .handled
         }
+        .accessibilityRepresentation {
+            Slider(value: Binding(get: { value }, set: { onCommit(clamp($0)) }), in: 0...1, step: step) {
+                Text(accessibilityLabel)
+            }
+            .accessibilityValue(accessibilityValue)
+            .disabled(!isEnabled)
+        }
+    }
+
+    private func clamp(_ fraction: Double) -> Double {
+        min(1, max(0, fraction))
     }
 }
