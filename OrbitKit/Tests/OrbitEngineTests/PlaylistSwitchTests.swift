@@ -38,7 +38,8 @@ struct PlaylistSwitchTests {
         #expect(playback.pendingIntents.isEmpty)
         #expect(playback.lastError == nil)
         #expect(stores.library.recentPlaylists.first?.id == target.id)
-        #expect(await rig.localCommands("play track") == 1)
+        #expect(await rig.webRequests("play") == 1)
+        #expect(await rig.localCommands("play track") == 0)
     }
 
     @Test func playlistsWithUnreadableItemsStillSwitch() async {
@@ -57,7 +58,7 @@ struct PlaylistSwitchTests {
     }
 
     @Test func aRefusedSwitchClearsPendingAndReportsTheError() async {
-        await rig.spotify.failLocalCommands(with: .contentRestricted)
+        await rig.spotify.failWebRequest("play", with: .contentRestricted)
         #expect(await playback.play(playlist: target) == false)
         #expect(playback.lastError == .contentRestricted)
         #expect(playback.pendingIntents.isEmpty)
@@ -70,7 +71,7 @@ struct PlaylistSwitchTests {
         let playback = playback
         let target = target
         let switching = Task { await playback.play(playlist: target) }
-        #expect(await eventually { await rig.localCommands("play track") == 1 })
+        #expect(await eventually { await rig.webRequests("play") == 1 })
         for _ in 0..<8 {
             rig.clock.advance(by: 1)
             await settle()

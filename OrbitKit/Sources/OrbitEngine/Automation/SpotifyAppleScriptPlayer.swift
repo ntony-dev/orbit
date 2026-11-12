@@ -85,6 +85,18 @@ public struct SpotifyAppleScriptPlayer: LocalPlayer {
     public func setShuffling(_ enabled: Bool) async throws(OrbitError) { try await command(.setShuffling(enabled)) }
     public func setRepeating(_ enabled: Bool) async throws(OrbitError) { try await command(.setRepeating(enabled)) }
 
+    // Neither call sends Spotify an Apple event or needs a permission: CGWindowList reports a window's owner, layer
+    // and bounds without Screen Recording, and hiding goes through NSRunningApplication.
+    public func isShowingWindow() async -> Bool {
+        guard let pid = channel.runningProcessID() else { return false }
+        return await MainActor.run { SpotifyWindows.isShowingWindow(pid: pid) }
+    }
+
+    public func hide() async {
+        guard let pid = channel.runningProcessID() else { return }
+        await MainActor.run { _ = NSRunningApplication(processIdentifier: pid)?.hide() }
+    }
+
     private func command(_ event: SpotifyAppleEvent) async throws(OrbitError) {
         try await requireAccess()
         do {
@@ -159,6 +171,27 @@ public struct SpotifyAppleScriptPlayer: LocalPlayer {
         guard var full = try? await readState() else { return notified }
         if full.track == nil { full.track = notified.track }
         return full
+    }
+}
+
+enum SpotifyWindows {
+    // Spotify also owns small offscreen helper windows; its main window is far larger than this.
+    private static let minimumSide: CGFloat = 100
+
+    // Only windows on screen in the current Space count: minimized and hidden windows are not on screen.
+    @MainActor
+    static func isShowingWindow(pid: pid_t) -> Bool {
+        guard let app = NSRunningApplication(processIdentifier: pid), !app.isHidden else { return false }
+        let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+        return windows.contains { window in
+            guard (window[kCGWindowOwnerPID as String] as? pid_t) == pid,
+                  (window[kCGWindowLayer as String] as? Int) == 0,
+                  (window[kCGWindowAlpha as String] as? Double ?? 1) > 0,
+                  let rect = window[kCGWindowBounds as String] as? NSDictionary,
+                  let bounds = CGRect(dictionaryRepresentation: rect)
+            else { return false }
+            return bounds.width >= minimumSide && bounds.height >= minimumSide
+        }
     }
 }
 

@@ -4,6 +4,10 @@ import OrbitCore
 // One simulated Spotify behind both the mock local player and the mock Web API, so commands sent through either
 // show up in the other, as they do with the real desktop app and Spotify Connect.
 public actor MockSpotify {
+    public enum Window: Sendable {
+        case visible, minimized, hidden
+    }
+
     private let latency: Duration
     private let now: @Sendable () -> Date
     private let events = Broadcaster<LocalPlayerEvent>()
@@ -14,6 +18,11 @@ public actor MockSpotify {
     private var savedTracks: [Track]
     private var devices = MockFixtures.devices
     private var activeDeviceID: String? = MockFixtures.devices.first { $0.isActive }?.id
+    // The Spotify Connect device the app on this Mac is.
+    private var localDeviceID = MockFixtures.localDevice.id
+    public private(set) var window = Window.visible
+    // How often the app brought its window up, which only a local `play track` does.
+    public private(set) var windowRaises = 0
 
     private var context: PlaybackContext?
     private var contextTracks: [Track] = []
@@ -33,6 +42,7 @@ public actor MockSpotify {
     private var heldReads: Set<String>?
     private var heldRequests: [CheckedContinuation<Void, Never>] = []
     private var webFailure: OrbitError?
+    private var requestFailures: [String: OrbitError] = [:]
     private var localFailure: OrbitError?
     private var ignoresPlayCommands = false
     private(set) var rejectsLikedSongsContext = false
@@ -80,7 +90,7 @@ public actor MockSpotify {
     // Quitting the app stops playback only when this Mac was the device playing.
     public func simulateQuit() {
         isRunning = false
-        if activeDeviceID == MockFixtures.localDevice.id { isPlaying = false }
+        if activeDeviceID == localDeviceID { isPlaying = false }
         events.send(.terminated)
     }
 
@@ -118,6 +128,11 @@ public actor MockSpotify {
     // Every Web API call throws this until cleared, e.g. `.rateLimited(retryAfter: 30)` or `.network(detail:)`.
     public func failWebAPI(with error: OrbitError?) {
         webFailure = error
+    }
+
+    // Only the named Web API request throws, e.g. "play" refused while state reads keep working.
+    public func failWebRequest(_ name: String, with error: OrbitError?) {
+        requestFailures[name] = error
     }
 
     public func failLocalCommands(with error: OrbitError?) {
@@ -168,6 +183,46 @@ public actor MockSpotify {
         emitChange()
     }
 
+    // The app on this Mac stays open with its track paused, but Spotify Connect no longer counts it as the active
+    // device, as happens after it sits idle for a while: the Web API reports nothing playing.
+    public func simulateIdleLocalDevice() {
+        setPlaying(false)
+        if activeDeviceID == localDeviceID { activeDeviceID = nil }
+    }
+
+    // The app on this Mac is missing from Spotify Connect, as when it is offline or signed in to another account.
+    public func removeLocalDeviceFromConnect() {
+        devices.removeAll { $0.id == localDeviceID }
+        if activeDeviceID == localDeviceID { activeDeviceID = nil }
+    }
+
+    // Spotify gives the app on this Mac a new Connect device ID, as after it signs out and back in.
+    public func changeLocalDeviceID(to id: String) {
+        guard let index = devices.firstIndex(where: { $0.id == localDeviceID }) else { return }
+        devices[index].id = id
+        if activeDeviceID == localDeviceID { activeDeviceID = id }
+        localDeviceID = id
+    }
+
+    public func setWindow(_ window: Window) {
+        self.window = window
+    }
+
+    // Like the real app opening a link: the window comes up even when it was minimized or the app hidden.
+    func raiseWindow() {
+        window = .visible
+        windowRaises += 1
+    }
+
+    func hideApp() {
+        guard isRunning, window == .visible else { return }
+        window = .hidden
+    }
+
+    var isShowingWindow: Bool {
+        isRunning && window == .visible
+    }
+
     // A playlist the user deleted or unfollowed elsewhere disappears from the library.
     public func removePlaylist(id: String) {
         playlists.removeAll { $0.id == id }
@@ -188,6 +243,7 @@ public actor MockSpotify {
             }
         }
         if let webFailure { throw webFailure }
+        if let failure = requestFailures[name] { throw failure }
     }
 
     func localCommand(_ name: String) async throws(OrbitError) {
@@ -250,7 +306,7 @@ public actor MockSpotify {
     }
 
     private var activeDeviceReachable: Bool {
-        isRunning || activeDeviceID != MockFixtures.localDevice.id
+        isRunning || activeDeviceID != localDeviceID
     }
 
     func snapshot() -> PlaybackSnapshot? {

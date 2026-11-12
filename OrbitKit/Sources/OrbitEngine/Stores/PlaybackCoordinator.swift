@@ -26,8 +26,10 @@ public enum InterfaceVisibility: Hashable, Sendable {
 //
 // Authority: while the Spotify app on this Mac is the active device, its AppleScript state and distributed
 // notification drive the snapshot and the Web API only adds context, device and artwork. When another device is
-// playing, or the app is closed, the Web API snapshot is authoritative. Commands go to the authoritative side
-// first and fall back to the other when that route is unavailable.
+// playing, or the app is closed, the Web API snapshot is authoritative. Transport goes to the authoritative side
+// first; starting a playlist, album or track goes to the Web API first, aimed at this Mac by device ID while it is
+// the device in use, because the app's `play track` brings its window up. Either falls back to the other route
+// when its own is unavailable.
 //
 // Races: commands run one at a time in issue order. Each optimistic change is an overlay on top of the last
 // observed state; it stays until an observation agrees with it or its grace period ends, so a stale notification
@@ -168,6 +170,7 @@ public final class PlaybackCoordinator {
         webSignedIn = available
         if !available {
             remote = nil
+            localDeviceID = nil
             savedState = nil
             syncError = nil
             webAPIPausedUntil = nil
@@ -430,6 +433,12 @@ extension PlaybackCoordinator {
     private struct Waiter {
         let matches: (ObservedState) -> Bool
         let continuation: CheckedContinuation<Bool, Never>
+    }
+
+    // Which route a command tries first when this Mac's app is the device in use. Transport prefers the app, which
+    // answers in milliseconds; starting something new prefers the Web API, which plays without showing Spotify.
+    private enum RoutePreference {
+        case local, webAPI
     }
 
     // Untyped so command closures stay one-liners; every service behind them throws OrbitError.
@@ -845,11 +854,35 @@ extension PlaybackCoordinator {
         return await task.value
     }
 
-    private func routes(local: LocalCommand?, web: WebCommand?) -> [PlaybackRoute] {
+    private func routes(local: LocalCommand?, web: WebCommand?, preferring preference: RoutePreference) -> [PlaybackRoute] {
         var available: [PlaybackRoute] = []
         if local != nil, localCommandsUsable { available.append(.local) }
         if web != nil, webUsable { available.append(.webAPI) }
-        return authority == .webAPI ? available.reversed() : available
+        return authority == .webAPI || preference == .webAPI ? available.reversed() : available
+    }
+
+    // A command for this Mac's app, rather than for whichever device the Web API considers active.
+    private var targetsThisMac: Bool {
+        localRunning && authority != .webAPI
+    }
+
+    // This Mac's Spotify Connect device: the one Web API state last showed playing here, else the only computer in
+    // the device list under this Mac's name. Nil when the app is missing from the list (offline, or signed in to
+    // another account) or when another computer has the same name, since neither can be told apart from here.
+    private func thisMacDeviceID() async -> String? {
+        if let localDeviceID { return localDeviceID }
+        if localDeviceName == nil { localDeviceName = await localPlayer.connectDeviceName() }
+        guard let name = localDeviceName else { return nil }
+        do {
+            let matches = try await api.devices().filter { $0.kind == .computer && $0.name == name }
+            noteWebSuccess()
+            guard matches.count == 1 else { return nil }
+            localDeviceID = matches[0].id
+            return matches[0].id
+        } catch {
+            noteWebFailure(error)
+            return nil
+        }
     }
 
     private func unavailableError(local: LocalCommand?) -> OrbitError {
@@ -860,9 +893,20 @@ extension PlaybackCoordinator {
     }
 
     // Sends one command over the best route and falls back to the other when that route is unusable.
-    private func deliver(local: LocalCommand?, web: WebCommand?) async -> Result<PlaybackRoute, OrbitError> {
-        let order = routes(local: local, web: web)
+    private func deliver(
+        local: LocalCommand?,
+        web: WebCommand?,
+        preferring preference: RoutePreference = .local
+    ) async -> Result<PlaybackRoute, OrbitError> {
+        var order = routes(local: local, web: web, preferring: preference)
         guard !order.isEmpty else { return .failure(unavailableError(local: local)) }
+        // Without a device ID the Web API acts on the active device, which an idle app on this Mac is not. When this
+        // Mac cannot be identified, the app is told directly instead.
+        var device: String?
+        if preference == .webAPI, order.first == .webAPI, targetsThisMac {
+            device = await thisMacDeviceID()
+            if device == nil, order.contains(.local) { order.removeFirst() }
+        }
         var failure: OrbitError = .unexpected(detail: "No route")
         for route in order {
             do throws(OrbitError) {
@@ -871,7 +915,7 @@ extension PlaybackCoordinator {
                     try await Self.typed { [localPlayer] in try await local?(localPlayer) }
                     localPermission = .granted
                 case .webAPI:
-                    try await sendWeb(web)
+                    try await sendWeb(web, to: device)
                     noteWebSuccess()
                 }
                 return .success(route)
@@ -885,8 +929,19 @@ extension PlaybackCoordinator {
         return .failure(failure)
     }
 
-    private func sendWeb(_ web: WebCommand?) async throws(OrbitError) {
+    private func sendWeb(_ web: WebCommand?, to device: String?) async throws(OrbitError) {
         guard let web else { return }
+        if let device {
+            do {
+                try await Self.typed { [api] in try await web(api, device) }
+            } catch .noActiveDevice {
+                // Spotify answers "Device not found" to an ID it no longer knows, as after the app signs in again.
+                localDeviceID = nil
+                guard let current = await thisMacDeviceID(), current != device else { throw .noActiveDevice }
+                try await Self.typed { [api] in try await web(api, current) }
+            }
+            return
+        }
         do {
             try await Self.typed { [api] in try await web(api, nil) }
         } catch .noActiveDevice {
@@ -993,8 +1048,10 @@ extension PlaybackCoordinator {
         let sent: SentCommand? = await enqueue { [self] in
             guard generation == switchGeneration else { return nil }
             let before = snapshot.track?.uri
-            let result = await deliver(local: local, web: web)
+            let wasShowing = localCommandsUsable ? await localPlayer.isShowingWindow() : true
+            let result = await deliver(local: local, web: web, preferring: .webAPI)
             commandEpoch += 1
+            if result == .success(.local), !wasShowing { tuckSpotifyAway() }
             return SentCommand(trackBefore: before, result: result)
         }
         guard let sent, generation == switchGeneration else { return false }
@@ -1004,7 +1061,9 @@ extension PlaybackCoordinator {
         }
         // Both start once the waiter below is registered, since this actor only yields when it suspends.
         let poller = webUsable ? Task { [weak self] in await self?.pollUntilConfirmed() } : nil
-        let reader = sent.result == .success(.local) ? Task { [weak self] in await self?.readLocalState() } : nil
+        // This Mac's app may have changed before the waiter was registered, whichever route started it.
+        let readsLocal = sent.result == .success(.local) || (sent.result == .success(.webAPI) && targetsThisMac)
+        let reader = readsLocal ? Task { [weak self] in await self?.readLocalState() } : nil
         defer { reader?.cancel() }
         let seen = await waitFor(timeout: timing.confirmationTimeout, register: { self.switchWaiterID = $0 }) {
             confirmed($0, sent.trackBefore)
@@ -1019,6 +1078,21 @@ extension PlaybackCoordinator {
         onSuccess()
         recompute()
         return true
+    }
+
+    // `play track` makes Spotify navigate to the item and bring its window up, un-minimizing it, a moment after the
+    // command returns. Nothing short of Accessibility or System Events can minimize it again, so the most Orbit can
+    // do is hide the app as Command-H would. That takes the window off screen, but it is no longer minimized when
+    // Spotify is next opened, it still shows the item, and if Spotify took focus, macOS picks the app that gets it
+    // back. The check repeats briefly because the window can appear after the first look.
+    private func tuckSpotifyAway() {
+        let player = localPlayer
+        Task { [clock] in
+            for delay in [0, 0.25, 0.75, 1.5] {
+                do { try await clock.sleep(.seconds(delay)) } catch { return }
+                if await player.isShowingWindow() { await player.hide() }
+            }
+        }
     }
 
     // The Web API reflects a new context a moment after the command; a few spaced reads catch it without polling hard.

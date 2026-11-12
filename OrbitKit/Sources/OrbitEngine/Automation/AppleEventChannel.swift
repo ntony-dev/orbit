@@ -20,7 +20,7 @@ final class AppleEventChannel: Sendable {
         runningProcessID() != nil
     }
 
-    private func runningProcessID() -> pid_t? {
+    func runningProcessID() -> pid_t? {
         NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier)
             .first { !$0.isTerminated }?
             .processIdentifier

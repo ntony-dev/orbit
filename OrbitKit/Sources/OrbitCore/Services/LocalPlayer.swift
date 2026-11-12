@@ -57,6 +57,7 @@ public protocol LocalPlayer: Sendable {
     func playPause() async throws(OrbitError)
     func nextTrack() async throws(OrbitError)
     func previousTrack() async throws(OrbitError)
+    // Spotify treats this like opening a link: it navigates to the item and brings its window up, even minimized.
     func play(track: SpotifyURI, inContext context: SpotifyURI?) async throws(OrbitError)
     func setPosition(_ seconds: TimeInterval) async throws(OrbitError)
     func setVolume(_ percent: Int) async throws(OrbitError)
@@ -65,8 +66,15 @@ public protocol LocalPlayer: Sendable {
     func setRepeating(_ enabled: Bool) async throws(OrbitError)
     // The name this Mac's Spotify app appears under in Spotify Connect, used to recognise it in Web API state.
     func connectDeviceName() async -> String?
+    // Whether the app has a window on screen; false while it is hidden, minimized or not running.
+    func isShowingWindow() async -> Bool
+    // Hides the app as Command-H does, without activating anything.
+    func hide() async
 }
 
 extension LocalPlayer {
     public func connectDeviceName() async -> String? { nil }
+    // Reporting a window by default means a player that cannot tell is never hidden.
+    public func isShowingWindow() async -> Bool { true }
+    public func hide() async {}
 }

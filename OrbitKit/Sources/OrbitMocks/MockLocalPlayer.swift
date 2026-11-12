@@ -55,7 +55,16 @@ public struct MockLocalPlayer: LocalPlayer {
 
     public func play(track: SpotifyURI, inContext context: SpotifyURI?) async throws(OrbitError) {
         try await spotify.localCommand("play track")
+        await spotify.raiseWindow()
         try await spotify.play(track: track, inContext: context)
+    }
+
+    public func isShowingWindow() async -> Bool {
+        await spotify.isShowingWindow
+    }
+
+    public func hide() async {
+        await spotify.hideApp()
     }
 
     public func setPosition(_ seconds: TimeInterval) async throws(OrbitError) {
