@@ -18,6 +18,9 @@ public enum DemoScenario: String, CaseIterable, Sendable {
     // Automation not asked yet, but signed in, so the Web API still shows what plays and the player asks inline.
     case automationNotAskedPlaying = "automation-not-asked-playing"
     case paused
+    // Playback pauses and resumes on its own every few seconds, so play-state transitions can be captured frame
+    // by frame without pressing anything.
+    case togglingPlayback = "toggling-playback"
 
     public struct Services: Sendable {
         public let localPlayer: any LocalPlayer
@@ -43,6 +46,7 @@ public enum DemoScenario: String, CaseIterable, Sendable {
         default: break
         }
         await spotify.startClock()
+        if self == .togglingPlayback { await spotify.startTogglingPlayback(every: .seconds(4)) }
         return Services(
             localPlayer: self == .idle ? IdleLocalPlayer(base: localPlayer) : localPlayer,
             api: ScenarioSpotifyAPI(base: MockSpotifyAPI(spotify: spotify), authorizer: authorizer, scenario: self),

@@ -12,6 +12,7 @@ public actor MockSpotify {
     private let now: @Sendable () -> Date
     private let events = Broadcaster<LocalPlayerEvent>()
     private var clockTask: Task<Void, Never>?
+    private var toggleTask: Task<Void, Never>?
 
     private var isRunning = true
     private var automationPermission = AutomationPermission.granted
@@ -76,6 +77,20 @@ public actor MockSpotify {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
                 await self?.tick()
+            }
+        }
+    }
+
+    // Halfway between toggles the unchanged state is posted again, as the real app's later notifications and
+    // Orbit's read-backs do, because a view that only settles on the next update looks right without one.
+    public func startTogglingPlayback(every interval: Duration) {
+        guard toggleTask == nil else { return }
+        toggleTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: interval / 2)
+                await self?.togglePlaying()
+                try? await Task.sleep(for: interval / 2)
+                await self?.emitChange()
             }
         }
     }
@@ -563,7 +578,7 @@ public actor MockSpotify {
     }
 
     // Without Automation permission the real player only has the notification, which omits volume, shuffle and repeat.
-    private func emitChange() {
+    func emitChange() {
         guard isRunning else { return }
         var state = LocalPlayerState(
             status: nowPlaying == nil ? .stopped : (isPlaying ? .playing : .paused),
