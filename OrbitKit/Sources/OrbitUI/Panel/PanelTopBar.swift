@@ -2,8 +2,8 @@ import OrbitCore
 import OrbitEngine
 import SwiftUI
 
-// The strip across the top of every expanded screen. Its empty space drags the panel, and it always ends with
-// the collapse button, so leaving the expanded surface is in the same place on every screen. One accessory (the
+// The strip across the top of every expanded screen. Its empty space drags the panel or, on a click, collapses
+// it, and it always ends with the collapse button, so leaving the expanded surface is in the same place on every screen. One accessory (the
 // player's settings, the browsing screens' play/pause) sits beside it at the same spacing everywhere.
 struct PanelTopBar<Leading: View, Accessory: View>: View {
     @ViewBuilder let leading: Leading
@@ -14,7 +14,13 @@ struct PanelTopBar<Leading: View, Accessory: View>: View {
     var body: some View {
         HStack(spacing: OrbitTokens.Spacing.m) {
             leading
-            Spacer(minLength: 0)
+            // The empty middle of the strip collapses on a click, like the chevron beside it; a drag across it
+            // still moves the panel. Lower priority than `leading`, so it only ever takes the space left over.
+            Color.clear
+                .contentShape(.rect)
+                .onTapGesture { panel.collapse() }
+                .layoutPriority(-1)
+                .accessibilityHidden(true)
             HStack(spacing: OrbitTokens.Spacing.xxs) {
                 accessory
                 Button {
