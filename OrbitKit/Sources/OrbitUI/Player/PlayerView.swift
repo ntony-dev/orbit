@@ -437,7 +437,7 @@ private struct DeviceButton: View {
     var body: some View {
         let isOpen = navigator.showsDevices
         Button {
-            withAnimation(theme.animation(OrbitTokens.Motion.fit)) { navigator.showsDevices.toggle() }
+            withAnimation(theme.animation(OrbitTokens.Motion.content)) { navigator.showsDevices.toggle() }
         } label: {
             Image(systemName: device?.kind.symbol ?? "hifispeaker")
                 .contentTransition(.identity)

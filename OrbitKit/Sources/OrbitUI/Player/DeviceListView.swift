@@ -112,7 +112,7 @@ struct DeviceListView: View {
     }
 
     private func close() {
-        withAnimation(theme.animation(OrbitTokens.Motion.fit)) { navigator.showsDevices = false }
+        withAnimation(theme.animation(OrbitTokens.Motion.content)) { navigator.showsDevices = false }
     }
 }
 
