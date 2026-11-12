@@ -142,6 +142,54 @@ struct PlaybackCoordinatorTests {
         #expect(coordinator.pendingIntents.isEmpty)
     }
 
+    // Resuming must show as optimistically as pausing does: Spotify answers a play more slowly than a pause, and
+    // the notification it posts meanwhile still says paused.
+    @Test func resumingShowsPlayingAtOnceWhileSpotifyCatchesUp() async throws {
+        coordinator.start()
+        try await pauseAndSettle()
+        await rig.spotify.holdCommands()
+        let coordinator = coordinator
+        let resume = Task { await coordinator.togglePlayPause() }
+        #expect(await eventually { await rig.spotify.heldRequestCount == 1 })
+        #expect(coordinator.snapshot.isPlaying)
+
+        let stale = try #require(await rig.spotify.currentLocalState())
+        #expect(stale.status == .paused)
+        await rig.spotify.emitLocalState(stale)
+        await settle()
+        #expect(coordinator.snapshot.isPlaying)
+
+        await rig.spotify.releaseHeld()
+        await resume.value
+        #expect(coordinator.snapshot.isPlaying)
+        #expect(await rig.spotify.currentLocalState()?.status == .playing)
+    }
+
+    @Test func aRefusedResumeRollsBackToPaused() async throws {
+        coordinator.start()
+        try await pauseAndSettle()
+        await rig.spotify.failLocalCommands(with: .unexpected(detail: "AppleEvent timed out"))
+        await rig.spotify.failWebAPI(with: .network(detail: "offline"))
+        await rig.spotify.holdCommands()
+        let coordinator = coordinator
+        let resume = Task { await coordinator.togglePlayPause() }
+        #expect(await eventually { await rig.spotify.heldRequestCount == 1 })
+        #expect(coordinator.snapshot.isPlaying)
+        await rig.spotify.releaseHeld()
+        await resume.value
+        #expect(!coordinator.snapshot.isPlaying)
+        #expect(coordinator.lastError == .network(detail: "offline"))
+    }
+
+    // Paused through Orbit, then past the optimistic grace period, so what follows starts from observed state.
+    private func pauseAndSettle() async throws {
+        await coordinator.refresh()
+        await coordinator.togglePlayPause()
+        rig.clock.advance(by: 2)
+        #expect(await eventually { await rig.spotify.currentLocalState()?.status == .paused && !coordinator.snapshot.isPlaying })
+        try #require(!coordinator.snapshot.isPlaying)
+    }
+
     @Test func automationDeniedFallsBackToTheWebAPI() async {
         await rig.spotify.setAutomationPermission(.denied)
         await coordinator.refresh()
