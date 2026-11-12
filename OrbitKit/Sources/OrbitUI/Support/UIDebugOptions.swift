@@ -4,11 +4,13 @@ import SwiftUI
 
 // Debug-only launch arguments that put the UI into a known state for screenshots without simulated input, and
 // without writing to the user's Preferences:
-//   --ui-screen player|picker|library|liked|queue|search|devices|playlist:<id>
-//                                  (devices is the player with its device list open)
+//   --ui-screen player|library|devices|queue|liked|playlist:<id>
+//                                  devices and queue are the player with that drawer open; liked and
+//                                  playlist:<id> are the library with that track list pushed; picker and search,
+//                                  from before the picker joined the library, open the library
 //   --ui-track-title <text>        the title the player shows for the current track, so long titles can be
 //                                  captured with the demo's short ones
-//   --ui-query <text>              the library search query, so search results can be captured
+//   --ui-query <text>              the library's search query, so filtering and Spotify results can be captured
 //   --ui-hover                     show the pill's hover controls
 //   --ui-scenario <name>           with --demo only, read by the shell, which builds the scenario's stores:
 //                                  signed-out, automation-denied, automation-not-asked,
@@ -17,11 +19,11 @@ import SwiftUI
 //   --ui-glass clear|balanced|tinted, --ui-opacity 0...1, --ui-accent neutral|mint|ice|amber|lavender,
 //   --ui-pill compact|regular, --ui-no-artwork
 //   --ui-reduce-transparency, --ui-increase-contrast, --ui-reduce-motion
-//   --ui-tour                      visit picker, library and player, then collapse, on a timer; pair it with
+//   --ui-tour                      visit the library and the player, then collapse, on a timer; pair it with
 //                                  --expanded, since expanding from the pill makes the panel key
 //   --ui-slow <factor>             play every animation at this speed (0.1 is ten times slower)
 //   --ui-switch <playlist-id>      two seconds after launch, switch to that playlist without collapsing
-//   --ui-shelf                     with --demo only, pin two playlists and add three recents, so the picker's
+//   --ui-shelf                     with --demo only, pin two playlists and add four recents, so the library's
 //                                  sections can be captured (the demo keeps no shelf file)
 //   --ui-backdrop [gradient|bright|busy|plain]
 //                                  draw a stand-in desktop inside the canvas, because a capture of Orbit's

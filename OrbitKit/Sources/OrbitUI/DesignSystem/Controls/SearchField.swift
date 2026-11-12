@@ -6,7 +6,9 @@ import SwiftUI
 struct SearchField: View {
     let prompt: String
     @Binding var text: String
-    var focusOnAppear = false
+    // Focuses when the user or a focus-search shortcut asks for search, whether the field is appearing or
+    // already on screen.
+    var answersSearchRequests = false
     // Takes focus whenever the panel is already key, without asking for key status itself, so typing filters
     // straight away once the user has opened Orbit.
     var focusesWhenKey = false
@@ -15,6 +17,9 @@ struct SearchField: View {
     var onSubmit: () -> Void = {}
     // Up and Down Arrow move the list selection below the field while the caret stays in it.
     var onMove: ((Int) -> Void)?
+    // Once the arrows have picked a row, Right Arrow opens it instead of moving the caret.
+    var hasSelection = false
+    var onOpen: () -> Void = {}
 
     @Environment(PanelState.self) private var panel
     @Environment(PanelNavigator.self) private var navigator
@@ -76,11 +81,17 @@ struct SearchField: View {
         .animation(theme.animation(OrbitTokens.Motion.hover), value: text.isEmpty)
         .animation(theme.animation(OrbitTokens.Motion.hover), value: isBusy)
         .onAppear {
-            if focusOnAppear {
+            if answersSearchRequests, navigator.wantsSearchFocus {
+                navigator.wantsSearchFocus = false
                 requestFocus()
             } else if focusesWhenKey, panel.isKeyWindow {
                 isFocused = true
             }
+        }
+        .onChange(of: navigator.wantsSearchFocus) { _, wants in
+            guard answersSearchRequests, wants else { return }
+            navigator.wantsSearchFocus = false
+            requestFocus()
         }
         .onChange(of: panel.isKeyWindow) { _, isKey in
             if isKey, wantsFocus || focusesWhenKey { isFocused = true }
@@ -111,16 +122,23 @@ struct SearchField: View {
         isFocused ? (text.isEmpty ? .empty : .filled) : nil
     }
 
-    // Takes only the field's share of the panel's key routing: moving and playing the list's selection, and
-    // clearing on Escape. An empty field leaves Escape to the panel, which steps back a layer.
+    // Takes only the field's share of the panel's key routing: moving, playing and opening the list's selection,
+    // and clearing on Escape. An empty field leaves Escape to the panel, which steps back a layer.
     private func handle(_ press: KeyPress) -> KeyPress.Result {
-        let context = PanelKeyContext(screen: onMove == nil ? .other : .list, field: text.isEmpty ? .empty : .filled)
+        let context = PanelKeyContext(
+            screen: onMove == nil ? .other : .list,
+            field: text.isEmpty ? .empty : .filled,
+            hasSelection: hasSelection
+        )
         switch PanelKeyRouter.action(for: press.key, modifiers: press.modifiers, in: context) {
         case .moveSelection(let offset):
             onMove?(offset)
             return .handled
         case .activateSelection:
             onSubmit()
+            return .handled
+        case .openSelection:
+            onOpen()
             return .handled
         case .clearField:
             text = ""

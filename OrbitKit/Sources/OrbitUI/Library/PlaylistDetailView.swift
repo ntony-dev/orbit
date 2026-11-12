@@ -136,9 +136,9 @@ private struct PlaylistHeader: View {
                         Image(systemName: library.isPinned(playlist) ? "pin.fill" : "pin")
                     }
                     .iconButton(isOn: library.isPinned(playlist), showsOnIndicator: false)
-                    .help(library.isPinned(playlist) ? "Unpin from Playlists" : "Pin to Playlists")
+                    .help(library.isPinned(playlist) ? "Unpin" : "Pin to Top of Library")
                     .accessibilityLabel(library.isPinned(playlist) ? "Unpin \(playlist.name)" : "Pin \(playlist.name)")
-                    .accessibilityHint("Pinned playlists stay at the top of Playlists")
+                    .accessibilityHint("Pinned playlists stay at the top of the library")
                     Button {
                         SpotifyApp.open(playlist.uri)
                     } label: {

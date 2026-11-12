@@ -3,7 +3,9 @@ import Observation
 // Where an expansion requested from outside the panel (menu bar, global shortcut) should land.
 public enum PanelDestination: Hashable, Sendable {
     case player
+    // The place to pick music: the library, from the top of its list.
     case playlistPicker
+    // The library with its search field focused.
     case search
 }
 
@@ -27,7 +29,7 @@ public final class PanelState {
 
     // Set by expand(to:). The UI navigates there and then calls clearRequestedDestination().
     public private(set) var requestedDestination: PanelDestination?
-    // Written by the UI: how many layers (picker, library, a playlist, devices) sit above the player.
+    // Written by the UI: how many layers (the library, a playlist, the device list or queue) sit above the player.
     public var openLayerCount = 0
     // Bumped by dismissActiveLayer() when a layer is open; the UI steps back one layer each time it changes.
     public private(set) var layerDismissals = 0

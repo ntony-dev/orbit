@@ -64,12 +64,16 @@ private struct KeyModifiers {
     var isCommandOnly: Bool { isPlainOrCommand && modifiers.contains(.command) }
 }
 
-// What the expanded panel shows, as far as keys are concerned: the player owns plain arrows for seeking, a list
-// owns them for its selection, and other screens (devices, the queue) own neither.
+// What the expanded panel shows, as far as keys are concerned: the player owns plain arrows for seeking (its
+// drawers included), a list owns them for its selection, a track list also takes Left Arrow to step back to the
+// library, and any other screen owns neither.
 enum PanelKeyScreen: Equatable {
     case player
     case list
+    case trackList
     case other
+
+    var isList: Bool { self == .list || self == .trackList }
 }
 
 enum TextFieldFocus: Equatable {
@@ -79,8 +83,10 @@ enum TextFieldFocus: Equatable {
 
 struct PanelKeyContext: Equatable {
     var screen: PanelKeyScreen
-    // The focused search or filter field, if any.
+    // The focused search field, if any.
     var field: TextFieldFocus?
+    // The arrow keys have picked a row, so Right Arrow opens it even while the field holds the caret.
+    var hasSelection = false
 }
 
 enum PanelKeyAction: Equatable {
@@ -113,9 +119,10 @@ enum PanelKeyAction: Equatable {
 
 // The one place that decides what a key does in the expanded panel. In order: Command-comma opens Settings from
 // anywhere; Escape clears a field with text, otherwise steps back a layer (which collapses from the player);
-// a list's plain Up, Down and Return move and play its selection, with or without its field focused; every other
-// key in a focused field is typing; and only then the playback shortcuts, where plain Left and Right seek on the
-// player alone, so they never seek from a list.
+// a list's plain Up, Down and Return move and play its selection, with or without its field focused, and Right
+// opens the selected row once the arrows have picked one (or always, without a field); Left steps back from a
+// track list; every other key in a focused field is typing; and only then the playback shortcuts, where plain
+// Left and Right seek on the player alone, so they never seek from a list.
 enum PanelKeyRouter {
     static func action(for key: KeyEquivalent, modifiers: EventModifiers, in context: PanelKeyContext) -> PanelKeyAction {
         let flags = KeyModifiers(modifiers)
@@ -123,12 +130,13 @@ enum PanelKeyRouter {
         if key == .escape, flags.isPlain {
             return context.field == .filled ? .clearField : .dismissLayer
         }
-        if context.screen == .list, flags.isPlain {
+        if context.screen.isList, flags.isPlain {
             switch key {
             case .downArrow: return .moveSelection(by: 1)
             case .upArrow: return .moveSelection(by: -1)
             case .return: return .activateSelection
-            case .rightArrow where context.field == nil: return .openSelection
+            case .rightArrow where context.field == nil || context.hasSelection: return .openSelection
+            case .leftArrow where context.screen == .trackList && context.field == nil: return .dismissLayer
             default: break
             }
         }

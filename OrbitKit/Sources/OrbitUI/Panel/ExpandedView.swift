@@ -13,10 +13,9 @@ struct ExpandedView: View {
             ZStack(alignment: .top) {
                 let key = navigator.fitKey
                 // Each screen reports to the key it was created for, so an outgoing screen still fading out can
-                // never size the surface for the incoming one; a library tab's list reports only for its own tab.
+                // never size the surface for the incoming one.
                 screen
                     .environment(\.listFitReporter, ListFitReporter { [navigator] fit in
-                        guard fit.libraryTab == key.libraryTab else { return }
                         navigator.recordFit(fit.screenHeight, for: key)
                     })
                     .id(ScreenID(section: navigator.section, detail: navigator.detail))
@@ -38,7 +37,6 @@ struct ExpandedView: View {
         SegmentedControl(
             segments: [
                 Segment(value: PanelSection.player, title: "Now Playing", symbol: "play.circle"),
-                Segment(value: PanelSection.picker, title: "Playlists", symbol: "music.note.list"),
                 Segment(value: PanelSection.library, title: "Library", symbol: "square.stack"),
             ],
             selection: Binding(
@@ -56,7 +54,6 @@ struct ExpandedView: View {
         switch (navigator.detail, navigator.section) {
         case (.playlist(let playlist), _): PlaylistDetailView(playlist: playlist)
         case (nil, .player): PlayerView()
-        case (nil, .picker): QuickPickerView()
         case (nil, .library): LibraryView()
         }
     }

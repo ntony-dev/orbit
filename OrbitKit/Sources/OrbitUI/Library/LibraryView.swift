@@ -2,134 +2,12 @@ import OrbitCore
 import OrbitEngine
 import SwiftUI
 
-// The mini library: denser than the picker, with playlists to browse into, Liked Songs, the queue and Spotify
-// search. The now-playing strip above keeps the way back to the player in view.
+// Everything to pick from, in one list: pins, recents, Liked Songs and every playlist, each a click away from
+// playing and a chevron away from its tracks. Typing filters the playlists at once and searches Spotify below
+// them after a pause, so a query never spends a request per keystroke. The arrow keys move a selection, Return
+// plays it (or the top match while typing) and Right Arrow opens it. The now-playing strip above keeps the way
+// back to the player in view.
 struct LibraryView: View {
-    @Environment(PanelNavigator.self) private var navigator
-    @Environment(\.orbitTheme) private var theme
-
-    var body: some View {
-        VStack(spacing: 0) {
-            PanelTopBar { NowPlayingStrip() } accessory: { NowPlayingStrip.PlayPause() }
-            AccountGate {
-                VStack(spacing: 0) {
-                    ChipTabs(
-                        tabs: [
-                            Segment(value: LibraryTab.playlists, title: "Playlists", symbol: "music.note.list"),
-                            Segment(value: LibraryTab.liked, title: "Liked", symbol: "heart"),
-                            Segment(value: LibraryTab.queue, title: "Queue", symbol: "list.bullet"),
-                            Segment(value: LibraryTab.search, title: "Search", symbol: "magnifyingglass"),
-                        ],
-                        selection: Binding(
-                            get: { navigator.libraryTab },
-                            set: { tab in
-                                // Choosing Search by hand means the user is about to type.
-                                navigator.wantsSearchFocus = tab == .search
-                                navigator.libraryTab = tab
-                            }
-                        )
-                    )
-                    .padding(.horizontal, OrbitTokens.Spacing.xl)
-                    .padding(.top, OrbitTokens.Spacing.m)
-                    ZStack(alignment: .top) {
-                        let tab = navigator.libraryTab
-                        content(for: tab)
-                            .environment(\.listFitTab, tab)
-                            .id(tab)
-                            .transition(.opacity.animation(theme.animation(OrbitTokens.Motion.screenFadeOut)))
-                    }
-                    .frame(maxHeight: .infinity, alignment: .top)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func content(for tab: LibraryTab) -> some View {
-        switch tab {
-        case .playlists: LibraryPlaylistsTab()
-        case .liked: LikedSongsTab()
-        case .queue: QueueTab()
-        case .search: SearchTab()
-        }
-    }
-}
-
-// Lighter than SegmentedControl so a second row of navigation inside the library reads as a filter, not as a
-// competing set of sections. Chips size to their labels and never truncate; if a narrower surface ever cannot
-// hold them all, the Search glyph goes first.
-struct ChipTabs<Value: Hashable>: View {
-    let tabs: [Segment<Value>]
-    @Binding var selection: Value
-
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            chips(showsSearchIcon: true)
-            chips(showsSearchIcon: false)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Library sections")
-    }
-
-    private func chips(showsSearchIcon: Bool) -> some View {
-        HStack(spacing: OrbitTokens.Spacing.s) {
-            ForEach(tabs) { tab in
-                Chip(
-                    tab: tab,
-                    isSelected: tab.value == selection,
-                    showsIcon: showsSearchIcon && tab.symbol == "magnifyingglass"
-                ) { selection = tab.value }
-            }
-        }
-        .fixedSize()
-    }
-}
-
-private struct Chip<Value: Hashable>: View {
-    let tab: Segment<Value>
-    let isSelected: Bool
-    let showsIcon: Bool
-    let action: () -> Void
-
-    @Environment(\.orbitTheme) private var theme
-    @State private var isHovered = false
-
-    var body: some View {
-        Button {
-            withAnimation(theme.animation(OrbitTokens.Motion.navigate), action)
-        } label: {
-            HStack(spacing: OrbitTokens.Spacing.xs) {
-                if showsIcon {
-                    Image(systemName: tab.symbol).imageScale(.small)
-                }
-                Text(tab.title)
-            }
-            .font(OrbitTokens.Typography.caption.weight(.medium))
-            .lineLimit(1)
-            .fixedSize()
-            .foregroundStyle(isSelected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
-            .padding(.horizontal, OrbitTokens.Spacing.m + OrbitTokens.Spacing.xxs)
-            .frame(height: OrbitTokens.Size.chipHeight)
-            .background {
-                Capsule().fill(fill)
-            }
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .animation(theme.animation(OrbitTokens.Motion.hover), value: isHovered)
-        .accessibilityLabel(tab.title)
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
-    }
-
-    private var fill: Color {
-        if isSelected { return theme.accent.opacity(theme.isHighContrast ? 0.32 : 0.2) }
-        return isHovered ? OrbitPalette.hoverFill(contrast: theme.contrast) : OrbitPalette.quietFill(contrast: theme.contrast)
-    }
-}
-
-private struct LibraryPlaylistsTab: View {
     @Environment(LibraryStore.self) private var library
     @Environment(AccountStore.self) private var account
     @Environment(PlaybackCoordinator.self) private var playback
@@ -138,281 +16,205 @@ private struct LibraryPlaylistsTab: View {
     @Environment(PanelState.self) private var panel
     @Environment(Preferences.self) private var preferences
     @Environment(\.orbitTheme) private var theme
-    @State private var filter = ""
     @State private var selection = KeyboardSelection()
-
-    private var shown: [Playlist] {
-        let liked = LikedSongs.playlist(for: account.profile, count: library.savedTracks.value?.count)
-        let all = [liked].compactMap { $0 } + (library.playlists.value ?? [])
-        let query = filter.trimmingCharacters(in: .whitespaces)
-        return query.isEmpty ? all : PickerContent.matches(for: query, in: all)
-    }
-
-    var body: some View {
-        let shown = shown
-        let keys = shown.map(\.id)
-        let target = selection.target(in: keys, fallsBackToFirst: !filter.isEmpty && panel.isKeyWindow)
-        VStack(spacing: 0) {
-            SearchField(
-                prompt: "Filter your playlists",
-                text: $filter,
-                focusesWhenKey: true,
-                onSubmit: { play(target, in: shown) },
-                onMove: { selection.move($0, in: keys) }
-            )
-            .padding(.horizontal, OrbitTokens.Spacing.xl)
-            .padding(.vertical, OrbitTokens.Spacing.m)
-            PanelScroll(reveal: selection.key) {
-                switch library.playlists {
-                case .idle, .loading:
-                    SkeletonRows(count: 6)
-                        .padding(.horizontal, OrbitTokens.Spacing.m)
-                case .failed(let error):
-                    StatusMessage(error: error) { Task { await library.loadPlaylists(force: true) } }
-                        .listState()
-                case .loaded(let playlists):
-                    if shown.isEmpty {
-                        StatusMessage(symbol: "magnifyingglass", title: "No playlists match “\(filter)”")
-                            .listState()
-                    } else {
-                        LazyVStack(spacing: OrbitTokens.Spacing.xxs) {
-                            ForEach(shown) { playlist in
-                                PlaylistRow(playlist: playlist, behavior: .browse)
-                                    .keyboardSelected(playlist.id == target)
-                                    .id(playlist.id)
-                            }
-                            if playlists.isEmpty, filter.isEmpty {
-                                StatusMessage(
-                                    symbol: "music.note.list",
-                                    title: "No playlists yet",
-                                    message: "Playlists you create or follow in Spotify show up here."
-                                )
-                                .padding(.vertical, OrbitTokens.Spacing.xl)
-                            }
-                        }
-                        .padding(.horizontal, OrbitTokens.Spacing.m)
-                        .padding(.bottom, OrbitTokens.Spacing.m)
-                    }
-                }
-            }
-        }
-        .onChange(of: keys) { _, keys in selection.reconcile(with: keys) }
-        .onChange(of: filter) { selection.clear() }
-        .task {
-            if case .idle = library.playlists { await library.loadPlaylists() }
-            // Liked Songs shows its count here as in the picker.
-            if case .idle = library.savedTracks { await library.loadSavedTracks() }
-        }
-    }
-
-    private func play(_ key: String?, in playlists: [Playlist]) {
-        guard let key, let playlist = playlists.first(where: { $0.id == key }) else { return }
-        Task { await switcher.play(playlist, with: playback, thenCollapse: panel.collapseAfterAction(preferences)) }
-    }
-}
-
-private struct LikedSongsTab: View {
-    @Environment(LibraryStore.self) private var library
-    @Environment(AccountStore.self) private var account
-    @Environment(PlaybackCoordinator.self) private var playback
-    @Environment(PlaylistSwitcher.self) private var switcher
-    @Environment(PanelState.self) private var panel
-    @Environment(Preferences.self) private var preferences
-    @State private var selection = KeyboardSelection()
-
-    var body: some View {
-        let context = LikedSongs.playlist(for: account.profile, count: nil)?.uri
-        let tracks = library.savedTracks.value ?? []
-        let keys = tracks.indices.map { "liked:\($0)" }
-        PanelScroll(reveal: selection.key) {
-            switch library.savedTracks {
-            case .idle, .loading:
-                SkeletonRows(count: 6)
-                    .padding(.horizontal, OrbitTokens.Spacing.m)
-                    .padding(.top, OrbitTokens.Spacing.m)
-            case .failed(let error):
-                StatusMessage(error: error) { Task { await library.loadSavedTracks(force: true) } }
-                    .listState()
-            case .loaded(let tracks) where tracks.isEmpty:
-                StatusMessage(symbol: "heart", title: "No liked songs yet", message: "Tap the heart in the player to save a song.")
-                    .listState()
-            case .loaded(let tracks):
-                LazyVStack(spacing: 0) {
-                    SectionHeader(title: "Liked Songs", trailing: Formatting.songCount(tracks.count))
-                    ForEach(Array(tracks.enumerated()), id: \.offset) { index, track in
-                        TrackRow(track: track, showsArtwork: true, context: context, isKeyboardSelected: selection.key == keys[index])
-                            .id(keys[index])
-                    }
-                }
-                .padding(.horizontal, OrbitTokens.Spacing.m)
-                .padding(.bottom, OrbitTokens.Spacing.m)
-            }
-        }
-        .keyboardList(selection: $selection, keys: keys) { key in
-            guard let index = keys.firstIndex(of: key), tracks[index].isPlayable else { return }
-            Task { await switcher.play(track: tracks[index], in: context, with: playback, thenCollapse: panel.collapseAfterAction(preferences)) }
-        }
-        .task {
-            if case .idle = library.savedTracks { await library.loadSavedTracks() }
-        }
-    }
-}
-
-private struct QueueTab: View {
-    @Environment(LibraryStore.self) private var library
-    @Environment(PlaybackCoordinator.self) private var playback
-
-    var body: some View {
-        PanelScroll {
-            switch library.queue {
-            case .idle, .loading:
-                SkeletonRows(count: 6)
-                    .padding(.horizontal, OrbitTokens.Spacing.m)
-                    .padding(.top, OrbitTokens.Spacing.m)
-            case .failed(let error):
-                StatusMessage(error: error) { Task { await library.loadQueue(force: true) } }
-                    .listState()
-            case .loaded(let queue):
-                LazyVStack(spacing: 0) {
-                    if let current = queue.current {
-                        SectionHeader(title: "Now Playing")
-                        TrackRow(track: current, showsArtwork: true, isInteractive: false)
-                    }
-                    SectionHeader(title: "Next Up", trailing: queue.upcoming.isEmpty ? nil : Formatting.songCount(queue.upcoming.count))
-                    if queue.upcoming.isEmpty {
-                        StatusMessage(
-                            symbol: "text.line.first.and.arrowtriangle.forward",
-                            title: "Nothing queued",
-                            message: "Right-click a song anywhere in Orbit and choose Add to Queue."
-                        )
-                        .padding(.vertical, OrbitTokens.Spacing.xl)
-                    }
-                    ForEach(Array(queue.upcoming.enumerated()), id: \.offset) { _, track in
-                        TrackRow(track: track, showsArtwork: true, isInteractive: false)
-                    }
-                }
-                .padding(.horizontal, OrbitTokens.Spacing.m)
-                .padding(.bottom, OrbitTokens.Spacing.m)
-            }
-        }
-        .panelKeyFocusTarget()
-        // Reloaded on each track change, which is when the queue actually moves; there is no polling. The store
-        // keeps the previous queue on screen while it reloads.
-        .task(id: playback.snapshot.track?.id) {
-            await library.loadQueue()
-        }
-    }
-}
-
-private struct SearchTab: View {
-    @Environment(LibraryStore.self) private var library
-    @Environment(PanelNavigator.self) private var navigator
-    @Environment(PlaybackCoordinator.self) private var playback
-    @Environment(PlaylistSwitcher.self) private var switcher
-    @Environment(PanelState.self) private var panel
-    @Environment(Preferences.self) private var preferences
-    @Environment(\.orbitTheme) private var theme
-    @State private var selection = KeyboardSelection()
+    // A playlist just pinned from a context menu, scrolled into view in its new section.
+    @State private var newPin: String?
 
     var body: some View {
         @Bindable var navigator = navigator
-        let results = library.searchResults.value ?? SearchResults()
-        let keys = Self.keys(for: results)
-        let target = selection.target(in: keys, fallsBackToFirst: panel.isKeyWindow)
         VStack(spacing: 0) {
-            SearchField(
-                prompt: "Search songs, albums, playlists",
-                text: $navigator.searchQuery,
-                focusOnAppear: navigator.wantsSearchFocus,
-                focusesWhenKey: true,
-                isBusy: library.isSearching,
-                onSubmit: { activate(target, in: results) },
-                onMove: { selection.move($0, in: keys) }
-            )
-            .padding(.horizontal, OrbitTokens.Spacing.xl)
-            .padding(.vertical, OrbitTokens.Spacing.m)
-            PanelScroll(reveal: selection.key) {
-                list(results, target: target)
+            PanelTopBar { NowPlayingStrip() } accessory: { NowPlayingStrip.PlayPause() }
+            AccountGate {
+                let content = content
+                VStack(spacing: 0) {
+                    SearchField(
+                        prompt: "Search your library and Spotify",
+                        text: $navigator.searchQuery,
+                        answersSearchRequests: true,
+                        focusesWhenKey: true,
+                        isBusy: library.isSearching,
+                        onSubmit: { activate(selection.target(in: content.keys, fallsBackToFirst: content.isFiltered), in: content) },
+                        onMove: { selection.move($0, in: content.keys) },
+                        hasSelection: selection.key != nil,
+                        onOpen: { open(selection.key, in: content) }
+                    )
+                    .padding(.horizontal, OrbitTokens.Spacing.xl)
+                    .padding(.top, OrbitTokens.Spacing.m)
+                    .padding(.bottom, OrbitTokens.Spacing.xs)
+                    list(content)
+                }
+                .onChange(of: content.keys) { _, keys in selection.reconcile(with: keys) }
+                .onChange(of: library.pinnedPlaylists.map(\.id)) { old, new in
+                    newPin = new.first { !old.contains($0) }.map { "pinned:\($0)" }
+                }
             }
         }
-        .onAppear { navigator.wantsSearchFocus = false }
         .onChange(of: navigator.searchQuery, initial: true) { _, query in
             selection.clear()
             guard query != library.searchQuery || library.searchResults.value == nil else { return }
             library.updateSearch(query)
         }
-        .onChange(of: keys) { _, keys in selection.reconcile(with: keys) }
+        .task(id: account.authState) {
+            guard account.authState.isSignedIn else { return }
+            if case .idle = library.playlists { await library.loadPlaylists() }
+            // Liked Songs shows its count on its row.
+            if case .idle = library.savedTracks { await library.loadSavedTracks() }
+        }
     }
 
-    @ViewBuilder
-    private func list(_ results: SearchResults, target: String?) -> some View {
-        let query = navigator.searchQuery.trimmingCharacters(in: .whitespaces)
-        if query.isEmpty {
-            StatusMessage(symbol: "magnifyingglass", title: "Search Spotify", message: "Find songs, albums and playlists to play right away.")
-                .listState()
-        } else {
-            switch library.searchResults {
-            case .idle, .loading:
-                SkeletonRows(count: 5)
-                    .padding(.horizontal, OrbitTokens.Spacing.m)
-            case .failed(let error):
-                StatusMessage(error: error) { Task { await library.search(navigator.searchQuery) } }
-                    .listState()
-            case .loaded(let results) where results.isEmpty:
-                StatusMessage(symbol: "magnifyingglass", title: "No results for “\(query)”", message: "Check the spelling or try fewer words.")
-                    .listState()
-            case .loaded:
+    private var content: LibraryContent {
+        LibraryContent(
+            pinned: library.pinnedPlaylists,
+            recents: library.recentPlaylists,
+            liked: LikedSongs.playlist(for: account.profile, count: library.savedTracks.value?.count),
+            library: library.playlists.value ?? [],
+            query: navigator.searchQuery,
+            results: library.searchResults.value
+        )
+    }
+
+    private func list(_ content: LibraryContent) -> some View {
+        // While typing, the top match is what Return plays, so it carries the selection until the arrows move it.
+        let target = selection.target(in: content.keys, fallsBackToFirst: content.isFiltered && panel.isKeyWindow)
+        return PanelScroll(reveal: selection.key ?? newPin, revealAnchor: selection.key == nil ? .center : nil) {
+            if content.isFiltered {
                 LazyVStack(spacing: OrbitTokens.Spacing.xxs) {
-                    if !results.tracks.isEmpty {
-                        SectionHeader(title: "Songs")
-                        ForEach(Array(results.tracks.enumerated()), id: \.offset) { index, track in
-                            TrackRow(track: track, showsArtwork: true, isKeyboardSelected: target == "track:\(index)")
-                                .id("track:\(index)")
-                        }
-                    }
-                    if !results.playlists.isEmpty {
-                        SectionHeader(title: "Playlists")
-                        ForEach(results.playlists) { playlist in
-                            PlaylistRow(playlist: playlist, behavior: .browse)
-                                .keyboardSelected(target == "playlist:\(playlist.id)")
-                                .id("playlist:\(playlist.id)")
-                        }
-                    }
-                    if !results.albums.isEmpty {
-                        SectionHeader(title: "Albums")
-                        ForEach(results.albums) { album in
-                            AlbumRow(album: album)
-                                .keyboardSelected(target == "album:\(album.id)")
-                                .id("album:\(album.id)")
-                        }
-                    }
+                    playlistSections(content, target: target)
+                    spotifySection(content, target: target)
                 }
                 .padding(.horizontal, OrbitTokens.Spacing.m)
                 .padding(.bottom, OrbitTokens.Spacing.m)
-                // A newer query is on its way; the previous results stay readable but step back.
-                .opacity(library.isSearching ? 0.6 : 1)
-                .animation(theme.animation(OrbitTokens.Motion.hover), value: library.isSearching)
+            } else {
+                switch library.playlists {
+                case .idle, .loading:
+                    SkeletonRows(count: 6)
+                        .padding(.horizontal, OrbitTokens.Spacing.m)
+                        .padding(.top, OrbitTokens.Spacing.s)
+                case .failed(let error):
+                    StatusMessage(error: error) { Task { await library.loadPlaylists(force: true) } }
+                        .listState()
+                case .loaded(let playlists):
+                    LazyVStack(spacing: OrbitTokens.Spacing.xxs) {
+                        playlistSections(content, target: target)
+                        if playlists.isEmpty {
+                            StatusMessage(
+                                symbol: "music.note.list",
+                                title: "No playlists yet",
+                                message: "Playlists you create or follow in Spotify show up here."
+                            )
+                            .padding(.vertical, OrbitTokens.Spacing.xl)
+                        }
+                    }
+                    .padding(.horizontal, OrbitTokens.Spacing.m)
+                    .padding(.bottom, OrbitTokens.Spacing.m)
+                }
             }
         }
     }
 
-    private static func keys(for results: SearchResults) -> [String] {
-        results.tracks.indices.map { "track:\($0)" }
-            + results.playlists.map { "playlist:\($0.id)" }
-            + results.albums.map { "album:\($0.id)" }
+    @ViewBuilder
+    private func playlistSections(_ content: LibraryContent, target: String?) -> some View {
+        ForEach(content.sections) { section in
+            SectionHeader(title: section.title)
+            ForEach(section.entries) { entry in
+                row(entry, inPinned: section.id == "pinned", isSelected: entry.id == target)
+                    .id(entry.id)
+            }
+        }
     }
 
-    private func activate(_ key: String?, in results: SearchResults) {
-        guard let key else { return }
+    // Spotify's results below the user's own matches. Until the first results arrive the section holds their
+    // place; a newer query on its way leaves the previous results readable but stepped back.
+    @ViewBuilder
+    private func spotifySection(_ content: LibraryContent, target: String?) -> some View {
+        switch library.searchResults {
+        case .loaded(let results) where results.isEmpty || content.spotify.isEmpty:
+            if content.sections.isEmpty {
+                StatusMessage(
+                    symbol: "magnifyingglass",
+                    title: "Nothing matches “\(content.query)”",
+                    message: "Check the spelling or try fewer words."
+                )
+                .listState()
+            } else {
+                SectionHeader(title: "Search Spotify")
+                Text("No results on Spotify")
+                    .font(OrbitTokens.Typography.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, OrbitTokens.Spacing.m)
+                    .padding(.vertical, OrbitTokens.Spacing.s)
+            }
+        case .loaded:
+            SectionHeader(title: "Search Spotify")
+            ForEach(content.spotify) { group in
+                SectionHeader(title: group.title, isSubheading: true)
+                ForEach(group.entries) { entry in
+                    row(entry, inPinned: false, isSelected: entry.id == target)
+                        .id(entry.id)
+                }
+            }
+            .opacity(library.isSearching ? 0.6 : 1)
+            .animation(theme.animation(OrbitTokens.Motion.hover), value: library.isSearching)
+        case .failed(let error):
+            SectionHeader(title: "Search Spotify")
+            StatusMessage(error: error) { Task { await library.search(navigator.searchQuery) } }
+                .padding(.vertical, OrbitTokens.Spacing.l)
+        case .idle, .loading:
+            SectionHeader(title: "Search Spotify")
+            SkeletonRows(count: 3)
+        }
+    }
+
+    @ViewBuilder
+    private func row(_ entry: LibraryContent.Entry, inPinned: Bool, isSelected: Bool) -> some View {
+        switch entry.item {
+        case .playlist(let playlist, let isRecent):
+            let row = PlaylistRow(playlist: playlist, isRecent: isRecent)
+                .keyboardSelected(isSelected)
+            if inPinned {
+                row
+                    .draggable(playlist.id)
+                    .dropDestination(for: String.self) { ids, _ in
+                        movePinned(ids.first, before: playlist)
+                    }
+            } else {
+                row
+            }
+        case .track(let track):
+            TrackRow(track: track, showsArtwork: true, isKeyboardSelected: isSelected)
+        case .album(let album):
+            AlbumRow(album: album)
+                .keyboardSelected(isSelected)
+        }
+    }
+
+    private func activate(_ key: String?, in content: LibraryContent) {
+        guard let key, let entry = content.entry(for: key) else { return }
         let collapse = panel.collapseAfterAction(preferences)
-        if key.hasPrefix("track:"), let index = Int(key.dropFirst("track:".count)), results.tracks.indices.contains(index) {
-            let track = results.tracks[index]
+        switch entry.item {
+        case .playlist(let playlist, _):
+            Task { await switcher.play(playlist, with: playback, thenCollapse: collapse) }
+        case .track(let track):
             guard track.isPlayable else { return }
             Task { await switcher.play(track: track, in: nil, with: playback, thenCollapse: collapse) }
-        } else if let playlist = results.playlists.first(where: { key == "playlist:\($0.id)" }) {
-            Task { await switcher.play(playlist, with: playback, thenCollapse: collapse) }
-        } else if let album = results.albums.first(where: { key == "album:\($0.id)" }) {
+        case .album(let album):
             Task { await switcher.play(context: album.uri, with: playback, thenCollapse: collapse) }
+        }
+    }
+
+    private func open(_ key: String?, in content: LibraryContent) {
+        guard let key, let playlist = content.entry(for: key)?.item.opensTracks else { return }
+        withAnimation(theme.animation(OrbitTokens.Motion.navigate)) { navigator.push(.playlist(playlist)) }
+    }
+
+    private func movePinned(_ id: String?, before target: Playlist) {
+        let pinned = library.pinnedPlaylists
+        guard let id, let source = pinned.firstIndex(where: { $0.id == id }),
+              let destination = pinned.firstIndex(where: { $0.id == target.id }), source != destination
+        else { return }
+        withAnimation(theme.animation(OrbitTokens.Motion.content)) {
+            library.movePinned(fromOffsets: IndexSet(integer: source), toOffset: destination > source ? destination + 1 : destination)
         }
     }
 }
@@ -424,7 +226,6 @@ private struct AlbumRow: View {
     @Environment(PlaylistSwitcher.self) private var switcher
     @Environment(PanelState.self) private var panel
     @Environment(Preferences.self) private var preferences
-    @Environment(\.orbitTheme) private var theme
 
     var body: some View {
         let isCurrent = playback.snapshot.context?.uri == album.uri

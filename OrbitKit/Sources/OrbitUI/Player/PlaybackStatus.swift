@@ -51,7 +51,7 @@ enum PlaybackStatus: Hashable {
 
     var hasTrack: Bool { self == .playing || self == .paused }
 
-    // Clicking the pill opens the screen that can act on what it says: the picker only when nothing plays and a
+    // Clicking the pill opens the screen that can act on what it says: the library only when nothing plays and a
     // playlist can be started from it, otherwise the player, where the Allow, Open Spotify and transport controls
     // live.
     var pillDestination: PanelDestination {

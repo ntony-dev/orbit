@@ -61,7 +61,7 @@ struct TrackRow: View {
                 }
             }
             .padding(.horizontal, OrbitTokens.Spacing.m)
-            .frame(height: showsArtwork ? OrbitTokens.Size.rowHeight - 4 : OrbitTokens.Size.trackRowHeight)
+            .frame(height: showsArtwork ? OrbitTokens.Size.artworkTrackRowHeight : OrbitTokens.Size.trackRowHeight)
         }
         .buttonStyle(RowButtonStyle(isSelected: isCurrent && isInteractive))
         .focusEffectDisabled()

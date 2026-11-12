@@ -2,15 +2,11 @@ import OrbitCore
 import OrbitEngine
 import SwiftUI
 
-// One playlist in the picker or library. In the picker a click switches playback; in the library it opens the
-// playlist and a hover button plays it. Pending, failed, confirmed and current states are all visible on the row.
+// One playlist in the library. Switching playlists is what Orbit is for, so the whole row plays it on one click;
+// the chevron at its end, always visible, opens its tracks. Pending, failed, confirmed and current states are all
+// visible on the row, and the playing row keeps its equalizer beside the chevron.
 struct PlaylistRow: View {
-    enum Behavior {
-        case switchOnClick, browse
-    }
-
     let playlist: Playlist
-    var behavior: Behavior = .switchOnClick
     var isRecent = false
 
     @Environment(PlaybackCoordinator.self) private var playback
@@ -35,7 +31,7 @@ struct PlaylistRow: View {
 
     var body: some View {
         let status = status
-        Button(action: primaryAction) {
+        Button(action: switchPlayback) {
             HStack(spacing: OrbitTokens.Spacing.l) {
                 PlaylistArtwork(playlist: playlist, size: OrbitTokens.Size.rowArtwork)
                 VStack(alignment: .leading, spacing: 1) {
@@ -45,10 +41,14 @@ struct PlaylistRow: View {
                     subtitle(status)
                 }
                 Spacer(minLength: OrbitTokens.Spacing.s)
-                trailing(status)
-                    .frame(minWidth: 20)
+                HStack(spacing: OrbitTokens.Spacing.xxs) {
+                    indicator(status)
+                        .frame(minWidth: OrbitTokens.Size.playingIndicator)
+                    ShowTracksButton(playlist: playlist, action: showTracks)
+                }
             }
-            .padding(.horizontal, OrbitTokens.Spacing.m)
+            .padding(.leading, OrbitTokens.Spacing.m)
+            .padding(.trailing, OrbitTokens.Spacing.xs)
             .frame(height: OrbitTokens.Size.rowHeight)
         }
         .rowButton(isSelected: status.isCurrent)
@@ -57,15 +57,11 @@ struct PlaylistRow: View {
         .contextMenu { menu }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel(status))
-        .accessibilityHint(behavior == .browse ? "Shows its tracks" : "Plays this playlist")
+        .accessibilityHint("Plays this playlist")
         .accessibilityAddTraits(.isButton)
         .accessibilityAddTraits(status.isCurrent ? .isSelected : [])
         .accessibilityActions {
-            if behavior == .browse {
-                Button("Play", action: switchPlayback)
-            } else {
-                Button("Show Tracks", action: showTracks)
-            }
+            Button("Show Tracks", action: showTracks)
             Button(library.isPinned(playlist) ? "Unpin" : "Pin", action: togglePin)
             if isRecent {
                 Button("Remove from Recents") { library.removeRecent(playlist) }
@@ -99,8 +95,9 @@ struct PlaylistRow: View {
         .contentTransition(.opacity)
     }
 
+    // What the row says about playback, beside the chevron; hovering previews the click with a play glyph.
     @ViewBuilder
-    private func trailing(_ status: PlaylistRowStatus) -> some View {
+    private func indicator(_ status: PlaylistRowStatus) -> some View {
         if status.isPending {
             ProgressView()
                 .controlSize(.mini)
@@ -116,23 +113,6 @@ struct PlaylistRow: View {
                 .font(.system(size: OrbitTokens.Icon.regular, weight: .bold))
                 .foregroundStyle(theme.accent)
                 .transition(theme.reducesMotion ? .opacity : .scale.combined(with: .opacity))
-        } else if behavior == .browse {
-            HStack(spacing: OrbitTokens.Spacing.xs) {
-                if isHovered && !status.isCurrent {
-                    Button(action: switchPlayback) {
-                        Image(systemName: "play.fill")
-                    }
-                    .iconButton(diameter: 24, glyph: OrbitTokens.Icon.small)
-                    .help("Play \(playlist.name)")
-                    .accessibilityLabel("Play \(playlist.name)")
-                    .transition(.opacity)
-                } else if status.isCurrent {
-                    PlayingIndicator(isPlaying: status.isPlaying)
-                }
-                Image(systemName: "chevron.right")
-                    .font(.system(size: OrbitTokens.Icon.small - 1, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-            }
         } else if status.isCurrent {
             PlayingIndicator(isPlaying: status.isPlaying)
         } else if isHovered {
@@ -150,10 +130,8 @@ struct PlaylistRow: View {
 
     @ViewBuilder
     private var menu: some View {
-        Button(behavior == .browse ? "Play" : "Play Now", action: switchPlayback)
-        if behavior == .switchOnClick {
-            Button("Show Tracks", action: showTracks)
-        }
+        Button("Play", action: switchPlayback)
+        Button("Show Tracks", action: showTracks)
         Divider()
         if library.isPinned(playlist) {
             Button("Unpin", action: togglePin)
@@ -175,20 +153,8 @@ struct PlaylistRow: View {
         Button("Open in Spotify") { SpotifyApp.open(playlist.uri) }
     }
 
-    private func primaryAction() {
-        switch behavior {
-        case .switchOnClick:
-            switchPlayback()
-        case .browse:
-            withAnimation(theme.animation(OrbitTokens.Motion.navigate)) { navigator.push(.playlist(playlist)) }
-        }
-    }
-
     private func showTracks() {
-        withAnimation(theme.animation(OrbitTokens.Motion.navigate)) {
-            navigator.showLibrary(.playlists)
-            navigator.push(.playlist(playlist))
-        }
+        withAnimation(theme.animation(OrbitTokens.Motion.navigate)) { navigator.push(.playlist(playlist)) }
     }
 
     private func togglePin() {
@@ -198,8 +164,7 @@ struct PlaylistRow: View {
     }
 
     private func switchPlayback() {
-        let collapse: (() -> Void)? = preferences.collapsesAfterAction ? { [panel] in panel.collapse() } : nil
-        Task { await switcher.play(playlist, with: playback, thenCollapse: collapse) }
+        Task { await switcher.play(playlist, with: playback, thenCollapse: panel.collapseAfterAction(preferences)) }
     }
 
     private func movePinned(from index: Int, by offset: Int) {
@@ -217,6 +182,22 @@ struct PlaylistRow: View {
         if let failure = status.failure { parts.append("couldn't switch: \(failure.message)") }
         if status.isCurrent { parts.append(status.isPlaying ? "now playing" : "paused") }
         return parts.joined(separator: ", ")
+    }
+}
+
+// The row's second action: a full-size icon button, so opening a playlist is as easy to hit as playing it, and
+// quiet at rest, so the row still reads as one target that plays.
+private struct ShowTracksButton: View {
+    let playlist: Playlist
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "chevron.right")
+        }
+        .iconButton(glyph: OrbitTokens.Icon.small, recedesAtRest: true)
+        .help("Show Tracks")
+        .accessibilityLabel("Show tracks of \(playlist.name)")
     }
 }
 

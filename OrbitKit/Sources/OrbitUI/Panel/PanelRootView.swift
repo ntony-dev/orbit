@@ -230,26 +230,32 @@ public struct PanelRootView: View {
         if let query = debug.searchQuery { navigator.searchQuery = query }
         guard let screen = debug.screen else { return }
         switch screen {
-        case "picker": navigator.show(.picker)
-        case "library": navigator.showLibrary(.playlists)
-        case "liked": navigator.showLibrary(.liked)
-        case "queue": navigator.showLibrary(.queue)
-        case "search": navigator.showLibrary(.search)
-        case "devices": navigator.showsDevices = true
+        // Search is the library with a query; focusing its field would ask for key status, which a capture must
+        // never take.
+        case "library", "picker", "search": navigator.show(.library)
+        case "devices": navigator.drawer = .devices
+        case "queue": navigator.drawer = .queue
+        case "liked": openDebugPlaylist(LikedSongs.id)
         default:
-            if screen.hasPrefix("playlist:") {
-                let id = String(screen.dropFirst("playlist:".count))
-                navigator.showLibrary(.playlists)
-                if let playlist = stores.library.playlists.value?.first(where: { $0.id == id }) {
-                    navigator.push(.playlist(playlist))
-                } else {
-                    pendingDebugPlaylistID = id
-                }
-            }
+            if screen.hasPrefix("playlist:") { openDebugPlaylist(String(screen.dropFirst("playlist:".count))) }
         }
     }
 
     @State private var pendingDebugPlaylistID: String?
+
+    private func openDebugPlaylist(_ id: String) {
+        navigator.show(.library)
+        if let playlist = debugPlaylist(id) {
+            navigator.push(.playlist(playlist))
+        } else {
+            pendingDebugPlaylistID = id
+        }
+    }
+
+    private func debugPlaylist(_ id: String) -> Playlist? {
+        if id == LikedSongs.id { return LikedSongs.playlist(for: stores.account.profile, count: nil) }
+        return stores.library.playlists.value?.first { $0.id == id }
+    }
 
     private func runDebugSwitch() async {
         #if DEBUG
@@ -268,7 +274,7 @@ public struct PanelRootView: View {
         let step = Duration.seconds(2.5)
         try? await Task.sleep(for: step)
         if !panel.isExpanded { expandFromPill() }
-        for section in [PanelSection.picker, .library, .player] {
+        for section in [PanelSection.library, .player] {
             try? await Task.sleep(for: step)
             withAnimation(resolvedTheme.animation(OrbitTokens.Motion.navigate)) { navigator.show(section) }
         }
@@ -297,7 +303,7 @@ public struct PanelRootView: View {
         #if DEBUG
         if let id = pendingDebugPlaylistID {
             for _ in 0..<40 {
-                if let playlist = stores.library.playlists.value?.first(where: { $0.id == id }) {
+                if let playlist = debugPlaylist(id) {
                     navigator.push(.playlist(playlist))
                     break
                 }

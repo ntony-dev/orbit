@@ -44,6 +44,8 @@ enum OrbitTokens {
         static let primaryTransportButton: CGFloat = 46
         static let rowHeight: CGFloat = 46
         static let trackRowHeight: CGFloat = 40
+        // Song rows that lead with artwork: search results and the queue.
+        static let artworkTrackRowHeight: CGFloat = 42
         static let segmentHeight: CGFloat = 30
         static let fieldHeight: CGFloat = 30
         static let sliderTrack: CGFloat = 4
@@ -66,9 +68,11 @@ enum OrbitTokens {
         // Room an empty, loading or error state keeps inside a fitted list, so the message never looks cramped.
         static let listStateHeight: CGFloat = 196
         static let listEdgeFade: CGFloat = 20
-        static let chipHeight: CGFloat = 24
-        // The device list the player reveals under its volume row shows this many rows before it scrolls.
+        // The drawers the player reveals under its volume row show this many rows before they scroll.
         static let deviceListVisibleRows = 4
+        static let queueVisibleRows = 5
+        // The player does not fit to content: its controls fill this, and a drawer or notice adds to it.
+        static let playerHeight: CGFloat = 298
 
         static func pill(_ size: PillSize) -> CGSize {
             switch size {

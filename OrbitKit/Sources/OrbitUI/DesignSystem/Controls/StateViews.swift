@@ -178,15 +178,18 @@ struct SkeletonRows: View {
     }
 }
 
+// A section title, or with `isSubheading` a quieter label for a group inside a section (Spotify's songs, albums
+// and playlists under Search Spotify).
 struct SectionHeader: View {
     let title: String
     var trailing: String?
+    var isSubheading = false
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
-                .font(OrbitTokens.Typography.sectionHeading)
-                .foregroundStyle(.secondary)
+                .font(isSubheading ? OrbitTokens.Typography.caption : OrbitTokens.Typography.sectionHeading)
+                .foregroundStyle(isSubheading ? .tertiary : .secondary)
             Spacer(minLength: 0)
             if let trailing {
                 Text(trailing)
@@ -195,7 +198,7 @@ struct SectionHeader: View {
             }
         }
         .padding(.horizontal, OrbitTokens.Spacing.m)
-        .padding(.top, OrbitTokens.Spacing.m)
+        .padding(.top, isSubheading ? OrbitTokens.Spacing.xs : OrbitTokens.Spacing.m)
         .padding(.bottom, OrbitTokens.Spacing.xxs)
         .accessibilityAddTraits(.isHeader)
     }

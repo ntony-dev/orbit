@@ -6,7 +6,7 @@ import Testing
 struct CanvasPlanTests {
     let pill = CGSize(width: 272, height: 52)
     let player = CGSize(width: 344, height: 318)
-    let picker = CGSize(width: 344, height: 488)
+    let library = CGSize(width: 344, height: 488)
 
     @Test func growsBeforeExpandingAndShrinksAfter() {
         let collapsed = CanvasPlan.canvas(for: pill)
@@ -16,17 +16,17 @@ struct CanvasPlanTests {
     }
 
     @Test func keepsTheLargerCanvasWhileShrinking() {
-        let expanded = CanvasPlan.canvas(for: picker)
+        let expanded = CanvasPlan.canvas(for: library)
         #expect(CanvasPlan.during(current: expanded, target: player) == expanded)
         #expect(CanvasPlan.after(current: expanded, target: player) == CanvasPlan.canvas(for: player))
     }
 
     @Test func interruptedCollapseNeverClipsTheSurface() {
-        // Expanded to the picker, collapse starts, then a re-expansion to the player arrives mid-flight.
-        let expanded = CanvasPlan.canvas(for: picker)
+        // Expanded to the library, collapse starts, then a re-expansion to the player arrives mid-flight.
+        let expanded = CanvasPlan.canvas(for: library)
         let collapsing = CanvasPlan.during(current: expanded, target: pill)
         let reexpanding = CanvasPlan.during(current: collapsing, target: player)
-        #expect(reexpanding.height >= CanvasPlan.canvas(for: picker).height)
+        #expect(reexpanding.height >= CanvasPlan.canvas(for: library).height)
     }
 
     @Test func pillSizesClampTheSurfaceRadiusToACapsule() {
@@ -38,10 +38,12 @@ struct CanvasPlanTests {
 
 @MainActor
 struct PanelNavigatorTests {
+    let mix = Playlist(id: "a", name: "Mix", ownerName: "Ana", canReadItems: true)
+
     @Test func backStepsOutOneLayerAtATime() {
         let navigator = PanelNavigator()
-        navigator.showLibrary(.playlists)
-        navigator.push(.playlist(Playlist(id: "a", name: "Mix", ownerName: "Ana", canReadItems: true)))
+        navigator.show(.library)
+        navigator.push(.playlist(mix))
         #expect(navigator.depth == 2)
         #expect(navigator.back())
         #expect(navigator.section == .library && navigator.detail == nil)
@@ -50,37 +52,54 @@ struct PanelNavigatorTests {
         #expect(!navigator.back())
     }
 
-    @Test func theDeviceListIsALayerThatEscapeClosesFirst() {
-        let navigator = PanelNavigator()
-        navigator.showsDevices = true
-        #expect(navigator.depth == 1)
-        #expect(navigator.keyScreen == .player)
-        #expect(navigator.back())
-        #expect(!navigator.showsDevices)
-        #expect(navigator.section == .player)
-        #expect(!navigator.back())
+    @Test func aDrawerIsALayerThatEscapeClosesFirst() {
+        for drawer in [PlayerDrawer.devices, .queue] {
+            let navigator = PanelNavigator()
+            navigator.toggle(drawer)
+            #expect(navigator.depth == 1)
+            #expect(navigator.keyScreen == .player)
+            #expect(navigator.back())
+            #expect(navigator.drawer == nil)
+            #expect(navigator.section == .player)
+            #expect(!navigator.back())
+        }
     }
 
-    @Test func theDeviceListGrowsThePlayerOnlyWhileItShows() {
+    @Test func theSameButtonClosesItsDrawerAndTheOtherReplacesIt() {
+        let navigator = PanelNavigator()
+        navigator.toggle(.queue)
+        #expect(navigator.drawer == .queue)
+        navigator.toggle(.devices)
+        #expect(navigator.drawer == .devices, "only one drawer is open at a time")
+        navigator.close(.queue)
+        #expect(navigator.drawer == .devices, "a drawer only closes itself")
+        navigator.toggle(.devices)
+        #expect(navigator.drawer == nil)
+    }
+
+    @Test func aDrawerGrowsThePlayerByItsOwnHeightOnlyWhileItShows() {
         let navigator = PanelNavigator()
         let closed = navigator.screenSize.height
-        navigator.devicesHeight = 150
+        navigator.recordDrawerHeight(150, for: .devices)
+        navigator.recordDrawerHeight(230, for: .queue)
         #expect(navigator.screenSize.height == closed)
-        navigator.showsDevices = true
+        navigator.toggle(.devices)
         #expect(navigator.screenSize.height == closed + 150)
-        navigator.showsDevices = false
+        navigator.toggle(.queue)
+        #expect(navigator.screenSize.height == closed + 230)
+        navigator.toggle(.queue)
         #expect(navigator.screenSize.height == closed)
     }
 
-    @Test func leavingThePlayerClosesTheDeviceList() {
+    @Test func leavingThePlayerClosesItsDrawer() {
         let navigator = PanelNavigator()
-        navigator.showsDevices = true
-        navigator.show(.picker)
-        #expect(!navigator.showsDevices)
+        navigator.toggle(.queue)
+        navigator.show(.library)
+        #expect(navigator.drawer == nil)
         navigator.show(.player)
-        navigator.showsDevices = true
+        navigator.toggle(.devices)
         navigator.reset(to: .player)
-        #expect(!navigator.showsDevices)
+        #expect(navigator.drawer == nil)
         #expect(navigator.depth == 0)
     }
 
@@ -88,19 +107,38 @@ struct PanelNavigatorTests {
         let navigator = PanelNavigator()
         navigator.show(.library)
         #expect(navigator.isForward)
-        navigator.show(.picker)
+        navigator.show(.player)
         #expect(!navigator.isForward)
     }
 
-    @Test func externalDestinationsResetTheStack() {
+    @Test func thePickerDestinationOpensTheLibraryFromTheTop() {
         let navigator = PanelNavigator()
-        navigator.showLibrary(.playlists)
-        navigator.push(.playlist(Playlist(id: "a", name: "Mix", ownerName: "Ana", canReadItems: true)))
+        navigator.show(.library)
+        navigator.searchQuery = "night"
+        navigator.push(.playlist(mix))
         navigator.reset(to: .playlistPicker)
-        #expect(navigator.section == .picker && navigator.detail == nil)
+        #expect(navigator.section == .library && navigator.detail == nil)
+        #expect(navigator.searchQuery.isEmpty)
+        #expect(!navigator.wantsSearchFocus)
+    }
+
+    @Test func theSearchDestinationOpensTheLibraryWithItsFieldFocused() {
+        let navigator = PanelNavigator()
+        navigator.searchQuery = "night"
+        navigator.toggle(.devices)
         navigator.reset(to: .search)
-        #expect(navigator.section == .library && navigator.libraryTab == .search)
+        #expect(navigator.section == .library && navigator.detail == nil && navigator.drawer == nil)
         #expect(navigator.wantsSearchFocus)
+        #expect(navigator.searchQuery == "night")
+    }
+
+    @Test func glancingAtThePlayerKeepsTheQuery() {
+        let navigator = PanelNavigator()
+        navigator.show(.library)
+        navigator.searchQuery = "night"
+        navigator.show(.player)
+        navigator.show(.library)
+        #expect(navigator.searchQuery == "night")
     }
 
     @Test func everyScreenFitsTheCanvasWidth() {

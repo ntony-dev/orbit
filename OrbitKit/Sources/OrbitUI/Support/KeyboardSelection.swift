@@ -69,6 +69,7 @@ private struct KeyboardListNavigation: ViewModifier {
     var onOpen: ((String) -> Void)?
 
     @Environment(PanelState.self) private var panel
+    @Environment(PanelNavigator.self) private var navigator
     @FocusState private var isFocused: Bool
 
     func body(content: Content) -> some View {
@@ -82,9 +83,11 @@ private struct KeyboardListNavigation: ViewModifier {
             .onKeyPress(phases: [.down, .repeat], action: handle)
     }
 
-    // Takes only the list's share of the panel's key routing; Space, Escape and the rest go on to the panel.
+    // Takes only the list's share of the panel's key routing; Space, Escape, Left from a track list and the rest
+    // go on to the panel.
     private func handle(_ press: KeyPress) -> KeyPress.Result {
-        switch PanelKeyRouter.action(for: press.key, modifiers: press.modifiers, in: PanelKeyContext(screen: .list)) {
+        let context = PanelKeyContext(screen: navigator.keyScreen, hasSelection: selection.key != nil)
+        switch PanelKeyRouter.action(for: press.key, modifiers: press.modifiers, in: context) {
         case .moveSelection(let offset):
             guard !keys.isEmpty else { return .ignored }
             selection.move(offset, in: keys)

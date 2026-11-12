@@ -11,7 +11,7 @@ struct PillDestinationTests {
         #expect(PlaybackStatus.paused.pillDestination == .player)
     }
 
-    @Test func opensThePickerOnlyWhenAPlaylistCanBeStartedFromIt() {
+    @Test func opensTheLibraryOnlyWhenAPlaylistCanBeStartedFromIt() {
         #expect(PlaybackStatus.idle(canBrowse: true).pillDestination == .playlistPicker)
     }
 }

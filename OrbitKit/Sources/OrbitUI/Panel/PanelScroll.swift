@@ -5,8 +5,6 @@ import SwiftUI
 struct ListFit: Equatable {
     var top: CGFloat
     var content: CGFloat
-    // Set by the library on each tab's list, so an outgoing tab's list never sizes the surface for the new one.
-    var libraryTab: LibraryTab?
 
     var screenHeight: CGFloat { top + content }
 }
@@ -20,7 +18,6 @@ struct ListFitReporter {
 
 extension EnvironmentValues {
     @Entry var listFitReporter: ListFitReporter?
-    @Entry var listFitTab: LibraryTab?
 }
 
 extension CoordinateSpaceProtocol where Self == NamedCoordinateSpace {
@@ -38,7 +35,6 @@ struct PanelScroll<Content: View>: View {
 
     @Environment(\.orbitTheme) private var theme
     @Environment(\.listFitReporter) private var fitReporter
-    @Environment(\.listFitTab) private var fitTab
     @State private var contentHeight: CGFloat = 0
     @State private var top: CGFloat = 0
     @State private var edges = ScrollEdges(fadesTop: false, fadesBottom: false)
@@ -75,7 +71,7 @@ struct PanelScroll<Content: View>: View {
 
 extension PanelScroll {
     private var fit: ListFit? {
-        contentHeight > 0 ? ListFit(top: top, content: contentHeight, libraryTab: fitTab) : nil
+        contentHeight > 0 ? ListFit(top: top, content: contentHeight) : nil
     }
 }
 

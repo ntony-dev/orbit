@@ -19,7 +19,7 @@ struct DeviceListView: View {
         content
             .padding(.top, OrbitTokens.Spacing.s)
             .fixedSize(horizontal: false, vertical: true)
-            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { navigator.devicesHeight = $0 }
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { navigator.recordDrawerHeight($0, for: .devices) }
             .onChange(of: library.devices.value, initial: true) { _, value in
                 if let value { retained = value }
             }
@@ -34,13 +34,13 @@ struct DeviceListView: View {
         case .unknown:
             SkeletonRows(count: 2)
         case .signedOut:
-            DeviceListMessage(
+            DrawerMessage(
                 symbol: "person.crop.circle.badge.plus",
                 title: "Connect Spotify to switch devices",
                 action: StateAction(title: "Connect") { Task { await account.signIn() } }
             )
         case .authorizing:
-            DeviceListMessage(symbol: "safari", title: "Finish signing in in your browser")
+            DrawerMessage(symbol: "safari", title: "Finish signing in in your browser")
         case .signedIn:
             devices
         }
@@ -52,14 +52,14 @@ struct DeviceListView: View {
         case .idle, .loading:
             SkeletonRows(count: 2)
         case .failed(let error):
-            DeviceListMessage(
+            DrawerMessage(
                 symbol: "exclamationmark.triangle",
                 title: error.message,
                 detail: error.recoveryHint,
                 action: StateAction(title: "Try Again") { Task { await library.loadDevices() } }
             )
         case .loaded(let devices) where devices.isEmpty:
-            DeviceListMessage(
+            DrawerMessage(
                 symbol: "hifispeaker.2",
                 title: "No devices found",
                 detail: "Open Spotify on a phone, speaker or computer.",
@@ -112,13 +112,13 @@ struct DeviceListView: View {
     }
 
     private func close() {
-        withAnimation(theme.animation(OrbitTokens.Motion.content)) { navigator.showsDevices = false }
+        withAnimation(theme.animation(OrbitTokens.Motion.content)) { navigator.close(.devices) }
     }
 }
 
-// The list's empty, error and signed-out states: one compact line with an action, so the list never grows into
+// A drawer's empty, error and signed-out states: one compact line with an action, so a drawer never grows into
 // a full-screen message beneath the player.
-private struct DeviceListMessage: View {
+struct DrawerMessage: View {
     let symbol: String
     let title: String
     var detail: String?

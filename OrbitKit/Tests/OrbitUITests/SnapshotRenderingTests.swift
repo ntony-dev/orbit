@@ -30,25 +30,23 @@ struct SnapshotRenderingTests {
             try harness.renderPill(.compact, scheme: scheme, hovered: false, to: directory.appending(path: "pill-compact-\(suffix).png"))
             try harness.renderPill(.compact, scheme: scheme, hovered: true, to: directory.appending(path: "pill-compact-hover-\(suffix).png"))
             try harness.render(scheme: scheme, to: directory.appending(path: "player-\(suffix).png")) { _ in }
-            try harness.render(scheme: scheme, to: directory.appending(path: "picker-\(suffix).png")) { $0.show(.picker) }
-            try harness.render(scheme: scheme, to: directory.appending(path: "library-\(suffix).png")) { $0.showLibrary(.playlists) }
-            try harness.render(scheme: scheme, to: directory.appending(path: "liked-\(suffix).png")) { $0.showLibrary(.liked) }
-            try harness.render(scheme: scheme, to: directory.appending(path: "queue-\(suffix).png")) { $0.showLibrary(.queue) }
+            try harness.render(scheme: scheme, to: directory.appending(path: "library-\(suffix).png")) { $0.show(.library) }
             try harness.render(scheme: scheme, to: directory.appending(path: "search-\(suffix).png")) {
-                $0.showLibrary(.search)
+                $0.show(.library)
                 $0.searchQuery = "night"
             }
-            try harness.render(scheme: scheme, to: directory.appending(path: "devices-\(suffix).png")) { $0.showsDevices = true }
+            try harness.render(scheme: scheme, to: directory.appending(path: "devices-\(suffix).png")) { $0.drawer = .devices }
+            try harness.render(scheme: scheme, to: directory.appending(path: "queue-\(suffix).png")) { $0.drawer = .queue }
             try harness.render(scheme: scheme, to: directory.appending(path: "playlist-\(suffix).png")) {
-                $0.showLibrary(.playlists)
+                $0.show(.library)
                 $0.push(.playlist(MockFixtures.playlists[0]))
             }
             try harness.render(scheme: scheme, to: directory.appending(path: "playlist-restricted-\(suffix).png")) {
-                $0.showLibrary(.playlists)
+                $0.show(.library)
                 $0.push(.playlist(MockFixtures.playlists.first { !$0.canReadItems }!))
             }
         }
-        try harness.render(scheme: .dark, accent: .mint, to: directory.appending(path: "picker-mint-dark.png")) { $0.show(.picker) }
+        try harness.render(scheme: .dark, accent: .mint, to: directory.appending(path: "library-mint-dark.png")) { $0.show(.library) }
         try harness.render(scheme: .light, accent: .ice, to: directory.appending(path: "player-ice-light.png")) { _ in }
         try harness.render(scheme: .dark, contrast: .increased, to: directory.appending(path: "player-contrast-dark.png")) { _ in }
     }
@@ -59,7 +57,7 @@ struct SnapshotRenderingTests {
         for scheme in Self.schemes {
             let suffix = scheme == .dark ? "dark" : "light"
             try harness.render(scheme: scheme, to: directory.appending(path: "\(scenario.rawValue)-player-\(suffix).png")) { _ in }
-            try harness.render(scheme: scheme, to: directory.appending(path: "\(scenario.rawValue)-picker-\(suffix).png")) { $0.show(.picker) }
+            try harness.render(scheme: scheme, to: directory.appending(path: "\(scenario.rawValue)-library-\(suffix).png")) { $0.show(.library) }
             try harness.renderPill(.regular, scheme: scheme, hovered: false, to: directory.appending(path: "\(scenario.rawValue)-pill-\(suffix).png"))
         }
     }

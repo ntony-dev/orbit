@@ -51,6 +51,29 @@ struct PanelKeyRouterTests {
         #expect(route(.leftArrow, in: PanelKeyContext(screen: .other)) == .ignored)
     }
 
+    // The library's field almost always holds the caret, so Right Arrow must open the selected playlist from it,
+    // but only once the arrows have picked a row; before that it moves the caret through the query.
+    @Test func rightArrowOpensTheSelectedRowFromTheSearchFieldOnceOneIsPicked() {
+        #expect(route(.rightArrow, in: typedFilter) == .textEditing)
+        #expect(route(.rightArrow, in: emptyFilter) == .textEditing)
+        #expect(route(.rightArrow, in: PanelKeyContext(screen: .list, field: .filled, hasSelection: true)) == .openSelection)
+        #expect(route(.rightArrow, in: PanelKeyContext(screen: .list, field: .empty, hasSelection: true)) == .openSelection)
+        #expect(route(.leftArrow, in: PanelKeyContext(screen: .list, field: .filled, hasSelection: true)) == .textEditing)
+        #expect(route(.rightArrow, .shift, in: PanelKeyContext(screen: .list, field: .filled, hasSelection: true)) == .textEditing)
+    }
+
+    @Test func leftArrowAndEscapeStepBackFromATrackList() {
+        let tracks = PanelKeyContext(screen: .trackList)
+        #expect(route(.leftArrow, in: tracks) == .dismissLayer)
+        #expect(route(.escape, in: tracks) == .dismissLayer)
+        #expect(route(.leftArrow, .command, in: tracks) == .playback(.previousTrack))
+        #expect(route(.downArrow, in: tracks) == .moveSelection(by: 1))
+        #expect(route(.return, in: tracks) == .activateSelection)
+        #expect(route(.space, in: tracks) == .playback(.togglePlayback))
+        // Left never steps back out of the library itself, and never seeks from it.
+        #expect(route(.leftArrow, in: list) == .ignored)
+    }
+
     @Test func playbackShortcutsWorkOnListsWhenNoFieldHasFocus() {
         #expect(route(.space, in: list) == .playback(.togglePlayback))
         #expect(route(.leftArrow, .command, in: list) == .playback(.previousTrack))
@@ -79,6 +102,7 @@ struct PanelKeyRouterTests {
         #expect(PanelKeyAction.clearField.owner == .field)
         #expect(PanelKeyAction.moveSelection(by: 1).owner == .list)
         #expect(PanelKeyAction.activateSelection.owner == .list)
+        #expect(PanelKeyAction.openSelection.owner == .list)
         #expect(PanelKeyAction.dismissLayer.owner == .panel)
         #expect(PanelKeyAction.playback(.togglePlayback).owner == .panel)
         #expect(PanelKeyAction.openSettings.owner == .panel)
@@ -88,15 +112,15 @@ struct PanelKeyRouterTests {
     @Test func screensDeclareWhoOwnsTheArrows() {
         let navigator = PanelNavigator()
         #expect(navigator.keyScreen == .player)
-        navigator.show(.picker)
+        navigator.show(.library)
         #expect(navigator.keyScreen == .list)
-        navigator.showLibrary(.queue)
-        #expect(navigator.keyScreen == .other)
-        navigator.showLibrary(.liked)
-        #expect(navigator.keyScreen == .list)
+        navigator.push(.playlist(Playlist(id: "a", name: "Mix", ownerName: "Ana", canReadItems: true)))
+        #expect(navigator.keyScreen == .trackList)
         navigator.show(.player)
-        navigator.showsDevices = true
-        #expect(navigator.keyScreen == .player)
+        for drawer in [PlayerDrawer.devices, .queue] {
+            navigator.drawer = drawer
+            #expect(navigator.keyScreen == .player, "a drawer keeps Space and seeking working")
+        }
     }
 
     @MainActor

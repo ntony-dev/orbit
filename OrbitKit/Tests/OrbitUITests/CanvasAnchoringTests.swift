@@ -10,7 +10,7 @@ import Testing
 struct CanvasAnchoringTests {
     let pill = OrbitTokens.Size.pill(.regular)
     let player = CGSize(width: 344, height: 318)
-    let picker = CGSize(width: 344, height: 488)
+    let library = CGSize(width: 344, height: 488)
 
     // A spring with a little overshoot, as the morph uses, so the canvas must hold sizes past the target too.
     private func morph(from start: CGSize, to end: CGSize) -> [CGSize] {
@@ -59,8 +59,8 @@ struct CanvasAnchoringTests {
     func navigatingToATallerScreenKeepsTheAnchor(anchor: PanelAnchor) {
         var canvas = CGRect(origin: CGPoint(x: 900, y: 300), size: CanvasPlan.canvas(for: player))
         let fixed = PanelGeometry.point(of: surfaceOnScreen(player, canvas: canvas, anchor: anchor), at: anchor)
-        canvas = PanelGeometry.resize(canvas, to: CanvasPlan.during(current: canvas.size, target: picker), keeping: anchor)
-        for size in morph(from: player, to: picker) {
+        canvas = PanelGeometry.resize(canvas, to: CanvasPlan.during(current: canvas.size, target: library), keeping: anchor)
+        for size in morph(from: player, to: library) {
             #expect(same(PanelGeometry.point(of: surfaceOnScreen(size, canvas: canvas, anchor: anchor), at: anchor), fixed))
         }
     }

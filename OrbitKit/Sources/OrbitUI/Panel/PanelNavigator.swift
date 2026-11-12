@@ -4,16 +4,17 @@ import Observation
 import OrbitCore
 
 enum PanelSection: Int, CaseIterable, Hashable {
-    case player, picker, library
+    case player, library
 }
 
-enum LibraryTab: Hashable, CaseIterable {
-    case playlists, liked, queue, search
-}
-
-// A layer pushed over a section: playlist contents from the library.
+// A layer pushed over a section: a playlist's tracks, opened from the library.
 enum PanelDetail: Hashable {
     case playlist(Playlist)
+}
+
+// What the player reveals in place under its volume row. One at a time, so opening one closes the other.
+enum PlayerDrawer: Hashable {
+    case devices, queue
 }
 
 // Where the expanded surface is. Owned by the UI alone; the shell only expresses an initial destination through
@@ -23,35 +24,35 @@ enum PanelDetail: Hashable {
 final class PanelNavigator {
     private(set) var section: PanelSection = .player
     private(set) var detail: PanelDetail?
-    var libraryTab: LibraryTab = .playlists
-    // Kept here rather than in the search screen so leaving and returning keeps the query and its results.
+    // The library's search field. Kept here rather than in the library so glancing at the player and coming
+    // back keeps the query and its results.
     var searchQuery = ""
     // Which way the last move went, so the incoming screen slides in from the side the user is heading toward.
     private(set) var isForward = true
-    // The device list the player reveals in place under its volume row. It counts as a layer, so Escape closes it
-    // before anything else and the pointer never has to travel to a back button.
-    var showsDevices = false
-    // The revealed list's height, reported by the list, which the player's surface grows by while it shows.
-    var devicesHeight: CGFloat = 0
+    // A drawer counts as a layer, so Escape closes it before anything else and the pointer never has to travel
+    // to a back button.
+    var drawer: PlayerDrawer?
+    // Each drawer's height, reported by the drawer, which the player's surface grows by while it shows. Kept per
+    // drawer so the outgoing one, still fading, never sizes the surface for the incoming one.
+    private(set) var drawerHeights: [PlayerDrawer: CGFloat] = [:]
     // Set when the user (or a focus-search shortcut) asked to type a search. Taking focus makes the panel key, so
     // search never focuses merely because it appeared.
     var wantsSearchFocus = false
 
-    // The focused search or filter field, written only by that field. During a transition two fields can be on
-    // screen for a moment, so each clears only its own claim.
+    // The focused search field, written only by that field. During a transition two fields can be on screen for
+    // a moment, so each clears only its own claim.
     private(set) var textFieldFocus: TextFieldFocus?
     private var textFieldOwner: UUID?
 
     var depth: Int {
-        (section == .player ? 0 : 1) + (detail == nil ? 0 : 1) + (showsDevices ? 1 : 0)
+        (section == .player ? 0 : 1) + (detail == nil ? 0 : 1) + (drawer == nil ? 0 : 1)
     }
 
     var keyScreen: PanelKeyScreen {
         switch (detail, section) {
-        case (.playlist, _): .list
+        case (.playlist, _): .trackList
         case (nil, .player): .player
-        case (nil, .picker): .list
-        case (nil, .library): libraryTab == .queue ? .other : .list
+        case (nil, .library): .list
         }
     }
 
@@ -70,26 +71,35 @@ final class PanelNavigator {
         isForward = newSection.rawValue >= section.rawValue
         section = newSection
         detail = nil
-        showsDevices = false
+        drawer = nil
     }
 
     func push(_ newDetail: PanelDetail) {
         isForward = true
         detail = newDetail
-        showsDevices = false
+        drawer = nil
     }
 
-    func showLibrary(_ tab: LibraryTab) {
-        libraryTab = tab
-        show(.library)
+    // The same click that opened a drawer closes it; opening one replaces the other.
+    func toggle(_ newDrawer: PlayerDrawer) {
+        drawer = drawer == newDrawer ? nil : newDrawer
+    }
+
+    func close(_ closing: PlayerDrawer) {
+        if drawer == closing { drawer = nil }
+    }
+
+    func recordDrawerHeight(_ height: CGFloat, for drawer: PlayerDrawer) {
+        guard drawerHeights[drawer] != height else { return }
+        drawerHeights[drawer] = height
     }
 
     // Steps back one layer and reports whether there was one to leave.
     @discardableResult
     func back() -> Bool {
         isForward = false
-        if showsDevices {
-            showsDevices = false
+        if drawer != nil {
+            drawer = nil
             return true
         }
         if detail != nil {
@@ -103,17 +113,19 @@ final class PanelNavigator {
         return false
     }
 
+    // The picker destination is a request for the place to pick music, so it starts from the full list rather
+    // than a query left from earlier; the search destination keeps the query and puts the caret in it.
     func reset(to destination: PanelDestination) {
         isForward = true
         detail = nil
-        showsDevices = false
+        drawer = nil
         switch destination {
         case .player:
             section = .player
         case .playlistPicker:
-            section = .picker
+            searchQuery = ""
+            section = .library
         case .search:
-            libraryTab = .search
             section = .library
             wantsSearchFocus = true
         }
@@ -126,7 +138,7 @@ final class PanelNavigator {
     var footerHeight: CGFloat = 0
 
     var fitKey: FitKey {
-        FitKey(section: section, detail: detail, libraryTab: section == .library && detail == nil ? libraryTab : nil)
+        FitKey(section: section, detail: detail)
     }
 
     func recordFit(_ height: CGFloat, for key: FitKey) {
@@ -136,13 +148,14 @@ final class PanelNavigator {
 
     // The surface size for the current screen: its fitted height when it has reported one, otherwise the
     // fixed height of the first pass, which is also the ceiling for screens that cannot fit (the player), plus
-    // the device list while the player shows it.
+    // the open drawer while the player shows one.
     var screenSize: CGSize {
         let height = Self.fittedHeight(
             natural: fittedHeights[fitKey].map { $0 + footerHeight },
             fallback: Self.height(section: section, detail: detail)
         )
-        return CGSize(width: OrbitTokens.Size.expandedWidth, height: height + (showsDevices ? devicesHeight : 0))
+        let drawerHeight = drawer.flatMap { drawerHeights[$0] } ?? 0
+        return CGSize(width: OrbitTokens.Size.expandedWidth, height: height + drawerHeight)
     }
 
     static func fittedHeight(natural: CGFloat?, fallback: CGFloat) -> CGFloat {
@@ -153,8 +166,7 @@ final class PanelNavigator {
     static func height(section: PanelSection, detail: PanelDetail?) -> CGFloat {
         if case .playlist = detail { return 540 }
         switch section {
-        case .player: return 318
-        case .picker: return 488
+        case .player: return OrbitTokens.Size.playerHeight
         case .library: return 540
         }
     }
@@ -163,5 +175,4 @@ final class PanelNavigator {
 struct FitKey: Hashable {
     let section: PanelSection
     let detail: PanelDetail?
-    let libraryTab: LibraryTab?
 }

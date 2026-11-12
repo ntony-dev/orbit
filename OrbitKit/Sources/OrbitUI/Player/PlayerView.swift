@@ -20,19 +20,24 @@ struct PlayerView: View {
             if status.hasTrack {
                 VStack(spacing: 0) {
                     NowPlayingHeader()
-                        .padding(.top, OrbitTokens.Spacing.m)
+                        .padding(.top, OrbitTokens.Spacing.s)
                     SeekBar()
-                        .padding(.top, OrbitTokens.Spacing.l)
+                        .padding(.top, OrbitTokens.Spacing.m + OrbitTokens.Spacing.xxs)
                     TransportRow()
                         .padding(.top, OrbitTokens.Spacing.xs)
                     VolumeRow()
                         .padding(.top, OrbitTokens.Spacing.m)
                 }
                 .padding(.horizontal, OrbitTokens.Spacing.xl)
-                if navigator.showsDevices {
+                if navigator.drawer == .devices {
                     DeviceListView()
                         .padding(.horizontal, OrbitTokens.Spacing.m)
-                        .transition(devicesTransition)
+                        .transition(drawerTransition)
+                }
+                if navigator.drawer == .queue {
+                    QueueListView()
+                        .padding(.horizontal, OrbitTokens.Spacing.m)
+                        .transition(drawerTransition)
                 }
                 PlayerNotice()
                     .padding(.horizontal, OrbitTokens.Spacing.l)
@@ -50,9 +55,9 @@ struct PlayerView: View {
         .panelKeyFocusTarget()
     }
 
-    // The list fades in while the surface grows to make room for it, settling a few points down as if it slid
+    // A drawer fades in while the surface grows to make room for it, settling a few points down as if it slid
     // out from under the volume row.
-    private var devicesTransition: AnyTransition {
+    private var drawerTransition: AnyTransition {
         let fadeOut = AnyTransition.opacity.animation(theme.animation(OrbitTokens.Motion.screenFadeOut))
         guard !theme.reducesMotion else { return .asymmetric(insertion: .opacity, removal: fadeOut) }
         return .asymmetric(insertion: .opacity.combined(with: .offset(y: -OrbitTokens.Spacing.s)), removal: fadeOut)
@@ -94,8 +99,8 @@ struct PlayerView: View {
                 title: "Nothing playing",
                 message: canBrowse ? "Pick a playlist to start listening." : "Start something in Spotify, or connect your account to pick a playlist here.",
                 actions: canBrowse
-                    ? [StateAction(title: "Choose a Playlist", symbol: "music.note.list") {
-                        withAnimation(theme.animation(OrbitTokens.Motion.navigate)) { navigator.show(.picker) }
+                    ? [StateAction(title: "Choose a Playlist", symbol: "square.stack") {
+                        withAnimation(theme.animation(OrbitTokens.Motion.navigate)) { navigator.show(.library) }
                     }]
                     : [StateAction(title: "Connect Spotify") { Task { await account.signIn() } }]
             )
@@ -105,8 +110,8 @@ struct PlayerView: View {
     }
 }
 
-// The playing context names where the music comes from and doubles as the way into the playlist picker, so it
-// brightens and shows a chevron on hover like any other link.
+// The playing context names where the music comes from and doubles as the way into the library, so it brightens
+// and shows a chevron on hover like any other link.
 private struct ContextLabel: View {
     let snapshot: PlaybackSnapshot
 
@@ -117,7 +122,7 @@ private struct ContextLabel: View {
     var body: some View {
         if let context = snapshot.context, snapshot.track != nil {
             Button {
-                withAnimation(theme.animation(OrbitTokens.Motion.navigate)) { navigator.show(.picker) }
+                withAnimation(theme.animation(OrbitTokens.Motion.navigate)) { navigator.show(.library) }
             } label: {
                 HStack(spacing: OrbitTokens.Spacing.s) {
                     Image(systemName: "music.note.list")
@@ -140,7 +145,7 @@ private struct ContextLabel: View {
             .animation(theme.animation(OrbitTokens.Motion.hover), value: isHovered)
             .help("Switch playlists")
             .accessibilityLabel("Playing from \(context.name ?? "Spotify")")
-            .accessibilityHint("Opens the playlist picker")
+            .accessibilityHint("Opens your library")
         } else {
             Text("Orbit")
                 .font(OrbitTokens.Typography.captionEmphasized)
@@ -268,7 +273,11 @@ private struct SeekBar: View {
         TimelineView(.animation(minimumInterval: OrbitTokens.Motion.progressInterval, paused: !snapshot.isPlaying || isScrubbing)) { context in
             let position = scrubFraction.map { $0 * duration } ?? snapshot.position(at: context.date)
             let fraction = duration > 0 ? position / duration : 0
-            VStack(spacing: OrbitTokens.Spacing.xxs) {
+            // Elapsed and remaining sit at the ends of the slider's row. Each keeps the width of the widest time
+            // the track can show, in the emphasized weight, so the slider never shifts as digits change or while
+            // the time being chosen brightens during a scrub.
+            HStack(spacing: OrbitTokens.Spacing.m) {
+                TimeLabel(text: Formatting.time(position), widest: Self.widest(duration), alignment: .leading, isEmphasized: isScrubbing)
                 OrbitSlider(
                     value: fraction,
                     onScrub: { scrubFraction = $0 },
@@ -285,20 +294,20 @@ private struct SeekBar: View {
                     step: duration > 0 ? PlayerKeyCommand.seekStep / duration : 0.05
                 )
                 .disabled(!canSeek)
-                // While scrubbing, the time being chosen brightens so the eye has one number to follow.
-                HStack {
-                    Text(Formatting.time(position))
-                        .font(isScrubbing ? OrbitTokens.Typography.timecodeEmphasized : OrbitTokens.Typography.timecode)
-                        .foregroundStyle(isScrubbing ? .primary : .secondary)
-                    Spacer()
-                    Text("-" + Formatting.time(max(0, duration - position)))
-                        .font(OrbitTokens.Typography.timecode)
-                        .foregroundStyle(.secondary)
-                }
-                .animation(theme.animation(OrbitTokens.Motion.hover), value: isScrubbing)
-                .accessibilityHidden(true)
+                TimeLabel(
+                    text: "-" + Formatting.time(max(0, duration - position)),
+                    widest: "-" + Self.widest(duration),
+                    alignment: .trailing,
+                    isEmphasized: false
+                )
             }
+            .animation(theme.animation(OrbitTokens.Motion.hover), value: isScrubbing)
         }
+    }
+
+    // The track's length with every digit zeroed: as wide as any time it can show, in monospaced digits.
+    static func widest(_ duration: TimeInterval) -> String {
+        String(Formatting.time(duration).map { $0.isNumber ? "0" : $0 })
     }
 
     static func spoken(_ interval: TimeInterval) -> String {
@@ -360,8 +369,8 @@ private struct TransportRow: View {
     }
 }
 
-// A full-width volume slider with the device button at its end, as in Spotify: the slider gets the row, and the
-// device stays one click away without its name taking room.
+// A full-width volume slider with the queue and device buttons at its end, as in Spotify: the slider gets the
+// row, and what plays next and where it plays stay one click away without taking room.
 private struct VolumeRow: View {
     @Environment(PlaybackCoordinator.self) private var playback
     @State private var draft: Double?
@@ -389,7 +398,10 @@ private struct VolumeRow: View {
             )
             .disabled(!canSetVolume)
             .help(canSetVolume ? "Volume" : "This device doesn't support volume control")
-            DeviceButton(device: snapshot.device)
+            HStack(spacing: OrbitTokens.Spacing.xxs) {
+                QueueButton()
+                DeviceButton(device: snapshot.device)
+            }
         }
     }
 
@@ -421,35 +433,93 @@ private struct VolumeRow: View {
     }
 }
 
-// Shows and hides the device list in place, taking the accent while the list is open, so the same click that
-// opened it closes it. The glyph is the current device's kind; its name is in the tooltip, the spoken value and
-// the list itself. It pulls out by the glyph's side bearing so the glyph, not its hover circle, lines up with the
-// end of the seek bar above.
-private struct DeviceButton: View {
-    let device: PlaybackDevice?
+private struct TimeLabel: View {
+    let text: String
+    let widest: String
+    let alignment: Alignment
+    let isEmphasized: Bool
+
+    var body: some View {
+        ZStack(alignment: alignment) {
+            Text(widest)
+                .font(OrbitTokens.Typography.timecodeEmphasized)
+                .hidden()
+            // While scrubbing, the time being chosen brightens so the eye has one number to follow.
+            Text(text)
+                .font(isEmphasized ? OrbitTokens.Typography.timecodeEmphasized : OrbitTokens.Typography.timecode)
+                .foregroundStyle(isEmphasized ? .primary : .secondary)
+        }
+        .fixedSize()
+        .accessibilityHidden(true)
+    }
+}
+
+// Shows and hides a drawer in place, taking the accent while it is open, so the same click that opened it closes
+// it. Opening one drawer closes the other.
+private struct DrawerToggle: View {
+    let drawer: PlayerDrawer
+    let symbol: String
+    let label: String
+    let help: (Bool) -> String
+    var value: String?
+    let hint: (Bool) -> String
+    let identifier: String
 
     @Environment(PanelNavigator.self) private var navigator
     @Environment(\.orbitTheme) private var theme
 
-    private static let diameter = OrbitTokens.Size.iconButton
-    private static let glyph = OrbitTokens.Icon.regular + 1
+    static let diameter = OrbitTokens.Size.iconButton
+    static let glyph = OrbitTokens.Icon.regular + 1
 
     var body: some View {
-        let isOpen = navigator.showsDevices
+        let isOpen = navigator.drawer == drawer
         Button {
-            withAnimation(theme.animation(OrbitTokens.Motion.content)) { navigator.showsDevices.toggle() }
+            withAnimation(theme.animation(OrbitTokens.Motion.content)) { navigator.toggle(drawer) }
         } label: {
-            Image(systemName: device?.kind.symbol ?? "hifispeaker")
+            Image(systemName: symbol)
                 .contentTransition(.identity)
         }
         .iconButton(diameter: Self.diameter, glyph: Self.glyph, isOn: isOpen, isToggle: true, showsOnIndicator: false)
-        .padding(.trailing, -(Self.diameter - Self.glyph) / 2)
-        .help(DeviceButton.help(device: device, isOpen: isOpen))
-        .accessibilityLabel("Devices")
-        .accessibilityValue(device.map { "Playing on \($0.name)" } ?? "No device")
-        .accessibilityHint(isOpen ? "Hides the device list" : "Shows Spotify Connect devices")
+        .help(help(isOpen))
+        .accessibilityLabel(label)
+        .accessibilityValue(value ?? "")
+        .accessibilityHint(hint(isOpen))
         .accessibilityAddTraits(isOpen ? .isSelected : [])
-        .accessibilityIdentifier("orbit.devices")
+        .accessibilityIdentifier(identifier)
+    }
+}
+
+// The songs coming up, revealed under the volume row.
+private struct QueueButton: View {
+    var body: some View {
+        DrawerToggle(
+            drawer: .queue,
+            symbol: "list.bullet",
+            label: "Queue",
+            help: { $0 ? "Hide queue" : "Show what plays next" },
+            hint: { $0 ? "Hides the queue" : "Shows the songs coming up" },
+            identifier: "orbit.queue"
+        )
+    }
+}
+
+// The glyph is the current device's kind; its name is in the tooltip, the spoken value and the list itself. It
+// pulls out by the glyph's side bearing so the glyph, not its hover circle, lines up with the end of the seek row
+// above.
+private struct DeviceButton: View {
+    let device: PlaybackDevice?
+
+    var body: some View {
+        DrawerToggle(
+            drawer: .devices,
+            symbol: device?.kind.symbol ?? "hifispeaker",
+            label: "Devices",
+            help: { DeviceButton.help(device: device, isOpen: $0) },
+            value: device.map { "Playing on \($0.name)" } ?? "No device",
+            hint: { $0 ? "Hides the device list" : "Shows Spotify Connect devices" },
+            identifier: "orbit.devices"
+        )
+        .padding(.trailing, -(DrawerToggle.diameter - DrawerToggle.glyph) / 2)
     }
 
     static func help(device: PlaybackDevice?, isOpen: Bool) -> String {
