@@ -135,6 +135,23 @@ struct WebClientDecodingTests {
         #expect(query == ["limit": "5", "offset": "0", "additional_types": "track,episode"])
     }
 
+    @Test func playlistIDsAreEscapedOnceAndStayInsideTheirPathSegment() async throws {
+        let harness = try await Harness()
+        harness.router.on("GET /playlists/a b/items", json: Fixtures.playlistItems)
+        harness.router.on("GET /playlists/x/../../me/items", json: Fixtures.playlistItems)
+        _ = try await harness.client.playlistItems(playlistID: "a b", page: PageRequest())
+        _ = try await harness.client.playlistItems(playlistID: "x/../../me", page: PageRequest())
+        let urls = harness.apiRequests.map { $0.url!.absoluteString.components(separatedBy: "?")[0] }
+        #expect(urls == [
+            "https://api.spotify.com/v1/playlists/a%20b/items",
+            "https://api.spotify.com/v1/playlists/x%2F..%2F..%2Fme/items",
+        ])
+        for id in ["", ".", ".."] {
+            await #expect(throws: OrbitError.notFound) { try await harness.client.playlistItems(playlistID: id, page: PageRequest()) }
+        }
+        #expect(harness.apiRequests.count == 2)
+    }
+
     @Test func savedTracksAndClampedPaging() async throws {
         let harness = try await Harness()
         harness.router.on("GET /me/tracks", json: Fixtures.savedTracks)

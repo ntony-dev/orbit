@@ -34,7 +34,9 @@ struct APIRequest: Sendable {
     }
 
     func urlRequest(token: String) -> URLRequest {
-        var components = URLComponents(url: Self.baseURL.appending(path: path), resolvingAgainstBaseURL: false)!
+        // `path` is already percent-encoded by `pathSegment`; URL.appending(path:) would encode it a second time.
+        var components = URLComponents(url: Self.baseURL, resolvingAgainstBaseURL: false)!
+        components.percentEncodedPath += path
         if !query.isEmpty { components.percentEncodedQuery = FormEncoding.encode(query) }
         var request = URLRequest(url: components.url!)
         request.httpMethod = method.rawValue
@@ -50,7 +52,9 @@ struct APIRequest: Sendable {
         return request
     }
 
-    static func pathSegment(_ value: String) -> String {
-        FormEncoding.escape(value)
+    // nil for values that would not stay one segment: empty, or a dot segment that resolves to the parent path.
+    static func pathSegment(_ value: String) -> String? {
+        guard !["", ".", ".."].contains(value) else { return nil }
+        return FormEncoding.escape(value)
     }
 }

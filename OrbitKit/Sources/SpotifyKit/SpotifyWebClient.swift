@@ -59,9 +59,10 @@ public actor SpotifyWebClient: SpotifyAPI {
     }
 
     public func playlistItems(playlistID: String, page: PageRequest) async throws(OrbitError) -> Page<Track> {
+        guard let segment = APIRequest.pathSegment(playlistID) else { throw .notFound }
         let request = APIRequest(
             .get,
-            "/playlists/\(APIRequest.pathSegment(playlistID))/items",
+            "/playlists/\(segment)/items",
             query: Self.paging(page, maximum: 50) + [("additional_types", "track,episode")],
             kind: .playlistItems
         )
