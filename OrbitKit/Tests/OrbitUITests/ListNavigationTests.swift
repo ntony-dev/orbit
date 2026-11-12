@@ -129,7 +129,5 @@ struct PanelFitTests {
     @Test func screensThatDoNotFitKeepTheirFixedHeight() {
         let navigator = PanelNavigator()
         #expect(navigator.screenSize.height == PanelNavigator.height(section: .player, detail: nil))
-        navigator.push(.devices)
-        #expect(navigator.screenSize.height == PanelNavigator.height(section: .player, detail: .devices))
     }
 }

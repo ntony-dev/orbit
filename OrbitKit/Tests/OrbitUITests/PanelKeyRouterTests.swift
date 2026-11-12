@@ -95,8 +95,8 @@ struct PanelKeyRouterTests {
         navigator.showLibrary(.liked)
         #expect(navigator.keyScreen == .list)
         navigator.show(.player)
-        navigator.push(.devices)
-        #expect(navigator.keyScreen == .other)
+        navigator.showsDevices = true
+        #expect(navigator.keyScreen == .player)
     }
 
     @MainActor

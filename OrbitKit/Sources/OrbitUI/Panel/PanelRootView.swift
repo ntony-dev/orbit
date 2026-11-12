@@ -112,8 +112,8 @@ public struct PanelRootView: View {
            PlayerNoticeKind.current(account: stores.account, playback: stores.playback) != nil {
             size.height += PlayerNoticeKind.height
         }
-        // The account gate replaces every screen but the player and devices with one short message and an action.
-        if navigator.section != .player || navigator.detail != nil, navigator.detail != .devices {
+        // The account gate replaces every screen but the player with one short message and an action.
+        if navigator.section != .player || navigator.detail != nil {
             switch stores.account.authState {
             case .signedOut, .authorizing: size.height = OrbitTokens.Size.gatedHeight
             case .unknown, .signedIn: break
@@ -212,7 +212,7 @@ public struct PanelRootView: View {
         case "liked": navigator.showLibrary(.liked)
         case "queue": navigator.showLibrary(.queue)
         case "search": navigator.showLibrary(.search)
-        case "devices": navigator.push(.devices)
+        case "devices": navigator.showsDevices = true
         default:
             if screen.hasPrefix("playlist:") {
                 let id = String(screen.dropFirst("playlist:".count))

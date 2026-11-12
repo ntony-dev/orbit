@@ -44,3 +44,12 @@ struct PlaybackGlyphTests {
         #expect(pause.minX >= 0 && play.maxX <= geometry.box)
     }
 }
+
+@MainActor
+struct DeviceListLayoutTests {
+    @Test func rowsStackWithoutTrailingSpacing() {
+        #expect(DeviceListView.height(rows: 0) == 0)
+        #expect(DeviceListView.height(rows: 1) == OrbitTokens.Size.rowHeight)
+        #expect(DeviceListView.height(rows: 3) == 3 * OrbitTokens.Size.rowHeight + 2 * OrbitTokens.Spacing.xxs)
+    }
+}

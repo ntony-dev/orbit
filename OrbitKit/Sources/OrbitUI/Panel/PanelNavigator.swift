@@ -11,10 +11,9 @@ enum LibraryTab: Hashable, CaseIterable {
     case playlists, liked, queue, search
 }
 
-// A layer pushed over a section: playlist contents from the library, or the device list from the player.
+// A layer pushed over a section: playlist contents from the library.
 enum PanelDetail: Hashable {
     case playlist(Playlist)
-    case devices
 }
 
 // Where the expanded surface is. Owned by the UI alone; the shell only expresses an initial destination through
@@ -29,6 +28,11 @@ final class PanelNavigator {
     var searchQuery = ""
     // Which way the last move went, so the incoming screen slides in from the side the user is heading toward.
     private(set) var isForward = true
+    // The device list the player reveals in place under its volume row. It counts as a layer, so Escape closes it
+    // before anything else and the pointer never has to travel to a back button.
+    var showsDevices = false
+    // The revealed list's height, reported by the list, which the player's surface grows by while it shows.
+    var devicesHeight: CGFloat = 0
     // Set when the user (or a focus-search shortcut) asked to type a search. Taking focus makes the panel key, so
     // search never focuses merely because it appeared.
     var wantsSearchFocus = false
@@ -39,13 +43,12 @@ final class PanelNavigator {
     private var textFieldOwner: UUID?
 
     var depth: Int {
-        (section == .player ? 0 : 1) + (detail == nil ? 0 : 1)
+        (section == .player ? 0 : 1) + (detail == nil ? 0 : 1) + (showsDevices ? 1 : 0)
     }
 
     var keyScreen: PanelKeyScreen {
         switch (detail, section) {
         case (.playlist, _): .list
-        case (.devices, _): .other
         case (nil, .player): .player
         case (nil, .picker): .list
         case (nil, .library): libraryTab == .queue ? .other : .list
@@ -67,11 +70,13 @@ final class PanelNavigator {
         isForward = newSection.rawValue >= section.rawValue
         section = newSection
         detail = nil
+        showsDevices = false
     }
 
     func push(_ newDetail: PanelDetail) {
         isForward = true
         detail = newDetail
+        showsDevices = false
     }
 
     func showLibrary(_ tab: LibraryTab) {
@@ -83,6 +88,10 @@ final class PanelNavigator {
     @discardableResult
     func back() -> Bool {
         isForward = false
+        if showsDevices {
+            showsDevices = false
+            return true
+        }
         if detail != nil {
             detail = nil
             return true
@@ -97,6 +106,7 @@ final class PanelNavigator {
     func reset(to destination: PanelDestination) {
         isForward = true
         detail = nil
+        showsDevices = false
         switch destination {
         case .player:
             section = .player
@@ -125,12 +135,14 @@ final class PanelNavigator {
     }
 
     // The surface size for the current screen: its fitted height when it has reported one, otherwise the
-    // fixed height of the first pass, which is also the ceiling for screens that cannot fit (player, devices).
+    // fixed height of the first pass, which is also the ceiling for screens that cannot fit (the player), plus
+    // the device list while the player shows it.
     var screenSize: CGSize {
-        CGSize(width: OrbitTokens.Size.expandedWidth, height: Self.fittedHeight(
+        let height = Self.fittedHeight(
             natural: fittedHeights[fitKey].map { $0 + footerHeight },
             fallback: Self.height(section: section, detail: detail)
-        ))
+        )
+        return CGSize(width: OrbitTokens.Size.expandedWidth, height: height + (showsDevices ? devicesHeight : 0))
     }
 
     static func fittedHeight(natural: CGFloat?, fallback: CGFloat) -> CGFloat {
@@ -139,11 +151,7 @@ final class PanelNavigator {
     }
 
     static func height(section: PanelSection, detail: PanelDetail?) -> CGFloat {
-        switch detail {
-        case .playlist: return 540
-        case .devices: return 372
-        case nil: break
-        }
+        if case .playlist = detail { return 540 }
         switch section {
         case .player: return 318
         case .picker: return 488

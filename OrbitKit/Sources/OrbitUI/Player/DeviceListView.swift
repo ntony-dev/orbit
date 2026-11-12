@@ -2,73 +2,99 @@ import OrbitCore
 import OrbitEngine
 import SwiftUI
 
-// Spotify Connect devices. Restricted devices are listed but disabled with the reason, a transfer shows progress
-// on its row, and a failed transfer stays marked until the next attempt.
+// Spotify Connect devices, revealed in place under the player's volume row by the device button. Restricted
+// devices are listed but disabled with the reason, a transfer shows progress on its row, and a failed transfer
+// stays marked until the next attempt. Choosing a device closes the list once Spotify has moved; choosing the
+// current one simply closes it. The list reports its height so the surface grows by exactly that much.
 struct DeviceListView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(PlaybackCoordinator.self) private var playback
+    @Environment(AccountStore.self) private var account
+    @Environment(PanelNavigator.self) private var navigator
     @Environment(\.orbitTheme) private var theme
     @State private var failure: (deviceID: String, error: OrbitError)?
     @State private var retained: [PlaybackDevice]?
 
     var body: some View {
-        VStack(spacing: 0) {
-            PanelTopBar { BackTitle(title: "Devices", subtitle: "Choose where Spotify plays") }
-            AccountGate { content }
-        }
-        .panelKeyFocusTarget()
-        .onChange(of: library.devices.value, initial: true) { _, value in
-            if let value { retained = value }
-        }
-        .task { await library.loadDevices() }
+        content
+            .padding(.top, OrbitTokens.Spacing.s)
+            .fixedSize(horizontal: false, vertical: true)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { navigator.devicesHeight = $0 }
+            .onChange(of: library.devices.value, initial: true) { _, value in
+                if let value { retained = value }
+            }
+            .task { await library.loadDevices() }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Devices")
     }
 
     @ViewBuilder
     private var content: some View {
+        switch account.authState {
+        case .unknown:
+            SkeletonRows(count: 2)
+        case .signedOut:
+            DeviceListMessage(
+                symbol: "person.crop.circle.badge.plus",
+                title: "Connect Spotify to switch devices",
+                action: StateAction(title: "Connect") { Task { await account.signIn() } }
+            )
+        case .authorizing:
+            DeviceListMessage(symbol: "safari", title: "Finish signing in in your browser")
+        case .signedIn:
+            devices
+        }
+    }
+
+    @ViewBuilder
+    private var devices: some View {
         switch library.devices.retaining(retained) {
         case .idle, .loading:
-            SkeletonRows(count: 4)
-                .padding(.horizontal, OrbitTokens.Spacing.m)
-                .padding(.top, OrbitTokens.Spacing.m)
-                .frame(maxHeight: .infinity, alignment: .top)
+            SkeletonRows(count: 2)
         case .failed(let error):
-            StatusMessage(error: error) { Task { await library.loadDevices() } }
-                .frame(maxHeight: .infinity)
+            DeviceListMessage(
+                symbol: "exclamationmark.triangle",
+                title: error.message,
+                detail: error.recoveryHint,
+                action: StateAction(title: "Try Again") { Task { await library.loadDevices() } }
+            )
         case .loaded(let devices) where devices.isEmpty:
-            StatusMessage(
+            DeviceListMessage(
                 symbol: "hifispeaker.2",
                 title: "No devices found",
-                message: "Open Spotify on a phone, speaker or computer signed in to your account.",
-                actions: [StateAction(title: "Refresh", symbol: "arrow.clockwise", isProminent: false) {
-                    Task { await library.loadDevices() }
-                }]
+                detail: "Open Spotify on a phone, speaker or computer.",
+                action: StateAction(title: "Refresh") { Task { await library.loadDevices() } }
             )
-            .frame(maxHeight: .infinity)
         case .loaded(let devices):
-            ScrollView {
-                LazyVStack(spacing: OrbitTokens.Spacing.xxs) {
+            let rows = ScrollView {
+                VStack(spacing: OrbitTokens.Spacing.xxs) {
                     ForEach(devices) { device in
-                        DeviceRow(
-                            device: device,
-                            isActive: playback.snapshot.device.map { $0.id == device.id } ?? device.isActive,
-                            isPending: playback.pendingIntents.contains(.transfer(deviceID: device.id)),
-                            failure: failure?.deviceID == device.id ? failure?.error : nil
-                        ) {
-                            transfer(to: device)
-                        }
+                        row(device)
                     }
                 }
-                .padding(.horizontal, OrbitTokens.Spacing.m)
-                .padding(.top, OrbitTokens.Spacing.m)
             }
             .scrollEdgeEffectStyle(.soft, for: .vertical)
-            .safeAreaInset(edge: .bottom) {
-                Text("Devices appear here while Spotify is open on them.")
-                    .font(OrbitTokens.Typography.caption)
-                    .foregroundStyle(.tertiary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.bottom, OrbitTokens.Spacing.s)
+            if devices.count > OrbitTokens.Size.deviceListVisibleRows {
+                rows.frame(height: Self.height(rows: OrbitTokens.Size.deviceListVisibleRows))
+            } else {
+                rows.frame(height: Self.height(rows: devices.count)).scrollDisabled(true)
             }
+        }
+    }
+
+    static func height(rows: Int) -> CGFloat {
+        CGFloat(rows) * OrbitTokens.Size.rowHeight + CGFloat(max(0, rows - 1)) * OrbitTokens.Spacing.xxs
+    }
+
+    private func row(_ device: PlaybackDevice) -> some View {
+        let isActive = playback.snapshot.device.map { $0.id == device.id } ?? device.isActive
+        return DeviceRow(
+            device: device,
+            isActive: isActive,
+            isPending: playback.pendingIntents.contains(.transfer(deviceID: device.id)),
+            failure: failure?.deviceID == device.id ? failure?.error : nil
+        ) {
+            isActive ? close() : transfer(to: device)
         }
     }
 
@@ -79,9 +105,53 @@ struct DeviceListView: View {
             if let error = playback.lastError {
                 withAnimation(theme.animation(OrbitTokens.Motion.content)) { failure = (device.id, error) }
             } else {
+                close()
                 await library.loadDevices()
             }
         }
+    }
+
+    private func close() {
+        withAnimation(theme.animation(OrbitTokens.Motion.fit)) { navigator.showsDevices = false }
+    }
+}
+
+// The list's empty, error and signed-out states: one compact line with an action, so the list never grows into
+// a full-screen message beneath the player.
+private struct DeviceListMessage: View {
+    let symbol: String
+    let title: String
+    var detail: String?
+    var action: StateAction?
+
+    var body: some View {
+        HStack(spacing: OrbitTokens.Spacing.l) {
+            Image(systemName: symbol)
+                .font(.system(size: OrbitTokens.Icon.transport - 1, weight: .medium))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.secondary)
+                .frame(width: OrbitTokens.Size.rowArtwork)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(OrbitTokens.Typography.rowTitle)
+                    .lineLimit(2)
+                if let detail {
+                    Text(detail)
+                        .font(OrbitTokens.Typography.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+            if let action {
+                Button(action.title, action: action.perform)
+                    .capsuleButton()
+            }
+        }
+        .padding(.horizontal, OrbitTokens.Spacing.m)
+        .frame(minHeight: OrbitTokens.Size.rowHeight)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -130,8 +200,8 @@ private struct DeviceRow: View {
         }
         .rowButton(isSelected: isActive)
         .disabled(device.isRestricted || isPending)
-        .allowsHitTesting(!isActive)
         .accessibilityLabel("\(device.name), \(statusText)")
+        .accessibilityHint(isActive ? "Closes the device list" : "Plays on this device")
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 

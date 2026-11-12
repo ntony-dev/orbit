@@ -38,7 +38,7 @@ struct SnapshotRenderingTests {
                 $0.showLibrary(.search)
                 $0.searchQuery = "night"
             }
-            try harness.render(scheme: scheme, to: directory.appending(path: "devices-\(suffix).png")) { $0.push(.devices) }
+            try harness.render(scheme: scheme, to: directory.appending(path: "devices-\(suffix).png")) { $0.showsDevices = true }
             try harness.render(scheme: scheme, to: directory.appending(path: "playlist-\(suffix).png")) {
                 $0.showLibrary(.playlists)
                 $0.push(.playlist(MockFixtures.playlists[0]))

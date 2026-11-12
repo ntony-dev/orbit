@@ -41,13 +41,47 @@ struct PanelNavigatorTests {
     @Test func backStepsOutOneLayerAtATime() {
         let navigator = PanelNavigator()
         navigator.showLibrary(.playlists)
-        navigator.push(.devices)
+        navigator.push(.playlist(Playlist(id: "a", name: "Mix", ownerName: "Ana", canReadItems: true)))
         #expect(navigator.depth == 2)
         #expect(navigator.back())
         #expect(navigator.section == .library && navigator.detail == nil)
         #expect(navigator.back())
         #expect(navigator.section == .player)
         #expect(!navigator.back())
+    }
+
+    @Test func theDeviceListIsALayerThatEscapeClosesFirst() {
+        let navigator = PanelNavigator()
+        navigator.showsDevices = true
+        #expect(navigator.depth == 1)
+        #expect(navigator.keyScreen == .player)
+        #expect(navigator.back())
+        #expect(!navigator.showsDevices)
+        #expect(navigator.section == .player)
+        #expect(!navigator.back())
+    }
+
+    @Test func theDeviceListGrowsThePlayerOnlyWhileItShows() {
+        let navigator = PanelNavigator()
+        let closed = navigator.screenSize.height
+        navigator.devicesHeight = 150
+        #expect(navigator.screenSize.height == closed)
+        navigator.showsDevices = true
+        #expect(navigator.screenSize.height == closed + 150)
+        navigator.showsDevices = false
+        #expect(navigator.screenSize.height == closed)
+    }
+
+    @Test func leavingThePlayerClosesTheDeviceList() {
+        let navigator = PanelNavigator()
+        navigator.showsDevices = true
+        navigator.show(.picker)
+        #expect(!navigator.showsDevices)
+        navigator.show(.player)
+        navigator.showsDevices = true
+        navigator.reset(to: .player)
+        #expect(!navigator.showsDevices)
+        #expect(navigator.depth == 0)
     }
 
     @Test func directionFollowsSectionOrder() {
@@ -60,8 +94,8 @@ struct PanelNavigatorTests {
 
     @Test func externalDestinationsResetTheStack() {
         let navigator = PanelNavigator()
-        navigator.showLibrary(.queue)
-        navigator.push(.devices)
+        navigator.showLibrary(.playlists)
+        navigator.push(.playlist(Playlist(id: "a", name: "Mix", ownerName: "Ana", canReadItems: true)))
         navigator.reset(to: .playlistPicker)
         #expect(navigator.section == .picker && navigator.detail == nil)
         navigator.reset(to: .search)
@@ -72,7 +106,6 @@ struct PanelNavigatorTests {
     @Test func everyScreenFitsTheCanvasWidth() {
         let sizes = PanelSection.allCases.map { PanelNavigator.height(section: $0, detail: nil) }
         #expect(sizes.allSatisfy { $0 > OrbitTokens.Size.pill(.regular).height })
-        #expect(PanelNavigator.height(section: .player, detail: .devices) > PanelNavigator.height(section: .player, detail: nil))
     }
 }
 

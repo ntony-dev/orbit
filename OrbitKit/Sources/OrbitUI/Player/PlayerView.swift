@@ -29,6 +29,11 @@ struct PlayerView: View {
                         .padding(.top, OrbitTokens.Spacing.m)
                 }
                 .padding(.horizontal, OrbitTokens.Spacing.xl)
+                if navigator.showsDevices {
+                    DeviceListView()
+                        .padding(.horizontal, OrbitTokens.Spacing.m)
+                        .transition(devicesTransition)
+                }
                 PlayerNotice()
                     .padding(.horizontal, OrbitTokens.Spacing.l)
                     .padding(.top, OrbitTokens.Spacing.m)
@@ -43,6 +48,14 @@ struct PlayerView: View {
         }
         .animation(theme.animation(OrbitTokens.Motion.content), value: status)
         .panelKeyFocusTarget()
+    }
+
+    // The list fades in while the surface grows to make room for it, settling a few points down as if it slid
+    // out from under the volume row.
+    private var devicesTransition: AnyTransition {
+        let fadeOut = AnyTransition.opacity.animation(theme.animation(OrbitTokens.Motion.screenFadeOut))
+        guard !theme.reducesMotion else { return .asymmetric(insertion: .opacity, removal: fadeOut) }
+        return .asymmetric(insertion: .opacity.combined(with: .offset(y: -OrbitTokens.Spacing.s)), removal: fadeOut)
     }
 
     @ViewBuilder
@@ -347,10 +360,10 @@ private struct TransportRow: View {
     }
 }
 
+// A full-width volume slider with the device button at its end, as in Spotify: the slider gets the row, and the
+// device stays one click away without its name taking room.
 private struct VolumeRow: View {
     @Environment(PlaybackCoordinator.self) private var playback
-    @Environment(PanelNavigator.self) private var navigator
-    @Environment(\.orbitTheme) private var theme
     @State private var draft: Double?
     @State private var lastSent = ContinuousClock.now
 
@@ -376,9 +389,7 @@ private struct VolumeRow: View {
             )
             .disabled(!canSetVolume)
             .help(canSetVolume ? "Volume" : "This device doesn't support volume control")
-            DeviceChip(device: snapshot.device) {
-                withAnimation(theme.animation(OrbitTokens.Motion.navigate)) { navigator.push(.devices) }
-            }
+            DeviceButton(device: snapshot.device)
         }
     }
 
@@ -410,62 +421,41 @@ private struct VolumeRow: View {
     }
 }
 
-private struct DeviceChip: View {
+// Shows and hides the device list in place, taking the accent while the list is open, so the same click that
+// opened it closes it. The glyph is the current device's kind; its name is in the tooltip, the spoken value and
+// the list itself. It pulls out by the glyph's side bearing so the glyph, not its hover circle, lines up with the
+// end of the seek bar above.
+private struct DeviceButton: View {
     let device: PlaybackDevice?
-    let action: () -> Void
 
+    @Environment(PanelNavigator.self) private var navigator
     @Environment(\.orbitTheme) private var theme
-    @State private var isHovered = false
+
+    private static let diameter = OrbitTokens.Size.iconButton
+    private static let glyph = OrbitTokens.Icon.regular + 1
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: OrbitTokens.Spacing.xs + 1) {
-                Image(systemName: device?.kind.symbol ?? "hifispeaker")
-                    .font(.system(size: OrbitTokens.Icon.small, weight: .semibold))
-                Text(device?.name ?? "Devices")
-                    .font(OrbitTokens.Typography.caption)
-                    .lineLimit(1)
-                    .frame(maxWidth: 92, alignment: .leading)
-                    .fixedSize(horizontal: true, vertical: false)
-            }
-            .foregroundStyle(isHovered ? .primary : .secondary)
-            .padding(.horizontal, OrbitTokens.Spacing.m)
-            .frame(height: OrbitTokens.Size.chipHeight)
-            .background {
-                Capsule().fill(isHovered ? OrbitPalette.hoverFill(contrast: theme.contrast) : OrbitPalette.quietFill(contrast: theme.contrast))
-            }
-            .contentShape(Capsule())
+        let isOpen = navigator.showsDevices
+        Button {
+            withAnimation(theme.animation(OrbitTokens.Motion.fit)) { navigator.showsDevices.toggle() }
+        } label: {
+            Image(systemName: device?.kind.symbol ?? "hifispeaker")
+                .contentTransition(.identity)
         }
-        .buttonStyle(DeviceChipStyle())
-        .focusEffectDisabled()
-        .onHover { isHovered = $0 }
-        .animation(theme.animation(OrbitTokens.Motion.hover), value: isHovered)
-        .help("Choose where Spotify plays")
-        .accessibilityLabel("Playing on \(device?.name ?? "an unknown device")")
-        .accessibilityHint("Shows Spotify Connect devices")
+        .iconButton(diameter: Self.diameter, glyph: Self.glyph, isOn: isOpen, isToggle: true, showsOnIndicator: false)
+        .padding(.trailing, -(Self.diameter - Self.glyph) / 2)
+        .help(DeviceButton.help(device: device, isOpen: isOpen))
+        .accessibilityLabel("Devices")
+        .accessibilityValue(device.map { "Playing on \($0.name)" } ?? "No device")
+        .accessibilityHint(isOpen ? "Hides the device list" : "Shows Spotify Connect devices")
+        .accessibilityAddTraits(isOpen ? .isSelected : [])
+        .accessibilityIdentifier("orbit.devices")
     }
-}
 
-// Plain content with a press dip and the shared accent focus ring, since `.plain` draws neither.
-private struct DeviceChipStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        DeviceChipBody(configuration: configuration)
-    }
-}
-
-private struct DeviceChipBody: View {
-    let configuration: ButtonStyleConfiguration
-
-    @Environment(\.orbitTheme) private var theme
-    @Environment(\.isFocused) private var isFocused
-
-    var body: some View {
-        configuration.label
-            .overlay {
-                if isFocused { Capsule().strokeBorder(theme.accent, lineWidth: 2).padding(-2) }
-            }
-            .opacity(configuration.isPressed ? 0.7 : 1)
-            .animation(theme.animation(OrbitTokens.Motion.press), value: configuration.isPressed)
+    static func help(device: PlaybackDevice?, isOpen: Bool) -> String {
+        if isOpen { return "Hide devices" }
+        guard let device else { return "Choose where Spotify plays" }
+        return "Playing on \(device.name) · Choose where Spotify plays"
     }
 }
 

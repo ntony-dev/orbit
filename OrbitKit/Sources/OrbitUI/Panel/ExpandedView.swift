@@ -55,7 +55,6 @@ struct ExpandedView: View {
     private var screen: some View {
         switch (navigator.detail, navigator.section) {
         case (.playlist(let playlist), _): PlaylistDetailView(playlist: playlist)
-        case (.devices, _): DeviceListView()
         case (nil, .player): PlayerView()
         case (nil, .picker): QuickPickerView()
         case (nil, .library): LibraryView()

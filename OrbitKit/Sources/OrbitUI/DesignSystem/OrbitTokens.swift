@@ -67,6 +67,8 @@ enum OrbitTokens {
         static let listStateHeight: CGFloat = 196
         static let listEdgeFade: CGFloat = 20
         static let chipHeight: CGFloat = 24
+        // The device list the player reveals under its volume row shows this many rows before it scrolls.
+        static let deviceListVisibleRows = 4
 
         static func pill(_ size: PillSize) -> CGSize {
             switch size {
