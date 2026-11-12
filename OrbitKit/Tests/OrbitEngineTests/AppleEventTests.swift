@@ -135,6 +135,13 @@ struct AppleEventTests {
         #expect(enrichments.withLock { $0 } == 1)
     }
 
+    // Callable synchronously from a detached task, so it is no longer bound to the main actor. The test process
+    // owns no window, so it is never reported as showing one.
+    @Test func theWindowCheckRunsOffTheMainActor() async {
+        let pid = getpid()
+        #expect(await Task.detached { SpotifyWindows.isShowingWindow(pid: pid) }.value == false)
+    }
+
     // Read-only check against the real app, opt-in because it needs Spotify running and Automation consent.
     @Test(.enabled(if: ProcessInfo.processInfo.environment["ORBIT_READ_REAL_SPOTIFY"] == "1"))
     func theRealAppsMillisecondDurationsAreReadAsSeconds() async throws {

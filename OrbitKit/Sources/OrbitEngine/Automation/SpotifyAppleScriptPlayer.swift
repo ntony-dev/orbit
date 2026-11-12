@@ -85,10 +85,11 @@ public struct SpotifyAppleScriptPlayer: LocalPlayer {
     public func setRepeating(_ enabled: Bool) async throws(OrbitError) { try await command(.setRepeating(enabled)) }
 
     // Neither call sends Spotify an Apple event or needs a permission: CGWindowList reports a window's owner, layer
-    // and bounds without Screen Recording, and hiding goes through NSRunningApplication.
+    // and bounds without Screen Recording, and hiding goes through NSRunningApplication. The window list is read
+    // off the main actor, since a playlist switch asks up to five times and the first read in a process is slow.
     public func isShowingWindow() async -> Bool {
         guard let pid = channel.runningProcessID() else { return false }
-        return await MainActor.run { SpotifyWindows.isShowingWindow(pid: pid) }
+        return await Task.detached(priority: .userInitiated) { SpotifyWindows.isShowingWindow(pid: pid) }.value
     }
 
     public func hide() async {
@@ -177,8 +178,8 @@ enum SpotifyWindows {
     // Spotify also owns small offscreen helper windows; its main window is far larger than this.
     private static let minimumSide: CGFloat = 100
 
-    // Only windows on screen in the current Space count: minimized and hidden windows are not on screen.
-    @MainActor
+    // Only windows on screen in the current Space count: minimized and hidden windows are not on screen. Both
+    // NSRunningApplication's properties and CGWindowList are safe to read from any thread.
     static func isShowingWindow(pid: pid_t) -> Bool {
         guard let app = NSRunningApplication(processIdentifier: pid), !app.isHidden else { return false }
         let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
