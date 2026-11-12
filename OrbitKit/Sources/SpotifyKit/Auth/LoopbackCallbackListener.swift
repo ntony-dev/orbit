@@ -34,6 +34,8 @@ private final class CallbackSession<Value: Sendable>: Sendable {
         var isFinished = false
         var listener: NWListener?
         var timer: Task<Void, Never>?
+        // Accepted and still open; closed with the session so none outlives it, such as a browser's spare connection.
+        var connections: [ObjectIdentifier: NWConnection] = [:]
         // Held back until the listener reports `.cancelled`, so the port is closed before `receive` returns.
         var pendingOutcome: Result<Value, OrbitError>?
     }
@@ -75,18 +77,20 @@ private final class CallbackSession<Value: Sendable>: Sendable {
     }
 
     func finish(_ outcome: Result<Value, OrbitError>) {
-        let resolved = state.withLock { state -> (NWListener?, Task<Void, Never>?)? in
+        let resolved = state.withLock { state -> (NWListener?, Task<Void, Never>?, [NWConnection])? in
             guard !state.isFinished else { return nil }
             state.isFinished = true
             state.pendingOutcome = outcome
             defer {
                 state.listener = nil
                 state.timer = nil
+                state.connections = [:]
             }
-            return (state.listener, state.timer)
+            return (state.listener, state.timer, Array(state.connections.values))
         }
-        guard let (listener, timer) = resolved else { return }
+        guard let (listener, timer, connections) = resolved else { return }
         timer?.cancel()
+        connections.forEach { $0.cancel() }
         if let listener {
             // `.cancelled` delivers the outcome once the socket is closed, so callers can rebind the port at once.
             listener.cancel()
@@ -134,7 +138,7 @@ private final class CallbackSession<Value: Sendable>: Sendable {
             self?.listenerChanged(to: newState)
         }
         listener.newConnectionHandler = { [weak self] connection in
-            guard let self else {
+            guard let self, track(connection) else {
                 connection.cancel()
                 return
             }
@@ -185,7 +189,7 @@ private final class CallbackSession<Value: Sendable>: Sendable {
             if let head = Self.requestHead(in: buffer) {
                 respond(to: head, on: connection)
             } else if error != nil || isComplete || buffer.count >= Self.maximumRequestSize {
-                connection.cancel()
+                close(connection)
             } else {
                 receive(on: connection, buffer: buffer)
             }
@@ -219,10 +223,23 @@ private final class CallbackSession<Value: Sendable>: Sendable {
     }
 
     private func send(_ page: CallbackPage, on connection: NWConnection, then completion: (@Sendable () -> Void)?) {
-        connection.send(content: page.response, contentContext: .finalMessage, isComplete: true, completion: .contentProcessed { _ in
-            connection.cancel()
+        connection.send(content: page.response, contentContext: .finalMessage, isComplete: true, completion: .contentProcessed { [weak self] _ in
+            if let self { close(connection) } else { connection.cancel() }
             completion?()
         })
+    }
+
+    private func track(_ connection: NWConnection) -> Bool {
+        state.withLock { state in
+            guard !state.isFinished else { return false }
+            state.connections[ObjectIdentifier(connection)] = connection
+            return true
+        }
+    }
+
+    private func close(_ connection: NWConnection) {
+        state.withLock { _ = $0.connections.removeValue(forKey: ObjectIdentifier(connection)) }
+        connection.cancel()
     }
 
     private static func requestHead(in buffer: Data) -> String? {

@@ -91,6 +91,59 @@ struct LoopbackCallbackListenerTests {
         #expect(served?.body.contains("Sign-in didn't finish.") == true)
     }
 
+    @Test func acceptsNothingExceptIPv4Loopback() async throws {
+        let port = LocalPorts.free()
+        let external = RawConnection.externalIPv4Address()
+        let reached = Locked<[String]>([])
+        let code = try await listener(port: port).receive(
+            whenReady: {
+                if let external, RawConnection(ipv4: external, port: port) != nil { reached.set(reached.value + [external]) }
+                if RawConnection(ipv6LoopbackPort: port) != nil { reached.set(reached.value + ["::1"]) }
+                _ = try? await LocalHTTP.get(URL(string: "http://127.0.0.1:\(port)/callback?code=abc&state=s1")!)
+            },
+            handle: codeHandler
+        )
+        #expect(code == "abc")
+        #expect(reached.value.isEmpty)
+    }
+
+    // Browsers open spare connections they may never use; none may outlive the sign-in.
+    @Test func idleConnectionsAreClosedWhenTheCallbackArrives() async throws {
+        let port = LocalPorts.free()
+        let idle = Locked<[RawConnection]>([])
+        _ = try await listener(port: port).receive(
+            whenReady: {
+                if let connection = RawConnection(ipv4: "127.0.0.1", port: port) { idle.set([connection]) }
+                _ = try? await LocalHTTP.get(URL(string: "http://127.0.0.1:\(port)/callback?code=abc&state=s1")!)
+            },
+            handle: codeHandler
+        )
+        let connection = try #require(idle.value.first)
+        #expect(connection.isClosedByPeer(within: 3))
+    }
+
+    @Test func idleConnectionsAreClosedWhenSignInIsCancelled() async throws {
+        let port = LocalPorts.free()
+        let idle = Locked<[RawConnection]>([])
+        let ready = AsyncStream.makeStream(of: Void.self)
+        let task = Task {
+            try await listener(port: port).receive(whenReady: {
+                // A request head that never ends, so the listener has accepted the connection and is reading it.
+                if let connection = RawConnection(ipv4: "127.0.0.1", port: port) {
+                    connection.write("GET /callback?code=abc")
+                    idle.set([connection])
+                }
+                try? await Task.sleep(for: .milliseconds(200))
+                ready.continuation.yield()
+            }, handle: codeHandler)
+        }
+        for await _ in ready.stream { break }
+        task.cancel()
+        _ = try? await task.value
+        let connection = try #require(idle.value.first)
+        #expect(connection.isClosedByPeer(within: 3))
+    }
+
     @Test func reportsPortInUse() async {
         let occupier = LocalPorts.Occupier()
         await #expect(throws: OrbitError.callbackPortInUse(port: Int(occupier.port))) {

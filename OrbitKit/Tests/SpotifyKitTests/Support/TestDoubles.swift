@@ -163,6 +163,77 @@ enum LocalHTTP {
     }
 }
 
+// Plain BSD sockets, for what URLSession can't do: hold a silent connection open, or dial a specific address.
+final class RawConnection: Sendable {
+    private let descriptor: Int32
+
+    // nil when the connection is refused.
+    init?(ipv4 address: String, port: UInt16) {
+        let descriptor = Darwin.socket(AF_INET, SOCK_STREAM, 0)
+        var target = sockaddr_in()
+        target.sin_family = sa_family_t(AF_INET)
+        target.sin_addr.s_addr = inet_addr(address)
+        target.sin_port = port.bigEndian
+        let connected = withUnsafePointer(to: &target) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(descriptor, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
+        }
+        guard connected == 0 else {
+            close(descriptor)
+            return nil
+        }
+        self.descriptor = descriptor
+    }
+
+    init?(ipv6LoopbackPort port: UInt16) {
+        let descriptor = Darwin.socket(AF_INET6, SOCK_STREAM, 0)
+        var target = sockaddr_in6()
+        target.sin6_family = sa_family_t(AF_INET6)
+        target.sin6_addr = in6addr_loopback
+        target.sin6_port = port.bigEndian
+        let connected = withUnsafePointer(to: &target) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(descriptor, $0, socklen_t(MemoryLayout<sockaddr_in6>.size)) }
+        }
+        guard connected == 0 else {
+            close(descriptor)
+            return nil
+        }
+        self.descriptor = descriptor
+    }
+
+    func write(_ text: String) {
+        _ = Array(text.utf8).withUnsafeBytes { send(descriptor, $0.baseAddress, $0.count, 0) }
+    }
+
+    // True when the peer closed or reset the connection within `timeout` seconds, rather than leaving it open.
+    func isClosedByPeer(within timeout: Int) -> Bool {
+        var limit = timeval(tv_sec: timeout, tv_usec: 0)
+        setsockopt(descriptor, SOL_SOCKET, SO_RCVTIMEO, &limit, socklen_t(MemoryLayout<timeval>.size))
+        var byte: UInt8 = 0
+        let received = recv(descriptor, &byte, 1, 0)
+        return received == 0 || (received < 0 && errno != EAGAIN)
+    }
+
+    deinit { close(descriptor) }
+
+    // The first IPv4 address of an interface that is up and isn't loopback, such as the Wi-Fi address.
+    static func externalIPv4Address() -> String? {
+        var list: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&list) == 0 else { return nil }
+        defer { freeifaddrs(list) }
+        var cursor = list
+        while let entry = cursor?.pointee {
+            defer { cursor = entry.ifa_next }
+            let flags = Int32(entry.ifa_flags)
+            guard let address = entry.ifa_addr, address.pointee.sa_family == sa_family_t(AF_INET),
+                  flags & IFF_UP != 0, flags & IFF_LOOPBACK == 0 else { continue }
+            var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+            guard getnameinfo(address, socklen_t(address.pointee.sa_len), &host, socklen_t(host.count), nil, 0, NI_NUMERICHOST) == 0 else { continue }
+            return String(decoding: host.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+        }
+        return nil
+    }
+}
+
 // A shareable Mutex, since escaping closures can't capture a noncopyable Mutex directly.
 final class Locked<Value: Sendable>: Sendable {
     private let mutex: Mutex<Value>
