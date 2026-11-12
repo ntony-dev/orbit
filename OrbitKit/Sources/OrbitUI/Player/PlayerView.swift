@@ -272,7 +272,7 @@ private struct SeekBar: View {
 
     var body: some View {
         let snapshot = playback.snapshot
-        let duration = max(0, snapshot.track?.duration ?? 0)
+        let duration = max(0, snapshot.track.map { UIDebugOptions.current.trackDuration ?? $0.duration } ?? 0)
         let canSeek = duration > 0 && snapshot.allows(.seek)
         let isScrubbing = scrubFraction != nil
         TimelineView(.animation(minimumInterval: OrbitTokens.Motion.progressInterval, paused: !snapshot.isPlaying || isScrubbing)) { context in

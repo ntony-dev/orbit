@@ -25,6 +25,13 @@ import SwiftUI
 //   --ui-switch <playlist-id>      two seconds after launch, switch to that playlist without collapsing
 //   --ui-shelf                     with --demo only, pin two playlists and add four recents, so the library's
 //                                  sections can be captured (the demo keeps no shelf file)
+//   --ui-shuffle, --ui-repeat all|one
+//                                  with --demo only: once playback is up, turn shuffle on and set repeat through
+//                                  the coordinator, as clicks would, so the toggles' on state can be captured
+//   --ui-device <device-id>        with --demo only: transfer playback to that demo device (dev-kitchen is a
+//                                  speaker, dev-phone a phone without volume), so another device's glyph shows
+//   --ui-track-duration <seconds>  with --demo only: the length the player shows for the current track, so a
+//                                  track over an hour can be captured with the demo's short ones
 //   --ui-backdrop [gradient|bright|busy|plain]
 //                                  draw a stand-in desktop inside the canvas, because a capture of Orbit's
 //                                  window alone cannot include what the glass refracts from behind it: a
@@ -48,6 +55,10 @@ struct UIDebugOptions {
     var runsTour = false
     var switchPlaylistID: String?
     var seedsShelf = false
+    var turnsShuffleOn = false
+    var repeatMode: RepeatMode?
+    var deviceID: String?
+    var trackDuration: TimeInterval?
     var animationSpeed: Double = 1
 
     #if DEBUG
@@ -83,6 +94,13 @@ struct UIDebugOptions {
         runsTour = arguments.contains("--ui-tour")
         switchPlaylistID = value("--ui-switch")
         seedsShelf = arguments.contains("--ui-shelf") && arguments.contains("--demo")
+        // These drive or reshape playback, so they never reach a real Spotify account.
+        if arguments.contains("--demo") {
+            turnsShuffleOn = arguments.contains("--ui-shuffle")
+            repeatMode = value("--ui-repeat").flatMap { ["all": RepeatMode.context, "one": .track][$0] }
+            deviceID = value("--ui-device")
+            trackDuration = value("--ui-track-duration").flatMap(TimeInterval.init).flatMap { $0 > 0 ? $0 : nil }
+        }
         animationSpeed = value("--ui-slow").flatMap(Double.init).map { min(1, max(0.02, $0)) } ?? 1
     }
 }

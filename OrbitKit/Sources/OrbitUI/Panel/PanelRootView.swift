@@ -85,6 +85,7 @@ public struct PanelRootView: View {
             await loadArtworkTint()
         }
         .task {
+            await applyDebugPlayback()
             await seedDebugShelf()
             await openPendingDebugPlaylist()
             await runDebugTour()
@@ -280,6 +281,29 @@ public struct PanelRootView: View {
         }
         try? await Task.sleep(for: step)
         panel.collapse()
+        #endif
+    }
+
+    // The demo starts with shuffle and repeat off on this Mac; these reach the other states the way clicks would.
+    private func applyDebugPlayback() async {
+        #if DEBUG
+        guard debug.turnsShuffleOn || debug.repeatMode != nil || debug.deviceID != nil else { return }
+        let playback = stores.playback
+        for _ in 0..<40 where playback.snapshot.track == nil {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        if debug.turnsShuffleOn, !playback.snapshot.shuffle { await playback.toggleShuffle() }
+        if let mode = debug.repeatMode {
+            for _ in RepeatMode.allCases where playback.snapshot.repeatMode != mode {
+                await playback.cycleRepeat()
+            }
+        }
+        if let id = debug.deviceID {
+            await stores.library.loadDevices()
+            if let device = stores.library.devices.value?.first(where: { $0.id == id }) {
+                await playback.transfer(to: device)
+            }
+        }
         #endif
     }
 
