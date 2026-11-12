@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="App/Assets.xcassets/AppIcon.appiconset/icon_128x128@2x.png" width="128" alt="Orbit's app icon: a dark pill with a purple square and a play symbol, circled by a thin ring with a green dot">
+</p>
+
 # Orbit
 
 Orbit is a small floating controller for Spotify on macOS 26 and later. A translucent pill sits above your windows and expands into a player and a library, so you can change what is playing without bringing Spotify's window forward. The Spotify desktop app still plays the audio; Orbit only controls it.
@@ -7,19 +11,23 @@ Orbit is a small floating controller for Spotify on macOS 26 and later. A transl
 These were captured from Orbit's demo mode, which uses made-up playlists and artwork. The colored background is drawn by a debug option to stand in for a desktop behind the glass.
 
 <p>
-  <img src="docs/images/pill-dark.png" width="312" alt="The collapsed pill in dark mode, showing round album artwork, the song Afterglow Avenue by Lumen Drift, and a playing indicator">
+  <img src="docs/images/pill-dark.png" width="312" alt="The collapsed pill in dark mode: round album artwork, the song Afterglow Avenue by Lumen Drift, and a playing indicator">
   <img src="docs/images/pill-light.png" width="312" alt="The same collapsed pill in light mode">
 </p>
 
 <p>
-  <img src="docs/images/player-dark.png" width="384" alt="The expanded player in dark mode: the playlist Night Drive at the top with a settings gear and a collapse button, album artwork, title, artist and album, a heart for Liked Songs, a seek bar, shuffle, previous, pause, next and repeat buttons, a volume slider with queue and device buttons, and Now Playing and Library tabs">
-  <img src="docs/images/player-light.png" width="384" alt="The same expanded player in light mode">
+  <img src="docs/images/player-dark.png" width="384" alt="Now Playing in dark mode: the playlist Night Drive at the top with a settings gear and a collapse button; album artwork, the title Afterglow Avenue, the artist Lumen Drift and a heart for Liked Songs; a seek bar with the elapsed and remaining time on the same row; shuffle, previous, pause, next and repeat; a volume slider with queue and device buttons; and the Now Playing and Library tabs at the bottom">
+  <img src="docs/images/player-light.png" width="384" alt="The same Now Playing view in light mode">
 </p>
 
 <p>
-  <img src="docs/images/playlist-picker-dark.png" width="384" alt="The library in dark mode: a search field, two pinned playlists, three recent playlists, then Your Library with Liked Songs first and the playing playlist, Night Drive, marked Now playing; each row ends with a chevron that opens its tracks">
-  <img src="docs/images/library-dark.png" width="384" alt="The library in dark mode while typing: the playlists whose names match, then Search Spotify with matching songs and albums">
-  <img src="docs/images/playlist-detail-light.png" width="384" alt="A playlist opened from the library in light mode: Night Drive with Pause, pin and Open in Spotify buttons, and its numbered tracks with durations, the first marked as playing">
+  <img src="docs/images/queue-dark.png" width="384" alt="Now Playing in dark mode with the queue open below the volume slider: Up Next, seven songs, starting with Bicycle Bell by Juniper Lane">
+  <img src="docs/images/library-dark.png" width="384" alt="The Library tab in dark mode: the current song with pause and collapse buttons, a field reading Search your library and Spotify, two pinned playlists, three recent playlists, then Your Library with Liked Songs and Night Drive, marked Now playing; each row ends with a chevron that opens its tracks">
+</p>
+
+<p>
+  <img src="docs/images/library-search-light.png" width="384" alt="The Library in light mode while searching for night: Night Drive and Late Night Jazz from Your Library, then Search Spotify with the matching songs Midnight Ledger and Night Drive 1986">
+  <img src="docs/images/playlist-detail-light.png" width="384" alt="A playlist opened from the Library in light mode: Night Drive with Pause, pin and Open in Spotify buttons, and its numbered tracks with durations, the first marked as playing">
 </p>
 
 ## Features
@@ -256,10 +264,10 @@ Run with mock services, which needs no Spotify account, does not talk to the Spo
 open build/Build/Products/Debug/Orbit.app --args --demo
 ```
 
-Other launch arguments, mainly for screenshots and tests, are documented in `OrbitKit/Sources/OrbitShell/LaunchOptions.swift` and, for Debug builds, `OrbitKit/Sources/OrbitUI/Support/UIDebugOptions.swift`. `Scripts/screenshot.sh` launches the Debug build in the background, captures one of its windows by window ID and quits it, without moving the pointer or changing focus; the screenshots above were made with it, for example:
+Other launch arguments, mainly for screenshots and tests, are documented in `OrbitKit/Sources/OrbitShell/LaunchOptions.swift` and, for Debug builds, `OrbitKit/Sources/OrbitUI/Support/UIDebugOptions.swift`. `Scripts/screenshot.sh` starts the Debug build's binary directly, captures one of its windows by window ID and quits it, without moving the pointer or changing focus; the screenshots above were made with it, for example:
 
 ```
-Scripts/screenshot.sh docs/images/player-dark.png --demo --expanded --appearance dark --ui-backdrop gradient
+Scripts/screenshot.sh docs/images/library-dark.png --demo --expanded --ui-screen library --ui-shelf --ui-backdrop plain --appearance dark
 ```
 
 It needs Screen Recording permission for the terminal app. Project conventions are in `CLAUDE.md`.
