@@ -2,7 +2,8 @@ import OrbitCore
 import OrbitEngine
 import SwiftUI
 
-// Play/pause everywhere it appears. Enabled only when the active device allows the transition it would make.
+// Play/pause everywhere it appears. Enabled only when the active device allows the transition it would make. The
+// prominent disc sizes its glyph from the diameter, in Spotify's proportion; elsewhere `glyph` is the glyph box.
 struct PlayPauseButton: View {
     var diameter: CGFloat = OrbitTokens.Size.iconButton
     var glyph: CGFloat = OrbitTokens.Icon.regular
@@ -17,10 +18,7 @@ struct PlayPauseButton: View {
         Button {
             Task { await playback.togglePlayPause() }
         } label: {
-            Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                .contentTransition(.symbolEffect(.replace.downUp))
-                // The play triangle is optically left-heavy; nudge it so it sits centred in a disc.
-                .offset(x: isPlaying || !isProminent ? 0 : 1.5)
+            PlaybackGlyph(isPlaying: isPlaying, box: isProminent ? diameter * PlaybackGlyphGeometry.discToBox : glyph)
         }
         .buttonStyle(PlaybackButtonStyle(diameter: diameter, glyph: glyph, isProminent: isProminent))
         .focusEffectDisabled()
