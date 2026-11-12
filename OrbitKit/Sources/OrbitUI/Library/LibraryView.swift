@@ -10,7 +10,7 @@ struct LibraryView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PanelTopBar { NowPlayingStrip() }
+            PanelTopBar { NowPlayingStrip() } accessory: { NowPlayingStrip.PlayPause() }
             AccountGate {
                 VStack(spacing: 0) {
                     ChipTabs(
@@ -34,9 +34,7 @@ struct LibraryView: View {
                     ZStack(alignment: .top) {
                         let tab = navigator.libraryTab
                         content(for: tab)
-                            .transformPreference(ListFitKey.self) { fits in
-                                for index in fits.indices { fits[index].libraryTab = tab }
-                            }
+                            .environment(\.listFitTab, tab)
                             .id(tab)
                             .transition(.opacity.animation(theme.animation(OrbitTokens.Motion.screenFadeOut)))
                     }

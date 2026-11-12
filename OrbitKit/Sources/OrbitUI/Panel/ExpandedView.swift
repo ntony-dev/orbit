@@ -12,12 +12,13 @@ struct ExpandedView: View {
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
                 let key = navigator.fitKey
+                // Each screen reports to the key it was created for, so an outgoing screen still fading out can
+                // never size the surface for the incoming one; a library tab's list reports only for its own tab.
                 screen
-                    .onPreferenceChange(ListFitKey.self) { fits in
-                        // A screen between lists for a frame keeps its last size rather than dropping to the fallback.
-                        guard let fit = fits.last(where: { $0.libraryTab == key.libraryTab }) else { return }
-                        MainActor.assumeIsolated { navigator.recordFit(fit.screenHeight, for: key) }
-                    }
+                    .environment(\.listFitReporter, ListFitReporter { [navigator] fit in
+                        guard fit.libraryTab == key.libraryTab else { return }
+                        navigator.recordFit(fit.screenHeight, for: key)
+                    })
                     .id(ScreenID(section: navigator.section, detail: navigator.detail))
                     .transition(screenTransition)
             }
@@ -78,7 +79,8 @@ struct ExpandedView: View {
     }
 }
 
-// Command-comma opens Settings from any screen, as in every Mac app; the visible entry point is on the player.
+// Command-comma opens Settings from any screen, as in every Mac app, even while nothing in the panel holds focus
+// and PanelKeyboard never sees the key; the visible entry point is on the player.
 private struct SettingsShortcut: View {
     var body: some View {
         Button("Settings…", action: OrbitSettings.open)

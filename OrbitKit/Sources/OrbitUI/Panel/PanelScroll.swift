@@ -11,12 +11,16 @@ struct ListFit: Equatable {
     var screenHeight: CGFloat { top + content }
 }
 
-struct ListFitKey: PreferenceKey {
-    static let defaultValue: [ListFit] = []
+// Handed to each screen by the expanded surface. Lists report through it directly rather than through a
+// preference, because a preference change made from a geometry callback was not always delivered: a playlist
+// whose tracks failed to load kept the taller loading skeleton's size.
+struct ListFitReporter {
+    let report: @MainActor (ListFit) -> Void
+}
 
-    static func reduce(value: inout [ListFit], nextValue: () -> [ListFit]) {
-        value += nextValue()
-    }
+extension EnvironmentValues {
+    @Entry var listFitReporter: ListFitReporter?
+    @Entry var listFitTab: LibraryTab?
 }
 
 extension CoordinateSpaceProtocol where Self == NamedCoordinateSpace {
@@ -33,6 +37,8 @@ struct PanelScroll<Content: View>: View {
     @ViewBuilder let content: Content
 
     @Environment(\.orbitTheme) private var theme
+    @Environment(\.listFitReporter) private var fitReporter
+    @Environment(\.listFitTab) private var fitTab
     @State private var contentHeight: CGFloat = 0
     @State private var top: CGFloat = 0
     @State private var edges = ScrollEdges(fadesTop: false, fadesBottom: false)
@@ -52,7 +58,9 @@ struct PanelScroll<Content: View>: View {
             }
             .mask { EdgeFadeMask(edges: edges) }
             .onGeometryChange(for: CGFloat.self) { $0.frame(in: .expandedSurface).minY } action: { top = $0 }
-            .preference(key: ListFitKey.self, value: contentHeight > 0 ? [ListFit(top: top, content: contentHeight)] : [])
+            .onChange(of: fit, initial: true) { _, fit in
+                if let fit { fitReporter?.report(fit) }
+            }
             .onAppear {
                 guard let reveal else { return }
                 proxy.scrollTo(reveal, anchor: revealAnchor)
@@ -62,6 +70,12 @@ struct PanelScroll<Content: View>: View {
                 withAnimation(theme.animation(OrbitTokens.Motion.selection)) { proxy.scrollTo(target, anchor: revealAnchor) }
             }
         }
+    }
+}
+
+extension PanelScroll {
+    private var fit: ListFit? {
+        contentHeight > 0 ? ListFit(top: top, content: contentHeight, libraryTab: fitTab) : nil
     }
 }
 
