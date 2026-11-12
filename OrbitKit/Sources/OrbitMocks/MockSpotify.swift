@@ -51,6 +51,7 @@ public actor MockSpotify {
     private var ignoresPlayCommands = false
     private(set) var rejectsLikedSongsContext = false
     private var pageSizeLimit: Int?
+    private var reportsLargerLocalArtwork = false
     private var droppedFromPages: Set<String> = []
     // Every Web API request and AppleScript command, in order, so tests can assert routing and request counts.
     public private(set) var webRequests: [String] = []
@@ -167,6 +168,18 @@ public actor MockSpotify {
     public func pageLikeTheWebAPI(size: Int, dropping ids: Set<String>) {
         pageSizeLimit = size
         droppedFromPages = ids
+    }
+
+    // The real app reports a 640 px cover through AppleScript while the Web API names a smaller one of the same
+    // image; this gives the local side its own URL for each cover.
+    public func reportLargerLocalArtwork(_ reports: Bool) {
+        reportsLargerLocalArtwork = reports
+    }
+
+    static func largerArtwork(_ track: Track?) -> Track? {
+        guard var track, let url = track.artworkURL else { return track }
+        track.artworkURL = URL(string: url.absoluteString + "#640")
+        return track
     }
 
     func playlistsPage(_ request: PageRequest) -> Page<Playlist> {
@@ -342,7 +355,7 @@ public actor MockSpotify {
         try requireRunning()
         return LocalPlayerState(
             status: nowPlaying == nil ? .stopped : (isPlaying ? .playing : .paused),
-            track: nowPlaying,
+            track: reportsLargerLocalArtwork ? Self.largerArtwork(nowPlaying) : nowPlaying,
             position: position,
             volume: volume,
             isShuffling: shuffle,
@@ -586,6 +599,7 @@ public actor MockSpotify {
             position: position
         )
         if automationPermission == .granted {
+            if reportsLargerLocalArtwork { state.track = Self.largerArtwork(state.track) }
             state.volume = volume
             state.isShuffling = shuffle
             state.isRepeating = repeatMode != .off

@@ -742,9 +742,11 @@ extension PlaybackCoordinator {
         let paired = remoteSnapshot.flatMap { $0.track?.uri == state.track?.uri && state.track != nil ? $0 : nil }
         var track = state.track
         if let richer = paired?.track {
+            // The app names a larger copy of the same cover. Keeping the URL already on screen spares a second
+            // download and decode per track change, since every view downsamples to well under either size.
             let artwork = track?.artworkURL
             track = richer
-            if track?.artworkURL == nil { track?.artworkURL = artwork }
+            if let artwork { track?.artworkURL = artwork }
         }
         // A track change seen locally before the next Web API read keeps the context it was playing in.
         let sameDevice = remoteSnapshot.flatMap { isLocalDevice($0.device) ? $0 : nil }

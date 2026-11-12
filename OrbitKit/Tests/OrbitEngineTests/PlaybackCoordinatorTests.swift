@@ -23,6 +23,30 @@ struct PlaybackCoordinatorTests {
         #expect(coordinator.isCurrentTrackSaved == true)
     }
 
+    // Each URL the snapshot names for a cover is one download and decode in the pill and one for the tint.
+    @Test func aTrackChangeNamesOneArtworkURLEvenWhenTheWebAPIReportsAnother() async throws {
+        await rig.spotify.reportLargerLocalArtwork(true)
+        coordinator.start()
+        #expect(await eventually { coordinator.snapshot.context != nil })
+        let first = try #require(coordinator.snapshot.track)
+        #expect(first.artworkURL?.fragment == "640")
+
+        rig.clock.advance(by: first.duration)
+        await rig.spotify.tick()
+        #expect(await eventually { coordinator.snapshot.track?.uri != first.uri })
+        var seen = [coordinator.snapshot.track?.artworkURL]
+        let syncs = await rig.webRequests("playbackState")
+        for _ in 0..<3 {
+            rig.clock.advance(by: 1)
+            await settle()
+            if coordinator.snapshot.track?.artworkURL != seen.last { seen.append(coordinator.snapshot.track?.artworkURL) }
+        }
+        #expect(await rig.webRequests("playbackState") > syncs)
+        #expect(seen.count == 1)
+        #expect(seen.first??.fragment == "640")
+        #expect(coordinator.snapshot.context?.uri == MockFixtures.startingPlaylist.uri)
+    }
+
     @Test func progressIsInterpolatedFromTheSampleNotPolled() async {
         await coordinator.refresh()
         let requests = await rig.webRequests("playbackState")
