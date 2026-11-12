@@ -46,10 +46,14 @@ private struct Harness {
     let authorizer: SpotifyAuthorizer
     let client: SpotifyWebClient
 
-    init() async throws {
+    // `latency` delays every reply, so requests that overlap in a real session overlap here too.
+    init(latency: Duration = .zero) async throws {
         let router = router
         let clock = clock
-        transport = StubTransport { request throws(OrbitError) in try router.handle(request) }
+        transport = StubTransport { request throws(OrbitError) in
+            if latency > .zero { try? await Task.sleep(for: latency) }
+            return try router.handle(request)
+        }
         authorizer = SpotifyAuthorizer(
             clientIDProvider: { "client-123" },
             tokenStore: InMemoryTokenStore(Sessions.valid(clock: clock)),
@@ -71,6 +75,20 @@ private struct Harness {
 }
 
 struct WebClientDecodingTests {
+    // At sign-in the account store asks for the profile while the first playlists page needs the user's ID.
+    @Test func overlappingProfileReadsShareOneRequest() async throws {
+        let harness = try await Harness(latency: .milliseconds(60))
+        harness.router.on("GET /me/playlists", json: Fixtures.playlists)
+        harness.router.on("GET /search", json: Fixtures.search)
+        async let profile = harness.client.currentUser()
+        async let playlists = harness.client.playlists(PageRequest())
+        _ = try await (profile, playlists)
+        _ = try await harness.client.search("night", categories: [.playlist], page: PageRequest())
+        let paths = harness.apiRequests.compactMap { $0.url?.path }
+        #expect(paths.filter { $0 == "/v1/me" }.count == 1)
+        #expect(paths.filter { $0 == "/v1/me/playlists" }.count == 1)
+    }
+
     @Test func currentUserMapsProfileAndSendsBearerToken() async throws {
         let harness = try await Harness()
         let user = try await harness.client.currentUser()

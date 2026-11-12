@@ -30,6 +30,7 @@ public actor SpotifyWebClient: SpotifyAPI {
     // requests nothing is sent: callers get the remaining wait immediately.
     private var cooldown: Cooldown?
     private var cachedUser: (sessionID: UUID, profile: UserProfile)?
+    private var profileRead: (sessionID: UUID, task: Task<Result<UserProfile, OrbitError>, Never>)?
     private var likedSongsContextRejected = false
 
     public init(authorizer: SpotifyAuthorizer) {
@@ -42,7 +43,25 @@ public actor SpotifyWebClient: SpotifyAPI {
         self.now = now
     }
 
+    // Overlapping reads for one session share a request: at sign-in the account store asks for the profile while
+    // the first playlists page needs the user's ID.
     public func currentUser() async throws(OrbitError) -> UserProfile {
+        let sessionID = try await authorizer.validCredential().sessionID
+        if let profileRead, profileRead.sessionID == sessionID { return try await profileRead.task.value.get() }
+        let task = Task { () -> Result<UserProfile, OrbitError> in
+            do throws(OrbitError) {
+                return .success(try await fetchCurrentUser())
+            } catch {
+                return .failure(error)
+            }
+        }
+        profileRead = (sessionID, task)
+        let result = await task.value
+        if profileRead?.task == task { profileRead = nil }
+        return try result.get()
+    }
+
+    private func fetchCurrentUser() async throws(OrbitError) -> UserProfile {
         let response = try await send(APIRequest(.get, "/me"))
         guard let profile = try APIDecoding.decode(UserDTO.self, from: response.data).profile else {
             throw .unexpected(detail: "Spotify returned a profile without an ID.")
