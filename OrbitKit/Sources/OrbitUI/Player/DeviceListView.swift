@@ -16,6 +16,7 @@ struct DeviceListView: View {
             PanelTopBar { BackTitle(title: "Devices", subtitle: "Choose where Spotify plays") }
             AccountGate { content }
         }
+        .panelKeyFocusTarget()
         .onChange(of: library.devices.value, initial: true) { _, value in
             if let value { retained = value }
         }

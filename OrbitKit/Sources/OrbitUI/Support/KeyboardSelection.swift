@@ -79,24 +79,27 @@ private struct KeyboardListNavigation: ViewModifier {
             .onAppear { if panel.isKeyWindow { isFocused = true } }
             .onChange(of: panel.isKeyWindow) { _, isKey in isFocused = isKey }
             .onChange(of: keys) { _, keys in selection.reconcile(with: keys) }
-            .onKeyPress(.downArrow) { move(1) }
-            .onKeyPress(.upArrow) { move(-1) }
-            .onKeyPress(.return) {
-                guard let key = selection.target(in: keys, fallsBackToFirst: false) else { return .ignored }
-                onActivate(key)
-                return .handled
-            }
-            .onKeyPress(.rightArrow) {
-                guard let onOpen, let key = selection.target(in: keys, fallsBackToFirst: false) else { return .ignored }
-                onOpen(key)
-                return .handled
-            }
+            .onKeyPress(phases: [.down, .repeat], action: handle)
     }
 
-    private func move(_ offset: Int) -> KeyPress.Result {
-        guard !keys.isEmpty else { return .ignored }
-        selection.move(offset, in: keys)
-        return .handled
+    // Takes only the list's share of the panel's key routing; Space, Escape and the rest go on to the panel.
+    private func handle(_ press: KeyPress) -> KeyPress.Result {
+        switch PanelKeyRouter.action(for: press.key, modifiers: press.modifiers, in: PanelKeyContext(screen: .list)) {
+        case .moveSelection(let offset):
+            guard !keys.isEmpty else { return .ignored }
+            selection.move(offset, in: keys)
+            return .handled
+        case .activateSelection where press.phase == .down:
+            guard let key = selection.target(in: keys, fallsBackToFirst: false) else { return .ignored }
+            onActivate(key)
+            return .handled
+        case .openSelection where press.phase == .down:
+            guard let onOpen, let key = selection.target(in: keys, fallsBackToFirst: false) else { return .ignored }
+            onOpen(key)
+            return .handled
+        default:
+            return .ignored
+        }
     }
 }
 

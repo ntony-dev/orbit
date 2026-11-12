@@ -51,30 +51,3 @@ enum PlaybackStatus: Hashable {
 
     var hasTrack: Bool { self == .playing || self == .paused }
 }
-
-// Spotify's own desktop shortcuts, so the expanded player answers to what Spotify users already know: Space plays
-// or pauses, arrows seek, Command-arrows change track and volume.
-enum PlayerKeyCommand: Equatable {
-    case togglePlayback
-    case seek(by: TimeInterval)
-    case previousTrack
-    case nextTrack
-    case changeVolume(by: Int)
-
-    static let seekStep: TimeInterval = 10
-    static let volumeStep = 10
-
-    static func command(for key: KeyEquivalent, modifiers: EventModifiers) -> PlayerKeyCommand? {
-        // Checked by exclusion because AppKit also flags arrow keys as keypad and function keys.
-        guard modifiers.isDisjoint(with: [.shift, .option, .control]) else { return nil }
-        let command = modifiers.contains(.command)
-        switch key {
-        case .space where !command: return .togglePlayback
-        case .leftArrow: return command ? .previousTrack : .seek(by: -seekStep)
-        case .rightArrow: return command ? .nextTrack : .seek(by: seekStep)
-        case .upArrow where command: return .changeVolume(by: volumeStep)
-        case .downArrow where command: return .changeVolume(by: -volumeStep)
-        default: return nil
-        }
-    }
-}

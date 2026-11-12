@@ -160,8 +160,7 @@ private struct LibraryPlaylistsTab: View {
                 text: $filter,
                 focusesWhenKey: true,
                 onSubmit: { play(target, in: shown) },
-                onMove: { selection.move($0, in: keys) },
-                onEscape: { withAnimation(theme.animation(OrbitTokens.Motion.navigate)) { _ = navigator.back() } }
+                onMove: { selection.move($0, in: keys) }
             )
             .padding(.horizontal, OrbitTokens.Spacing.xl)
             .padding(.vertical, OrbitTokens.Spacing.m)
@@ -298,6 +297,7 @@ private struct QueueTab: View {
                 .padding(.bottom, OrbitTokens.Spacing.m)
             }
         }
+        .panelKeyFocusTarget()
         // Reloaded on each track change, which is when the queue actually moves; there is no polling. The store
         // keeps the previous queue on screen while it reloads.
         .task(id: playback.snapshot.track?.id) {
@@ -329,8 +329,7 @@ private struct SearchTab: View {
                 focusesWhenKey: true,
                 isBusy: library.isSearching,
                 onSubmit: { activate(target, in: results) },
-                onMove: { selection.move($0, in: keys) },
-                onEscape: { withAnimation(theme.animation(OrbitTokens.Motion.navigate)) { _ = navigator.back() } }
+                onMove: { selection.move($0, in: keys) }
             )
             .padding(.horizontal, OrbitTokens.Spacing.xl)
             .padding(.vertical, OrbitTokens.Spacing.m)

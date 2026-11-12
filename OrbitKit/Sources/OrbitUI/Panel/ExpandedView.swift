@@ -29,6 +29,7 @@ struct ExpandedView: View {
         .coordinateSpace(.expandedSurface)
         // Applies to the scroll views of every screen, including ones that are not a PanelScroll.
         .scrollIndicators(.never)
+        .modifier(PanelKeyboard())
         .background { SettingsShortcut() }
     }
 

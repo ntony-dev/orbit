@@ -30,8 +30,7 @@ struct QuickPickerView: View {
                         text: $filter,
                         focusesWhenKey: true,
                         onSubmit: { playSelection(in: content) },
-                        onMove: { selection.move($0, in: content.keys) },
-                        onEscape: { withAnimation(theme.animation(OrbitTokens.Motion.navigate)) { _ = navigator.back() } }
+                        onMove: { selection.move($0, in: content.keys) }
                     )
                     .padding(.horizontal, OrbitTokens.Spacing.xl)
                     .padding(.top, OrbitTokens.Spacing.m)

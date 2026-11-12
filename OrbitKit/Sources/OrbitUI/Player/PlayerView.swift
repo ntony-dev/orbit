@@ -40,7 +40,7 @@ struct PlayerView: View {
             }
         }
         .animation(theme.animation(OrbitTokens.Motion.content), value: status)
-        .modifier(PlayerKeyboard())
+        .panelKeyFocusTarget()
     }
 
     @ViewBuilder
@@ -461,55 +461,6 @@ private struct DeviceChipBody: View {
             }
             .opacity(configuration.isPressed ? 0.7 : 1)
             .animation(theme.animation(OrbitTokens.Motion.press), value: configuration.isPressed)
-    }
-}
-
-// Spotify's desktop shortcuts on the expanded player. An invisible key catcher behind the controls takes focus when
-// the player appears, so Space works at once. It is a sibling of the controls rather than their container, because
-// a focused container would make every button inside it report focus and draw its ring. The handler sits above
-// both, so keys a focused control ignores still arrive, while Space on a focused button presses that button.
-private struct PlayerKeyboard: ViewModifier {
-    @Environment(PlaybackCoordinator.self) private var playback
-    @FocusState private var isFocused: Bool
-
-    func body(content: Content) -> some View {
-        content
-            .background {
-                Color.clear
-                    .focusable(interactions: .edit)
-                    .focused($isFocused)
-                    .focusEffectDisabled()
-                    .accessibilityHidden(true)
-            }
-            .onAppear { isFocused = true }
-            .onKeyPress(phases: [.down, .repeat]) { press in
-                guard let command = PlayerKeyCommand.command(for: press.key, modifiers: press.modifiers) else { return .ignored }
-                if press.phase == .repeat, command == .togglePlayback { return .handled }
-                perform(command)
-                return .handled
-            }
-    }
-
-    private func perform(_ command: PlayerKeyCommand) {
-        let snapshot = playback.snapshot
-        switch command {
-        case .togglePlayback:
-            guard snapshot.track != nil, snapshot.allows(snapshot.isPlaying ? .pause : .resume) else { return }
-            Task { await playback.togglePlayPause() }
-        case .seek(let delta):
-            guard let duration = snapshot.track?.duration, snapshot.allows(.seek) else { return }
-            let target = min(duration, max(0, snapshot.position(at: .now) + delta))
-            Task { await playback.seek(to: target) }
-        case .previousTrack:
-            guard snapshot.allows(.skipPrevious) else { return }
-            Task { await playback.previous() }
-        case .nextTrack:
-            guard snapshot.allows(.skipNext) else { return }
-            Task { await playback.next() }
-        case .changeVolume(let delta):
-            guard let volume = snapshot.volume, snapshot.allows(.setVolume) else { return }
-            Task { await playback.setVolume(volume + delta) }
-        }
     }
 }
 

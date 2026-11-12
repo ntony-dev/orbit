@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import Observation
 import OrbitCore
 
@@ -32,8 +33,33 @@ final class PanelNavigator {
     // search never focuses merely because it appeared.
     var wantsSearchFocus = false
 
+    // The focused search or filter field, written only by that field. During a transition two fields can be on
+    // screen for a moment, so each clears only its own claim.
+    private(set) var textFieldFocus: TextFieldFocus?
+    private var textFieldOwner: UUID?
+
     var depth: Int {
         (section == .player ? 0 : 1) + (detail == nil ? 0 : 1)
+    }
+
+    var keyScreen: PanelKeyScreen {
+        switch (detail, section) {
+        case (.playlist, _): .list
+        case (.devices, _): .other
+        case (nil, .player): .player
+        case (nil, .picker): .list
+        case (nil, .library): libraryTab == .queue ? .other : .list
+        }
+    }
+
+    func setTextFieldFocus(_ focus: TextFieldFocus?, owner: UUID) {
+        if let focus {
+            textFieldOwner = owner
+            textFieldFocus = focus
+        } else if textFieldOwner == owner {
+            textFieldOwner = nil
+            textFieldFocus = nil
+        }
     }
 
     func show(_ newSection: PanelSection) {

@@ -15,14 +15,14 @@ struct SearchField: View {
     var onSubmit: () -> Void = {}
     // Up and Down Arrow move the list selection below the field while the caret stays in it.
     var onMove: ((Int) -> Void)?
-    // Called for Escape on an empty field, so the screen can step back instead of only clearing.
-    var onEscape: (() -> Void)?
 
     @Environment(PanelState.self) private var panel
+    @Environment(PanelNavigator.self) private var navigator
     @Environment(\.panelHost) private var host
     @Environment(\.orbitTheme) private var theme
     @FocusState private var isFocused: Bool
     @State private var wantsFocus = false
+    @State private var focusOwner = UUID()
 
     var body: some View {
         HStack(spacing: OrbitTokens.Spacing.s) {
@@ -35,9 +35,7 @@ struct SearchField: View {
                 .font(OrbitTokens.Typography.body)
                 .focused($isFocused)
                 .onSubmit(onSubmit)
-                .onExitCommand(perform: escape)
-                .onKeyPress(.downArrow) { move(1) }
-                .onKeyPress(.upArrow) { move(-1) }
+                .onKeyPress(phases: .down, action: handle)
             if isBusy, !text.isEmpty {
                 ProgressView()
                     .controlSize(.mini)
@@ -91,7 +89,11 @@ struct SearchField: View {
                 isFocused = false
             }
         }
+        .onChange(of: focusState, initial: true) { _, state in
+            navigator.setTextFieldFocus(state, owner: focusOwner)
+        }
         .onDisappear {
+            navigator.setTextFieldFocus(nil, owner: focusOwner)
             if isFocused || wantsFocus { host?.setAcceptsKeyboardInput(false) }
         }
     }
@@ -105,19 +107,26 @@ struct SearchField: View {
         }
     }
 
-    private func move(_ offset: Int) -> KeyPress.Result {
-        guard let onMove else { return .ignored }
-        onMove(offset)
-        return .handled
+    private var focusState: TextFieldFocus? {
+        isFocused ? (text.isEmpty ? .empty : .filled) : nil
     }
 
-    private func escape() {
-        if !text.isEmpty {
+    // Takes only the field's share of the panel's key routing: moving and playing the list's selection, and
+    // clearing on Escape. An empty field leaves Escape to the panel, which steps back a layer.
+    private func handle(_ press: KeyPress) -> KeyPress.Result {
+        let context = PanelKeyContext(screen: onMove == nil ? .other : .list, field: text.isEmpty ? .empty : .filled)
+        switch PanelKeyRouter.action(for: press.key, modifiers: press.modifiers, in: context) {
+        case .moveSelection(let offset):
+            onMove?(offset)
+            return .handled
+        case .activateSelection:
+            onSubmit()
+            return .handled
+        case .clearField:
             text = ""
-            return
+            return .handled
+        default:
+            return .ignored
         }
-        isFocused = false
-        host?.setAcceptsKeyboardInput(false)
-        onEscape?()
     }
 }
