@@ -191,6 +191,8 @@ public actor MockSpotify {
     }
 
     func localCommand(_ name: String) async throws(OrbitError) {
+        // Like the real player, a command asks for Automation permission if it was never asked; the user accepts.
+        _ = permission(prompting: true)
         try requireRunning()
         localCommands.append(name)
         await awaitCommandTurn()

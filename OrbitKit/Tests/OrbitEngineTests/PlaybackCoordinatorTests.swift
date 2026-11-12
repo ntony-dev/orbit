@@ -160,6 +160,18 @@ struct PlaybackCoordinatorTests {
         #expect(await rig.spotify.localCommands.isEmpty)
     }
 
+    // A fresh install: nothing is observed until the first command, which is what asks for Automation.
+    @Test func theFirstLocalCommandAsksForAutomation() async {
+        await rig.spotify.setAutomationPermission(.notDetermined)
+        coordinator.setWebAPIAvailable(false)
+        await coordinator.refresh()
+        #expect(coordinator.snapshot.track == nil)
+        await coordinator.togglePlayPause()
+        #expect(coordinator.lastError == nil)
+        #expect(await rig.localCommands("play") == 1)
+        #expect(coordinator.snapshot.track != nil)
+    }
+
     @Test func localControlsKeepWorkingWhileTheWebAPIIsDown() async {
         await coordinator.refresh()
         await rig.spotify.failWebAPI(with: .network(detail: "offline"))
