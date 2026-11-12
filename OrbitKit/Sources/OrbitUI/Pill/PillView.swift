@@ -199,37 +199,3 @@ private struct PillAccessibilityActions: ViewModifier {
             }
     }
 }
-
-// A waveform whose bars light in turn while playing, over a dimmer copy of itself so the shape stays readable on
-// any glass; a still pause glyph otherwise. A symbol effect keeps this on the render server, so the always-visible
-// pill does not tick the main thread.
-struct PlayingIndicator: View {
-    let isPlaying: Bool
-
-    @Environment(\.orbitTheme) private var theme
-
-    var body: some View {
-        ZStack {
-            if isPlaying {
-                Image(systemName: "waveform")
-                    .foregroundStyle(theme.accent.opacity(theme.isHighContrast ? 0.85 : 0.7))
-                Image(systemName: "waveform")
-                    .foregroundStyle(theme.accent)
-                    .symbolEffect(
-                        .variableColor.iterative.hideInactiveLayers.nonReversing,
-                        options: .repeat(.continuous),
-                        isActive: !theme.reducesMotion
-                    )
-            } else {
-                Image(systemName: "pause.fill")
-                    .font(.system(size: OrbitTokens.Icon.small, weight: .semibold))
-                    .foregroundStyle(.secondary)
-            }
-        }
-        // Heavy, so the bars stay at least two pixels wide on a 1x display instead of anti-aliasing to grey.
-        .font(.system(size: OrbitTokens.Icon.indicator, weight: .heavy))
-        .transition(.opacity)
-        .animation(theme.animation(OrbitTokens.Motion.hover), value: isPlaying)
-        .accessibilityHidden(true)
-    }
-}
