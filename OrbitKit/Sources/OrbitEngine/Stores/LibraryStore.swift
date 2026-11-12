@@ -11,7 +11,7 @@ public enum PreferredDeviceStatus: Hashable, Sendable {
     case missing(DeviceReference)
 }
 
-// Library data from the Web API, cached briefly so reopening the picker is instant and several views asking for
+// Library data from the Web API, cached briefly so reopening the library is instant and several views asking for
 // the same thing share one request. Values stay visible while they refresh, and every load ends loaded or failed.
 @MainActor
 @Observable
