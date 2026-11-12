@@ -25,6 +25,10 @@ public final class LibraryStore {
         public var devicesLifetime: TimeInterval = 15
         public var searchLifetime: TimeInterval = 120
         public var searchDebounce: Duration = .milliseconds(300)
+        // How many opened playlists keep their tracks and how many searches keep their results. Revisiting one
+        // of the most recent is instant; older ones load again as on a first visit.
+        public var playlistsKept = 12
+        public var searchesKept = 24
 
         public init() {}
     }
@@ -58,6 +62,8 @@ public final class LibraryStore {
     @ObservationIgnored private var loadedAt: [CacheKey: Date] = [:]
     @ObservationIgnored private var inFlight: [CacheKey: Task<Void, Never>] = [:]
     @ObservationIgnored private var searchCache: [String: (results: SearchResults, at: Date)] = [:]
+    // Playlists whose tracks are kept, least recently shown first.
+    @ObservationIgnored private var itemsRecency: [Playlist.ID] = []
     @ObservationIgnored private var searchTask: Task<Void, Never>?
     @ObservationIgnored private var shelfRestore: Task<Void, Never>?
     @ObservationIgnored private var shelfRevision = 0
@@ -123,7 +129,9 @@ public final class LibraryStore {
 
     public func items(for playlist: Playlist) -> LoadState<[Track]> {
         if playlist.id == LikedSongs.playlistID { return savedTracks }
-        return playlistItems[playlist.id] ?? .idle
+        guard let items = playlistItems[playlist.id] else { return .idle }
+        touchItems(playlist.id)
+        return items
     }
 
     public func loadItems(for playlist: Playlist, force: Bool = false) async {
@@ -144,6 +152,8 @@ public final class LibraryStore {
             if result.value != nil || playlistItems[playlist.id]?.value == nil || result.error == .playlistItemsUnavailable {
                 playlistItems[playlist.id] = result
             }
+            touchItems(playlist.id)
+            evictItems()
             if result.error == .notFound { markMissing(playlist.uri) }
             return result.value != nil
         }
@@ -175,7 +185,7 @@ public final class LibraryStore {
         do {
             let found = try await api.search(key, categories: Set(SearchCategory.allCases), page: PageRequest(limit: 10))
             guard started == generation else { return }
-            searchCache[key] = (found, clock.now())
+            cacheSearch(found, for: key)
             result = .loaded(found)
         } catch {
             result = .failed(error)
@@ -306,6 +316,7 @@ public final class LibraryStore {
         inFlight.removeAll()
         loadedAt.removeAll()
         searchCache.removeAll()
+        itemsRecency.removeAll()
         searchTask?.cancel()
         playlists = .idle
         playlistItems = [:]
@@ -389,6 +400,41 @@ public final class LibraryStore {
         if searchResults.value == nil { searchResults = .loading }
         isSearching = true
         return key
+    }
+
+    private func touchItems(_ id: Playlist.ID) {
+        if itemsRecency.last == id { return }
+        itemsRecency.removeAll { $0 == id }
+        itemsRecency.append(id)
+    }
+
+    // Drops the tracks of the least recently shown playlists beyond the limit, never one still loading.
+    private func evictItems() {
+        var excess = itemsRecency.count - timing.playlistsKept
+        var index = 0
+        while excess > 0, index < itemsRecency.count {
+            let id = itemsRecency[index]
+            guard inFlight[.items(id)] == nil else {
+                index += 1
+                continue
+            }
+            itemsRecency.remove(at: index)
+            playlistItems[id] = nil
+            loadedAt[.items(id)] = nil
+            excess -= 1
+        }
+    }
+
+    // Expired results are never shown again, so they go first; then the oldest beyond the limit.
+    private func cacheSearch(_ results: SearchResults, for key: String) {
+        let now = clock.now()
+        searchCache = searchCache.filter { now.timeIntervalSince($0.value.at) < timing.searchLifetime }
+        searchCache[key] = (results, now)
+        let excess = searchCache.count - timing.searchesKept
+        guard excess > 0 else { return }
+        for old in searchCache.sorted(by: { $0.value.at < $1.value.at }).prefix(excess).map(\.key) {
+            searchCache[old] = nil
+        }
     }
 
     private func loadAll<Item: Sendable>(

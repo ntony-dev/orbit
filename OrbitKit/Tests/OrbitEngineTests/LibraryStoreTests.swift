@@ -102,6 +102,51 @@ struct LibraryStoreTests {
         #expect(library.likedSongs?.itemCount == MockFixtures.savedTrackIDs.count)
     }
 
+    @Test func onlyTheMostRecentlyShownPlaylistsKeepTheirTracks() async {
+        var timing = LibraryStore.Timing()
+        timing.playlistsKept = 3
+        let library = LibraryStore(api: rig.services.api, clock: rig.engineClock, timing: timing)
+        let readable = MockFixtures.playlists.filter(\.canReadItems)
+        #expect(readable.count > 4)
+        for playlist in readable.prefix(3) { await library.loadItems(for: playlist) }
+        // Shown again just now, so it outlives the older two.
+        #expect(library.items(for: readable[0]).value != nil)
+        await library.loadItems(for: readable[3])
+        await library.loadItems(for: readable[4])
+        #expect(library.playlistItems.count == 3)
+        #expect(library.items(for: readable[1]) == .idle)
+        #expect(library.items(for: readable[2]) == .idle)
+
+        let requests = await rig.webRequests("playlistItems")
+        await library.loadItems(for: readable[0])
+        await library.loadItems(for: readable[4])
+        #expect(await rig.webRequests("playlistItems") == requests)
+        await library.loadItems(for: readable[1])
+        #expect(await rig.webRequests("playlistItems") == requests + 1)
+        #expect(library.items(for: readable[1]).value != nil)
+    }
+
+    @Test func searchResultsAreBoundedAndExpiredOnesDropped() async {
+        var timing = LibraryStore.Timing()
+        timing.searchesKept = 2
+        let library = LibraryStore(api: rig.services.api, clock: rig.engineClock, timing: timing)
+        for query in ["night", "jazz", "rain"] {
+            await library.search(query)
+            rig.clock.advance(by: 1)
+        }
+        #expect(await rig.webRequests("search") == 3)
+        await library.search("rain")
+        await library.search("jazz")
+        #expect(await rig.webRequests("search") == 3)
+        await library.search("night")
+        #expect(await rig.webRequests("search") == 4)
+
+        rig.clock.advance(by: timing.searchLifetime + 1)
+        await library.search("lofi")
+        await library.search("night")
+        #expect(await rig.webRequests("search") == 6)
+    }
+
     @Test func searchIsDebouncedAndOnlyTheLastQueryIsSent() async {
         for query in ["n", "ni", "nig", "night"] {
             library.updateSearch(query)
