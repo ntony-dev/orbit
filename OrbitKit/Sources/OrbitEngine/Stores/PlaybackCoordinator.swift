@@ -49,7 +49,7 @@ public final class PlaybackCoordinator {
 
     public private(set) var snapshot: PlaybackSnapshot = .idle
     // Intents sent but not yet confirmed, so the UI can show progress on exactly the control that was used.
-    public private(set) var pendingIntents: Set<PlaybackIntent> = []
+    public var pendingIntents: Set<PlaybackIntent> { Set(pendingCounts.keys) }
     public var isCurrentTrackSaved: Bool? {
         guard let savedState, savedState.uri == snapshot.track?.uri else { return nil }
         return savedState.saved
@@ -57,7 +57,6 @@ public final class PlaybackCoordinator {
     public private(set) var lastError: OrbitError?
     // Which side `snapshot` comes from; nil when nothing is playing anywhere Orbit can see.
     public private(set) var authority: PlaybackRoute?
-    public private(set) var interfaceVisibility: InterfaceVisibility = .collapsed
     // The user's synchronization setting, which scales the regular Web API sync interval.
     public var syncFrequency: SyncFrequency = .standard {
         // A shorter interval applies at once; a longer one from the next sync, which is already scheduled.
@@ -87,14 +86,16 @@ public final class PlaybackCoordinator {
     @ObservationIgnored private var localDeviceName: String?
     @ObservationIgnored private var localDeviceID: String?
     @ObservationIgnored private var remote: RemoteObservation?
+    @ObservationIgnored private var interfaceVisibility = InterfaceVisibility.collapsed
     // The context Orbit itself confirmed starting, ordered against Web API reads by `contextSequence`.
     @ObservationIgnored private var knownContext: (context: PlaybackContext, sequence: Int)?
     @ObservationIgnored private var contextSequence = 0
     @ObservationIgnored private var webSignedIn = true
 
+    private var pendingCounts: [PlaybackIntent: Int] = [:]
     @ObservationIgnored private var overlays: [Field: Overlay] = [:]
-    @ObservationIgnored private var nextOverlayID = 0
-    @ObservationIgnored private var pendingCounts: [PlaybackIntent: Int] = [:]
+    // Numbers commands in issue order: overlays apply in this order and coalescing keeps the highest per intent.
+    @ObservationIgnored private var lastCommandID = 0
     @ObservationIgnored private var latestIntent: [PlaybackIntent: Int] = [:]
     @ObservationIgnored private var commandTail: Task<Void, Never>?
     @ObservationIgnored private var commandEpoch = 0
@@ -259,7 +260,7 @@ public final class PlaybackCoordinator {
     }
 
     // AppleScript only knows repeat on or off, so repeat-one always goes through the Web API.
-    public func setRepeat(_ mode: RepeatMode) async {
+    func setRepeat(_ mode: RepeatMode) async {
         var local: LocalCommand?
         if mode != .track {
             local = { player in try await player.setRepeating(mode == .context) }
@@ -293,7 +294,26 @@ public final class PlaybackCoordinator {
     }
 
     private func play(context uri: SpotifyURI, name: String?) async -> Bool {
-        let started = await startContext(uri, name: name)
+        let tracks = contextTracks?(uri)
+        let started = await start(
+            .playContext(uri),
+            local: { try await $0.play(track: uri, inContext: nil) },
+            // Liked Songs goes out as its collection context too: when Spotify refuses that, the Web client itself
+            // falls back to playing the saved tracks as a list.
+            web: { try await $0.play(.context(uri), deviceID: $1) },
+            confirmed: { observation, before in
+                if let context = observation.context {
+                    return context == uri || (LikedSongs.isLikedSongs(context) && LikedSongs.isLikedSongs(uri))
+                }
+                // After that fallback, Web API state never names a context; the track is all there is to go on.
+                guard observation.isLocal || LikedSongs.isLikedSongs(uri) else { return false }
+                guard observation.isPlaying, let track = observation.track else { return false }
+                if let tracks, !tracks.isEmpty { return tracks.contains(track) }
+                return track != before || (observation.position ?? .infinity) < 3
+            }
+        ) { [weak self] in
+            self?.adopt(context: uri, name: name)
+        }
         if !started, lastError == .notFound { contextNotFound?(uri) }
         return started
     }
@@ -394,7 +414,7 @@ extension PlaybackCoordinator {
         var sequence: Int
     }
 
-    struct ObservedState {
+    private struct ObservedState {
         var track: SpotifyURI?
         var context: SpotifyURI?
         var isPlaying: Bool
@@ -413,8 +433,8 @@ extension PlaybackCoordinator {
     }
 
     // Untyped so command closures stay one-liners; every service behind them throws OrbitError.
-    typealias LocalCommand = @Sendable (any LocalPlayer) async throws -> Void
-    typealias WebCommand = @Sendable (any SpotifyAPI, String?) async throws -> Void
+    private typealias LocalCommand = @Sendable (any LocalPlayer) async throws -> Void
+    private typealias WebCommand = @Sendable (any SpotifyAPI, String?) async throws -> Void
 
     private var webUsable: Bool {
         guard webSignedIn else { return false }
@@ -643,56 +663,63 @@ extension PlaybackCoordinator {
         case nil:
             return .idle
         case .webAPI:
-            guard var result = remoteSnapshot else { return .idle }
-            if let context = result.context {
-                result.context = named(context)
-            } else if let known = knownContext, LikedSongs.isLikedSongs(known.context.uri), let track = result.track?.uri,
-                      contextTracks?(known.context.uri)?.contains(track) == true {
-                // Liked Songs started as a track list still belongs to Liked Songs for as long as it plays saved tracks.
-                result.context = known.context
-            }
-            return result
+            return remoteSnapshot.map(snapshotFromWebAPI) ?? .idle
         case .local:
-            guard let local else { return .idle }
-            let state = local.state
-            let paired = remoteSnapshot.flatMap { $0.track?.uri == state.track?.uri && state.track != nil ? $0 : nil }
-            var track = state.track
-            if let richer = paired?.track {
-                let artwork = track?.artworkURL
-                track = richer
-                if track?.artworkURL == nil { track?.artworkURL = artwork }
-            }
-            // A track change seen locally before the next Web API read keeps the context it was playing in.
-            let sameDevice = remoteSnapshot.flatMap { isLocalDevice($0.device) ? $0 : nil }
-            var context = (paired ?? sameDevice)?.context.map { named($0) }
-            if let known = knownContext, known.sequence > (remote?.sequence ?? -1) || context == nil {
-                context = known.context
-            }
-            let volume = state.volume ?? paired?.volume
-            var device = paired?.device ?? remoteSnapshot?.device.flatMap { isLocalDevice($0) ? $0 : nil }
-                ?? PlaybackDevice(id: localDeviceID ?? Self.localDevicePlaceholderID, name: localDeviceName ?? "This Mac", kind: .computer)
-            device.isActive = true
-            device.volumePercent = volume
-            let repeatMode: RepeatMode = switch state.isRepeating {
-            case true?: (paired?.repeatMode ?? snapshot.repeatMode) == .track ? .track : .context
-            case false?: .off
-            case nil: paired?.repeatMode ?? snapshot.repeatMode
-            }
-            return PlaybackSnapshot(
-                track: track,
-                isPlaying: state.status == .playing,
-                position: state.position ?? 0,
-                sampledAt: local.at,
-                shuffle: state.isShuffling ?? paired?.shuffle ?? snapshot.shuffle,
-                repeatMode: repeatMode,
-                context: context,
-                device: device,
-                volume: volume
-            )
+            return local.map { snapshotFromLocal($0, remote: remoteSnapshot) } ?? .idle
         }
     }
 
-    static let localDevicePlaceholderID = "orbit.local-device"
+    private func snapshotFromWebAPI(_ observed: PlaybackSnapshot) -> PlaybackSnapshot {
+        var result = observed
+        if let context = result.context {
+            result.context = named(context)
+        } else if let known = knownContext, LikedSongs.isLikedSongs(known.context.uri), let track = result.track?.uri,
+                  contextTracks?(known.context.uri)?.contains(track) == true {
+            // Liked Songs started as a track list still belongs to Liked Songs for as long as it plays saved tracks.
+            result.context = known.context
+        }
+        return result
+    }
+
+    // AppleScript reports no context, device or repeat-one, so those come from a Web API read of the same track or
+    // of this Mac, and fields the notification omits fall back to the previous snapshot.
+    private func snapshotFromLocal(_ local: LocalObservation, remote remoteSnapshot: PlaybackSnapshot?) -> PlaybackSnapshot {
+        let state = local.state
+        let paired = remoteSnapshot.flatMap { $0.track?.uri == state.track?.uri && state.track != nil ? $0 : nil }
+        var track = state.track
+        if let richer = paired?.track {
+            let artwork = track?.artworkURL
+            track = richer
+            if track?.artworkURL == nil { track?.artworkURL = artwork }
+        }
+        // A track change seen locally before the next Web API read keeps the context it was playing in.
+        let sameDevice = remoteSnapshot.flatMap { isLocalDevice($0.device) ? $0 : nil }
+        var context = (paired ?? sameDevice)?.context.map { named($0) }
+        if let known = knownContext, known.sequence > (remote?.sequence ?? -1) || context == nil {
+            context = known.context
+        }
+        let volume = state.volume ?? paired?.volume
+        var device = paired?.device ?? sameDevice?.device
+            ?? PlaybackDevice(id: localDeviceID ?? "orbit.local-device", name: localDeviceName ?? "This Mac", kind: .computer)
+        device.isActive = true
+        device.volumePercent = volume
+        let repeatMode: RepeatMode = switch state.isRepeating {
+        case true?: (paired?.repeatMode ?? snapshot.repeatMode) == .track ? .track : .context
+        case false?: .off
+        case nil: paired?.repeatMode ?? snapshot.repeatMode
+        }
+        return PlaybackSnapshot(
+            track: track,
+            isPlaying: state.status == .playing,
+            position: state.position ?? 0,
+            sampledAt: local.at,
+            shuffle: state.isShuffling ?? paired?.shuffle ?? snapshot.shuffle,
+            repeatMode: repeatMode,
+            context: context,
+            device: device,
+            volume: volume
+        )
+    }
 
     private func named(_ context: PlaybackContext) -> PlaybackContext {
         guard context.name == nil else { return context }
@@ -801,13 +828,11 @@ extension PlaybackCoordinator {
 
     private func addPending(_ intent: PlaybackIntent) {
         pendingCounts[intent, default: 0] += 1
-        pendingIntents.insert(intent)
     }
 
     private func removePending(_ intent: PlaybackIntent) {
         let count = (pendingCounts[intent] ?? 1) - 1
         pendingCounts[intent] = count > 0 ? count : nil
-        if count <= 0 { pendingIntents.remove(intent) }
     }
 
     private func enqueue<Value: Sendable>(_ body: @escaping @MainActor () async -> Value) async -> Value {
@@ -844,6 +869,7 @@ extension PlaybackCoordinator {
                 switch route {
                 case .local:
                     try await Self.typed { [localPlayer] in try await local?(localPlayer) }
+                    localPermission = .granted
                 case .webAPI:
                     try await sendWeb(web)
                     noteWebSuccess()
@@ -888,8 +914,7 @@ extension PlaybackCoordinator {
         local: LocalCommand?,
         web: WebCommand?
     ) async {
-        nextOverlayID += 1
-        let id = nextOverlayID
+        let id = nextCommandID()
         latestIntent[intent] = id
         if let overlay {
             overlays[overlay.0] = Overlay(id: id, apply: overlay.1, isSatisfied: overlay.2)
@@ -903,14 +928,31 @@ extension PlaybackCoordinator {
             if waitsForTrackChange, let skip = skipInFlight {
                 _ = await waitFor(timeout: timing.trackChangeTimeout) { $0.track != skip.from }
             }
-            let result = await deliver(local: local, web: web)
-            settle(overlayID: id, field: overlay?.0, result: result)
-            // Reading back right away reconciles within a few milliseconds instead of waiting for the notification.
-            if case .success(.local) = result { await readLocalState() }
+            await send(id, field: overlay?.0, local: local, web: web)
         }
     }
 
-    private func settle(overlayID id: Int, field: Field?, result: Result<PlaybackRoute, OrbitError>) {
+    // Skips are never coalesced: three presses mean three tracks.
+    private func changeTrack(_ intent: PlaybackIntent, local: @escaping LocalCommand, web: @escaping WebCommand) async {
+        addPending(intent)
+        defer { removePending(intent) }
+        let id = nextCommandID()
+        await enqueue { [self] in
+            skipInFlight = (snapshot.track?.uri, id)
+            let result = await send(id, field: nil, local: local, web: web)
+            if case .failure = result, skipInFlight?.id == id { skipInFlight = nil }
+        }
+    }
+
+    private func nextCommandID() -> Int {
+        lastCommandID += 1
+        return lastCommandID
+    }
+
+    // Delivers a queued command, then gives its overlay a grace period on success or drops it on failure.
+    @discardableResult
+    private func send(_ id: Int, field: Field?, local: LocalCommand?, web: WebCommand?) async -> Result<PlaybackRoute, OrbitError> {
+        let result = await deliver(local: local, web: web)
         commandEpoch += 1
         switch result {
         case .success(let route):
@@ -921,7 +963,8 @@ extension PlaybackCoordinator {
             }
             recompute()
             if route == .local {
-                localPermission = .granted
+                // Reading back right away reconciles within milliseconds instead of waiting for the notification.
+                await readLocalState()
             } else {
                 scheduleSync(after: timing.webSettleDelay)
             }
@@ -930,41 +973,7 @@ extension PlaybackCoordinator {
             lastError = error
             recompute()
         }
-    }
-
-    // Skips are never coalesced: three presses mean three tracks.
-    private func changeTrack(_ intent: PlaybackIntent, local: @escaping LocalCommand, web: @escaping WebCommand) async {
-        addPending(intent)
-        defer { removePending(intent) }
-        nextOverlayID += 1
-        let id = nextOverlayID
-        await enqueue { [self] in
-            skipInFlight = (snapshot.track?.uri, id)
-            let result = await deliver(local: local, web: web)
-            if case .failure = result, skipInFlight?.id == id { skipInFlight = nil }
-            settle(overlayID: id, field: nil, result: result)
-            if case .success(.local) = result { await readLocalState() }
-        }
-    }
-
-    private func startContext(_ uri: SpotifyURI, name: String?) async -> Bool {
-        let tracks = contextTracks?(uri)
-        return await start(
-            .playContext(uri),
-            local: { try await $0.play(track: uri, inContext: nil) },
-            web: { try await $0.play(LikedSongs.webTarget(for: uri), deviceID: $1) },
-            confirmed: { observation, before in
-                if let context = observation.context { return Self.sameContext(context, uri) }
-                // When Spotify refuses Liked Songs as a context the Web client plays the saved tracks as a list,
-                // and Web API state then never names a context; the track is all there is to go on.
-                guard observation.isLocal || LikedSongs.isLikedSongs(uri) else { return false }
-                guard observation.isPlaying, let track = observation.track else { return false }
-                if let tracks, !tracks.isEmpty { return tracks.contains(track) }
-                return track != before || (observation.position ?? .infinity) < 3
-            }
-        ) { [weak self] in
-            self?.adopt(context: uri, name: name)
-        }
+        return result
     }
 
     // Issues a play command, then waits for observed state to show it before reporting success.
@@ -986,7 +995,6 @@ extension PlaybackCoordinator {
             let before = snapshot.track?.uri
             let result = await deliver(local: local, web: web)
             commandEpoch += 1
-            if case .success(.local) = result { localPermission = .granted }
             return SentCommand(trackBefore: before, result: result)
         }
         guard let sent, generation == switchGeneration else { return false }
@@ -1026,10 +1034,6 @@ extension PlaybackCoordinator {
         let context = PlaybackContext(uri: uri, name: name ?? contextName?(uri))
         contextSequence += 1
         knownContext = (context, contextSequence)
-    }
-
-    static func sameContext(_ lhs: SpotifyURI, _ rhs: SpotifyURI) -> Bool {
-        lhs == rhs || (LikedSongs.isLikedSongs(lhs) && LikedSongs.isLikedSongs(rhs))
     }
 
     private func waitFor(

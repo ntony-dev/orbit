@@ -9,12 +9,6 @@ public enum LikedSongs {
         .likedSongs(userID: userID)
     }
 
-    // How a context is started over the Web API. Liked Songs goes out as its collection context too; the Web
-    // client itself falls back to a track list when Spotify refuses that, so this stays a plain context.
-    static func webTarget(for context: SpotifyURI) -> PlayTarget {
-        .context(context)
-    }
-
     public static func playlist(userID: String, ownerName: String?, itemCount: Int?) -> Playlist {
         Playlist(
             id: playlistID,
