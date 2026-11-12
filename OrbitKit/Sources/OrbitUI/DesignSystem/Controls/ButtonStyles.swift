@@ -63,7 +63,10 @@ private struct IconButtonBody: View {
     private var glyphStyle: AnyShapeStyle {
         if style.isOn, isEnabled { return AnyShapeStyle(theme.accent) }
         // A disabled glyph dims from the primary color, so an unavailable toggle is not dimmed twice.
-        if style.isToggle || style.recedesAtRest, isEnabled, !isHovered { return AnyShapeStyle(.secondary) }
+        // An off toggle stays receded under the pointer, where the hover fill is its feedback: brightened, one just
+        // switched off looked still on until the pointer left.
+        if style.isToggle, isEnabled { return AnyShapeStyle(.secondary) }
+        if style.recedesAtRest, isEnabled, !isHovered { return AnyShapeStyle(.secondary) }
         return AnyShapeStyle(.primary)
     }
 
