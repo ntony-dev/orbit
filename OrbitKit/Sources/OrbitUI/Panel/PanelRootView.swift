@@ -193,7 +193,10 @@ public struct PanelRootView: View {
         Task { @MainActor in
             try? await Task.sleep(for: OrbitTokens.Motion.settle / resolvedTheme.animationSpeed)
             guard generation == resizeGeneration else { return }
-            if let after = CanvasPlan.after(current: allocatedCanvas, target: surface) { allocateCanvas(after) }
+            // Fitted to the surface as it is now: a list that re-fits from inside a layout pass (a playlist whose
+            // tracks turn out to be unavailable, replacing the taller loading rows) can change the surface without
+            // this view seeing the change, which left the canvas at the skeleton's height.
+            if let after = CanvasPlan.after(current: allocatedCanvas, target: currentSurfaceSize) { allocateCanvas(after) }
             panel.isCanvasFitted = true
         }
     }
