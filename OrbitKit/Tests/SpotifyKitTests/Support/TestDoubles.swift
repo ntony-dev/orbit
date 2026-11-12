@@ -127,8 +127,8 @@ enum LocalPorts {
     }
 
     // Holds a port open on 127.0.0.1 the way another app would, to exercise the port-in-use path.
-    final class Occupier {
-        private let socket: Int32
+    final class Occupier: Sendable {
+        let socket: Int32
         let port: UInt16
 
         init() {
@@ -161,6 +161,38 @@ enum LocalHTTP {
         let (data, response) = try await session.data(from: url)
         return ((response as? HTTPURLResponse)?.statusCode ?? 0, String(decoding: data, as: UTF8.self))
     }
+}
+
+// Answers every connection on 127.0.0.1 with one fixed response and records what it was sent.
+final class CannedHTTPServer: Sendable {
+    private let occupier = LocalPorts.Occupier()
+    private let received = Locked<[String]>([])
+    private let stopped = Locked(false)
+
+    var port: UInt16 { occupier.port }
+
+    init(response: String) {
+        let reply = Array(response.utf8)
+        let thread = Thread { [occupier, received, stopped] in
+            while !stopped.value {
+                var waiting = pollfd(fd: occupier.socket, events: Int16(POLLIN), revents: 0)
+                guard poll(&waiting, 1, 50) > 0 else { continue }
+                let client = accept(occupier.socket, nil, nil)
+                guard client >= 0 else { continue }
+                var buffer = [UInt8](repeating: 0, count: 64 * 1024)
+                let count = recv(client, &buffer, buffer.count, 0)
+                received.set(received.value + [String(decoding: buffer.prefix(max(count, 0)), as: UTF8.self)])
+                _ = reply.withUnsafeBytes { send(client, $0.baseAddress, $0.count, 0) }
+                close(client)
+            }
+        }
+        thread.start()
+    }
+
+    var requests: [String] { received.value }
+
+    // The thread holds the Occupier, so the socket closes once the accept loop notices and exits.
+    deinit { stopped.set(true) }
 }
 
 // Plain BSD sockets, for what URLSession can't do: hold a silent connection open, or dial a specific address.

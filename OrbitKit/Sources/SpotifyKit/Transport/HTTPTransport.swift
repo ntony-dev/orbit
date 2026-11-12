@@ -16,7 +16,7 @@ struct URLSessionTransport: HTTPTransport {
         configuration.httpShouldSetCookies = false
         configuration.timeoutIntervalForRequest = 20
         configuration.waitsForConnectivity = false
-        session = URLSession(configuration: configuration)
+        session = URLSession(configuration: configuration, delegate: RedirectRefusal(), delegateQueue: nil)
     }
 
     func send(_ request: URLRequest) async throws(OrbitError) -> (Data, HTTPURLResponse) {
@@ -38,6 +38,21 @@ struct URLSessionTransport: HTTPTransport {
         } catch {
             throw .network(detail: "The request failed.")
         }
+    }
+}
+
+// Spotify's API and accounts hosts have no reason to redirect. A followed 307 or 308 would re-send a token
+// request's body, the refresh token or the code and verifier, to whatever host the Location names, so the
+// redirect response is returned as is and fails as an unexpected status.
+private final class RedirectRefusal: NSObject, URLSessionTaskDelegate, Sendable {
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping @Sendable (URLRequest?) -> Void
+    ) {
+        completionHandler(nil)
     }
 }
 
