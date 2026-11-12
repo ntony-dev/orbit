@@ -535,8 +535,9 @@ public final class LibraryStore {
                 guard isCurrent() else { return nil }
                 items += page.items
                 request = page.nextRequest(limit: current.limit)
+                guard !isRefresh else { continue }
                 nextPage[key] = request
-                if !isRefresh { show(.loaded(items), request == nil ? nil : .loading) }
+                show(.loaded(items), request == nil ? nil : .loading)
             }
             if isRefresh { show(.loaded(items), nil) }
             return nil
