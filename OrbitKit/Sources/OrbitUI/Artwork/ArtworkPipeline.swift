@@ -87,6 +87,22 @@ actor ArtworkPipeline {
     }
 }
 
+// The same pipeline for AppKit surfaces outside SwiftUI, such as the menu bar's now-playing item: one download,
+// decoded off the main actor at the size shown, shared with every view that shows the same cover.
+public enum ArtworkImages {
+    public static func cached(_ url: URL, points: CGFloat, scale: CGFloat) -> CGImage? {
+        ArtworkPipeline.shared.memory[key(url, points: points, scale: scale)]?.image
+    }
+
+    public static func load(_ url: URL, points: CGFloat, scale: CGFloat) async -> CGImage? {
+        await ArtworkPipeline.shared.artwork(for: key(url, points: points, scale: scale))?.image
+    }
+
+    static func key(_ url: URL, points: CGFloat, scale: CGFloat) -> ArtworkKey {
+        ArtworkKey(url: url, pixelSize: ArtworkView.pixels(points, scale: scale))
+    }
+}
+
 // NSCache is documented as thread-safe, which is what makes sharing it across isolation domains sound.
 final class ArtworkMemoryCache: @unchecked Sendable {
     private let cache: NSCache<Entry.Key, Entry> = {

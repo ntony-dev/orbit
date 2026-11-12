@@ -2,6 +2,7 @@ import AppKit
 import KeyboardShortcuts
 import OrbitCore
 import OrbitEngine
+import OrbitUI
 
 // The way back into Orbit when the pill is hidden, and the same essentials as the pill without opening it.
 // The menu is rebuilt each time it opens, so it never needs to observe the stores while closed.
@@ -101,15 +102,22 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         return item
     }
 
+    // Through the artwork pipeline, so the cover the pill already shows is usually decoded or on disk, and a
+    // download is decoded off the main actor at the item's size rather than in full.
     private func artworkImage(for url: URL?) -> NSImage? {
         guard let url else { return nil }
         if let artwork, artwork.url == url { return artwork.image }
         artworkLoad?.cancel()
+        let side: CGFloat = 32
+        let scale = statusItem.button?.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
+        if let cached = ArtworkImages.cached(url, points: side, scale: scale) {
+            let image = NSImage(cgImage: cached, size: NSSize(width: side, height: side))
+            artwork = (url, image)
+            return image
+        }
         artworkLoad = Task { [weak self] in
-            guard let (data, _) = try? await URLSession.shared.data(from: url), !Task.isCancelled,
-                  let image = NSImage(data: data)
-            else { return }
-            image.size = NSSize(width: 32, height: 32)
+            guard let decoded = await ArtworkImages.load(url, points: side, scale: scale), !Task.isCancelled else { return }
+            let image = NSImage(cgImage: decoded, size: NSSize(width: side, height: side))
             self?.artwork = (url, image)
             // The menu may still be open; the item picks the image up in place.
             self?.menu.items.first?.image = image

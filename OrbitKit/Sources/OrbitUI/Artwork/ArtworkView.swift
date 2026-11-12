@@ -93,7 +93,7 @@ struct ArtworkView: View {
         }
     }
 
-    static func pixels(_ points: CGFloat, scale: CGFloat) -> Int {
+    nonisolated static func pixels(_ points: CGFloat, scale: CGFloat) -> Int {
         Int((points * scale).rounded(.up))
     }
 }
