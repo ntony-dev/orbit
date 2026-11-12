@@ -81,14 +81,34 @@ enum PanelPlacement {
         return options.snapsToEdges ? snap(clamped, in: visible) : clamped
     }
 
-    // The expanded surface grows away from the nearest corner so it stays on screen; a pill centred on the
-    // display grows symmetrically.
+    // How close the glass must come to an edge of the visible frame to count as sitting on it: a snapped pill
+    // sits `edgeGap` away, and an unsnapped one dropped against the edge lands a little further out.
+    static let edgeReach: CGFloat = edgeGap + snapDistance * 2
+
+    // Which point of the surface stays put while it expands, so the card grows onto the screen. A pill sitting on
+    // an edge, in the middle third of that edge, grows away from the edge and evenly along it, like a notch: from
+    // the top centre straight down, from the middle of a side straight inward. Anywhere else it grows away from
+    // the nearest corner, and a pill centred on the display grows evenly to both sides.
     static func anchor(for surface: CGRect, in visible: CGRect) -> PanelAnchor {
-        let horizontal: PanelAnchor.Horizontal =
-            if abs(surface.midX - visible.midX) <= 1 { .center }
-            else if surface.midX > visible.midX { .trailing }
-            else { .leading }
-        return PanelAnchor(horizontal: horizontal, vertical: surface.midY > visible.midY ? .top : .bottom)
+        let onTop = visible.maxY - surface.maxY <= edgeReach
+        let onBottom = surface.minY - visible.minY <= edgeReach
+        let onLeading = surface.minX - visible.minX <= edgeReach
+        let onTrailing = visible.maxX - surface.maxX <= edgeReach
+        let alongTopOrBottom = abs(surface.midX - visible.midX) <= visible.width / 6
+        let alongSide = abs(surface.midY - visible.midY) <= visible.height / 6
+        let horizontal: PanelAnchor.Horizontal = surface.midX > visible.midX ? .trailing : .leading
+        let vertical: PanelAnchor.Vertical = surface.midY > visible.midY ? .top : .bottom
+
+        if onTop != onBottom, alongTopOrBottom, !onLeading, !onTrailing {
+            return PanelAnchor(horizontal: .center, vertical: onTop ? .top : .bottom)
+        }
+        if onLeading != onTrailing, alongSide, !onTop, !onBottom {
+            return PanelAnchor(horizontal: onLeading ? .leading : .trailing, vertical: .center)
+        }
+        if abs(surface.midX - visible.midX) <= 1 {
+            return PanelAnchor(horizontal: .center, vertical: vertical)
+        }
+        return PanelAnchor(horizontal: horizontal, vertical: vertical)
     }
 
     static func savedPosition(of surface: CGRect, in visible: CGRect) -> SavedPanelPosition {

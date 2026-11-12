@@ -41,10 +41,47 @@ struct PanelGeometryTests {
 
     @Test func expandThenCollapseReturnsToTheSameFrame() {
         let pill = CGRect(x: 1000, y: 50, width: 286, height: 84)
-        for anchor in [PanelAnchor.bottomTrailing, .bottomLeading, .topTrailing, .topLeading, .topCenter] {
+        for anchor in PanelAnchor.all {
             let expanded = PanelGeometry.resize(pill, to: CGSize(width: 376, height: 466), keeping: anchor)
             #expect(PanelGeometry.resize(expanded, to: pill.size, keeping: anchor) == pill)
         }
+    }
+
+    @Test(arguments: PanelAnchor.all)
+    func resizingKeepsTheAnchoredPointAndTheRequestedSize(anchor: PanelAnchor) {
+        let pill = CGRect(x: 1584, y: 1336, width: 312, height: 92)
+        for size in [CGSize(width: 384, height: 358), CGSize(width: 384, height: 528), CGSize(width: 252, height: 80)] {
+            let resized = PanelGeometry.resize(pill, to: size, keeping: anchor)
+            #expect(resized.size == size)
+            #expect(PanelGeometry.point(of: resized, at: anchor) == PanelGeometry.point(of: pill, at: anchor))
+        }
+    }
+
+    @Test func topCentreGrowsStraightDownWithItsTopEdgeFixed() {
+        let pill = CGRect(x: 1584, y: 1336, width: 312, height: 92)
+        let expanded = PanelGeometry.resize(pill, to: CGSize(width: 384, height: 358), keeping: .topCenter)
+        #expect(expanded.maxY == pill.maxY)
+        #expect(expanded.midX == pill.midX)
+        #expect(expanded.minX == pill.minX - 36 && expanded.maxX == pill.maxX + 36)
+    }
+
+    @Test func sideMiddlesGrowInwardAndEvenlyAlongTheEdge() {
+        let pill = CGRect(x: 3100, y: 600, width: 312, height: 92)
+        let fromTrailing = PanelGeometry.resize(pill, to: CGSize(width: 384, height: 358), keeping: .centerTrailing)
+        #expect(fromTrailing.maxX == pill.maxX && fromTrailing.midY == pill.midY)
+        let fromLeading = PanelGeometry.resize(pill, to: CGSize(width: 384, height: 358), keeping: .centerLeading)
+        #expect(fromLeading.minX == pill.minX && fromLeading.midY == pill.midY)
+        let fromBottom = PanelGeometry.resize(pill, to: CGSize(width: 384, height: 358), keeping: .bottomCenter)
+        #expect(fromBottom.minY == pill.minY && fromBottom.midX == pill.midX)
+    }
+
+    // An odd difference in size cannot be split evenly; the canvas keeps its exact size and a whole-point origin
+    // rather than growing a point, so the UI's surface still lines up with the anchor.
+    @Test func anOddDifferenceRoundsTheOriginNotTheSize() {
+        let frame = CGRect(x: 100, y: 100, width: 300, height: 90)
+        let resized = PanelGeometry.resize(frame, to: CGSize(width: 371, height: 300), keeping: .centerTrailing)
+        #expect(resized.size == CGSize(width: 371, height: 300))
+        #expect(resized.origin.y == resized.origin.y.rounded())
     }
 
     @Test func zeroSizeFrameBecomesTheAnchoredCorner() {

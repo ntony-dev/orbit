@@ -92,6 +92,39 @@ struct PanelPlacementTests {
         #expect(PanelPlacement.anchor(for: CGRect(origin: origin, size: pill), in: ultrawide.visibleFrame) == expected)
     }
 
+    @Test func aDockedOrTopSnappedPillGrowsFromTheTopEdge() {
+        let visible = ultrawide.visibleFrame
+        #expect(PanelPlacement.anchor(for: PanelPlacement.dockedSurface(size: pill, in: visible), in: visible) == .topCenter)
+        let nearTopCentre = CGRect(origin: CGPoint(x: visible.midX - pill.width / 2 + 12, y: visible.maxY - pill.height - 14), size: pill)
+        let snapped = PanelPlacement.snap(nearTopCentre, in: visible)
+        #expect(PanelPlacement.anchor(for: snapped, in: visible) == .topCenter)
+    }
+
+    // Dropped near, not exactly at, the middle of an edge: it still grows from that edge, never from a corner.
+    @Test(arguments: [
+        (CGPoint(x: 1895, y: 1338), PanelAnchor.topCenter),
+        (CGPoint(x: 1195, y: 78), PanelAnchor.bottomCenter),
+        (CGPoint(x: 8, y: 819), PanelAnchor.centerLeading),
+        (CGPoint(x: 3182, y: 569), PanelAnchor.centerTrailing),
+    ])
+    func aPillNearTheMiddleOfAnEdgeGrowsFromThatEdge(origin: CGPoint, expected: PanelAnchor) {
+        #expect(PanelPlacement.anchor(for: CGRect(origin: origin, size: pill), in: ultrawide.visibleFrame) == expected)
+    }
+
+    @Test func outsideTheMiddleThirdOfAnEdgeItGrowsFromTheCorner() {
+        let visible = ultrawide.visibleFrame
+        let topRightThird = CGRect(x: 2700, y: visible.maxY - PanelPlacement.edgeGap - pill.height, width: pill.width, height: pill.height)
+        #expect(PanelPlacement.anchor(for: topRightThird, in: visible) == .topTrailing)
+        let floatingNearTheMiddle = CGRect(x: visible.midX - pill.width / 2 + 40, y: 900, width: pill.width, height: pill.height)
+        #expect(PanelPlacement.anchor(for: floatingNearTheMiddle, in: visible) == .topTrailing)
+    }
+
+    @Test func aPillInTheCornerOfTwoEdgesGrowsFromTheCorner() {
+        let visible = ultrawide.visibleFrame
+        let snapped = PanelPlacement.snap(CGRect(x: 3175, y: 80, width: pill.width, height: pill.height), in: visible)
+        #expect(PanelPlacement.anchor(for: snapped, in: visible) == .bottomTrailing)
+    }
+
     @Test func savedPositionRoundTrips() {
         let surface = CGRect(origin: CGPoint(x: 900, y: 333), size: pill)
         let saved = PanelPlacement.savedPosition(of: surface, in: ultrawide.visibleFrame)

@@ -10,7 +10,7 @@ public enum PanelGeometry {
         (translation.width * translation.width + translation.height * translation.height) >= dragThreshold * dragThreshold
     }
 
-    // The pill grows away from the nearest screen corner, so the expanded surface stays on screen.
+    // The nearest screen corner, which the expanded surface grows away from so it stays on screen.
     public static func anchor(forCanvas canvas: CGRect, in visibleFrame: CGRect) -> PanelAnchor {
         PanelAnchor(
             horizontal: canvas.midX > visibleFrame.midX ? .trailing : .leading,
@@ -18,19 +18,38 @@ public enum PanelGeometry {
         )
     }
 
-    // The new canvas frame for `size`, keeping the anchored corner (or top/bottom centre) where it was.
+    // The new canvas frame for `size`, keeping the anchored corner or edge middle where it was. Only the origin is
+    // rounded, so the canvas is always exactly the size the UI asked for and its surface lines up with the anchor.
     public static func resize(_ frame: CGRect, to size: CGSize, keeping anchor: PanelAnchor) -> CGRect {
-        var resized = CGRect(origin: frame.origin, size: size)
-        switch anchor.horizontal {
-        case .leading: resized.origin.x = frame.minX
-        case .center: resized.origin.x = frame.midX - size.width / 2
-        case .trailing: resized.origin.x = frame.maxX - size.width
+        let fixed = point(of: frame, at: anchor)
+        let unit = unitPoint(of: anchor)
+        return CGRect(
+            x: (fixed.x - size.width * unit.x).rounded(),
+            y: (fixed.y - size.height * unit.y).rounded(),
+            width: size.width,
+            height: size.height
+        )
+    }
+
+    // The anchored point of `frame` in screen coordinates: what stays put while the canvas resizes.
+    public static func point(of frame: CGRect, at anchor: PanelAnchor) -> CGPoint {
+        let unit = unitPoint(of: anchor)
+        return CGPoint(x: frame.minX + frame.width * unit.x, y: frame.minY + frame.height * unit.y)
+    }
+
+    // Where the anchor sits in a frame, from its bottom-left corner (AppKit's y points up).
+    private static func unitPoint(of anchor: PanelAnchor) -> (x: CGFloat, y: CGFloat) {
+        let x: CGFloat = switch anchor.horizontal {
+        case .leading: 0
+        case .center: 0.5
+        case .trailing: 1
         }
-        switch anchor.vertical {
-        case .top: resized.origin.y = frame.maxY - size.height
-        case .bottom: resized.origin.y = frame.minY
+        let y: CGFloat = switch anchor.vertical {
+        case .top: 1
+        case .center: 0.5
+        case .bottom: 0
         }
-        return resized.integral
+        return (x, y)
     }
 
     // Window origin during a drag, from global mouse positions only. `pressLocation` is where the press began,

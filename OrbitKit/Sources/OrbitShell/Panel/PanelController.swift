@@ -38,6 +38,8 @@ final class PanelController: PanelHost {
     private var suppressesFocus = false
     // Set by --panel-anchor, which holds the pill exactly where asked until the user drags it.
     private var isPinned = false
+    // The user dragged the open panel, so where its pill comes to rest after collapsing is a move by the user.
+    private var wasMovedWhileExpanded = false
 
     init(stores: OrbitStores, preferences: Preferences) {
         self.preferences = preferences
@@ -119,7 +121,8 @@ final class PanelController: PanelHost {
             isPresentedOnDemand = false
             updateVisibility()
         }
-        settle(movedByUser: false)
+        settle(movedByUser: wasMovedWhileExpanded)
+        wasMovedWhileExpanded = false
     }
 
     func beginDrag() {
@@ -151,6 +154,8 @@ final class PanelController: PanelHost {
             settle(movedByUser: true)
         } else {
             keepExpandedSurfaceOnScreen()
+            reanchorExpandedSurface()
+            wasMovedWhileExpanded = true
         }
         scheduleFullscreenCheck()
     }
@@ -234,6 +239,15 @@ final class PanelController: PanelHost {
         displayID = display.id
         positions[display.id] = PanelPlacement.savedPosition(of: settled, in: display.visibleFrame)
         persistPositions()
+    }
+
+    // A card the user drops near another corner or edge collapses toward it, so the pill lands where the card was
+    // taken. Only while the canvas fits the card exactly, when changing the anchor moves nothing on screen.
+    private func reanchorExpandedSurface() {
+        guard state.isExpanded, state.isCanvasFitted else { return }
+        let surface = Self.surface(ofCanvas: panel.frame)
+        guard let display = PanelPlacement.display(for: surface, in: NSScreen.layouts) else { return }
+        state.anchor = PanelPlacement.anchor(for: surface, in: display.visibleFrame)
     }
 
     private func keepExpandedSurfaceOnScreen() {

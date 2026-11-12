@@ -146,27 +146,3 @@ enum OrbitTokens {
         static let toggle = Animation.easeOut(duration: 0.08)
     }
 }
-
-extension Alignment {
-    init(_ anchor: PanelAnchor) {
-        switch (anchor.vertical, anchor.horizontal) {
-        case (.top, .leading): self = .topLeading
-        case (.top, .center): self = .top
-        case (.top, .trailing): self = .topTrailing
-        case (.bottom, .leading): self = .bottomLeading
-        case (.bottom, .center): self = .bottom
-        case (.bottom, .trailing): self = .bottomTrailing
-        }
-    }
-}
-
-extension UnitPoint {
-    init(_ anchor: PanelAnchor) {
-        let x: CGFloat = switch anchor.horizontal {
-        case .leading: 0
-        case .center: 0.5
-        case .trailing: 1
-        }
-        self.init(x: x, y: anchor.vertical == .top ? 0 : 1)
-    }
-}

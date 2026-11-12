@@ -50,7 +50,12 @@ public struct PanelRootView: View {
         // Size changes that come from state rather than navigation, such as a notice appearing, still morph.
         .animation(theme.animation(OrbitTokens.Motion.morph), value: expandedSize)
         .padding(OrbitTokens.Size.canvasMargin)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: Alignment(panel.anchor))
+        // The canvas takes its new size at once, exactly when the window does. Were it to animate, the hosting view
+        // would centre the growing canvas in the window and carry the surface off its anchor, so a pill would jump
+        // toward the middle of the card and grow from there.
+        .animation(nil) { content in
+            content.frame(width: allocatedCanvas.width, height: allocatedCanvas.height, alignment: Alignment(panel.anchor))
+        }
         .background {
             if let backdrop = debug.backdrop { DebugBackdrop(style: backdrop) }
         }
@@ -153,8 +158,8 @@ public struct PanelRootView: View {
             applyDebugScreen()
             isShowingExpanded = true
         }
-        allocatedCanvas = CanvasPlan.canvas(for: currentSurfaceSize)
-        host.setCanvasSize(allocatedCanvas)
+        allocateCanvas(CanvasPlan.canvas(for: currentSurfaceSize))
+        panel.isCanvasFitted = true
     }
 
     private func expandFromPill() {
@@ -176,16 +181,25 @@ public struct PanelRootView: View {
     private func fitCanvas(to surface: CGSize) {
         resizeGeneration += 1
         let generation = resizeGeneration
+        panel.isCanvasFitted = false
         let during = CanvasPlan.during(current: allocatedCanvas, target: surface)
-        if during != allocatedCanvas {
-            allocatedCanvas = during
-            host.setCanvasSize(during)
-        }
+        if during != allocatedCanvas { allocateCanvas(during) }
         Task { @MainActor in
             try? await Task.sleep(for: OrbitTokens.Motion.settle / resolvedTheme.animationSpeed)
-            guard generation == resizeGeneration, let after = CanvasPlan.after(current: allocatedCanvas, target: surface) else { return }
-            allocatedCanvas = after
-            host.setCanvasSize(after)
+            guard generation == resizeGeneration else { return }
+            if let after = CanvasPlan.after(current: allocatedCanvas, target: surface) { allocateCanvas(after) }
+            panel.isCanvasFitted = true
+        }
+    }
+
+    // Outside the morph's transaction, so the window, the hosting view and the canvas frame all change in one
+    // unanimated step while the surface inside keeps animating.
+    private func allocateCanvas(_ size: CGSize) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            allocatedCanvas = size
+            host.setCanvasSize(size)
         }
     }
 

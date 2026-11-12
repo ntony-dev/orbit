@@ -12,10 +12,14 @@ public enum PanelDestination: Hashable, Sendable {
 @Observable
 public final class PanelState {
     // Written through expand() and collapse() by either side. The UI animates toward it; the shell reacts to it
-    // (outside-click monitoring, Escape, giving up key status).
+    // (outside-click monitoring, Escape, giving up key status). Expanded does not imply key: an open panel stays
+    // open while the user works in another app, unless they chose to collapse it on an outside click.
     public private(set) var isExpanded = false
-    // Written by the shell whenever the pill settles somewhere new; never changes while expanded.
+    // Written by the shell whenever the pill settles somewhere new, and when the user drops a dragged open panel
+    // while `isCanvasFitted`, which moves nothing on screen and only changes where the card collapses to.
     public var anchor: PanelAnchor = .topLeading
+    // Written by the UI: true while the canvas is exactly the surface plus its margin and no resize is pending.
+    public var isCanvasFitted = false
     // Written by the shell for the duration of a drag.
     public var isDragging = false
     // Written by the shell: true while the panel is the key window and can receive typing.
