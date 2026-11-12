@@ -9,6 +9,25 @@ import OrbitEngine
 @MainActor
 @Observable
 final class PlaylistSwitcher {
+    // How a play command ended, judged from what the coordinator returned rather than from its shared error, which
+    // a newer command may already have set or cleared.
+    enum Outcome: Equatable {
+        case started
+        case failed(OrbitError)
+        // A newer switch replaced this one before Spotify confirmed it: neither a success nor a failure.
+        case superseded
+
+        init(started: Bool, error: OrbitError?) {
+            if started {
+                self = .started
+            } else if let error {
+                self = .failed(error)
+            } else {
+                self = .superseded
+            }
+        }
+    }
+
     private(set) var failures: [SpotifyURI: OrbitError] = [:]
     private(set) var confirmed: SpotifyURI?
 
@@ -19,33 +38,42 @@ final class PlaylistSwitcher {
     }
 
     func play(_ playlist: Playlist, with playback: PlaybackCoordinator, thenCollapse collapse: (() -> Void)?) async {
-        failures[playlist.uri] = nil
-        confirmationTask?.cancel()
-        confirmed = nil
-        await playback.play(playlist: playlist)
-        await settle(playlist.uri, error: playback.lastError, collapse: collapse)
+        begin(playlist.uri)
+        let started = await playback.play(playlist: playlist)
+        await settle(playlist.uri, Outcome(started: started, error: playback.lastError), collapse: collapse)
     }
 
     func play(track: Track, in context: SpotifyURI?, with playback: PlaybackCoordinator, thenCollapse collapse: (() -> Void)?) async {
-        failures[track.uri] = nil
-        await playback.play(track: track, in: context)
-        await settle(track.uri, error: playback.lastError, collapse: collapse)
+        begin(track.uri)
+        let started = await playback.play(track: track, in: context)
+        await settle(track.uri, Outcome(started: started, error: playback.lastError), collapse: collapse)
     }
 
     func play(context uri: SpotifyURI, with playback: PlaybackCoordinator, thenCollapse collapse: (() -> Void)?) async {
-        failures[uri] = nil
-        await playback.play(context: uri)
-        await settle(uri, error: playback.lastError, collapse: collapse)
+        begin(uri)
+        let started = await playback.play(context: uri)
+        await settle(uri, Outcome(started: started, error: playback.lastError), collapse: collapse)
     }
 
     func dismissFailure(for uri: SpotifyURI) {
         failures[uri] = nil
     }
 
-    private func settle(_ uri: SpotifyURI, error: OrbitError?, collapse: (() -> Void)?) async {
-        if let error {
+    private func begin(_ uri: SpotifyURI) {
+        failures[uri] = nil
+        confirmationTask?.cancel()
+        confirmed = nil
+    }
+
+    func settle(_ uri: SpotifyURI, _ outcome: Outcome, collapse: (() -> Void)?) async {
+        switch outcome {
+        case .superseded:
+            return
+        case .failed(let error):
             failures[uri] = error
             return
+        case .started:
+            break
         }
         confirmed = uri
         let task = Task { [weak self] in
