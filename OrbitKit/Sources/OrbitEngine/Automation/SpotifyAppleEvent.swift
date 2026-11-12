@@ -17,15 +17,13 @@ enum SpotifyAppleEvent: Hashable, Sendable {
     case setShuffling(Bool)
     case setRepeating(Bool)
 
-    enum TrackProperty: String, CaseIterable, Sendable {
+    enum TrackProperty: String, Sendable {
         case id = "ID  "
         case name = "pnam"
         case artist = "pArt"
         case album = "pAlb"
-        case albumArtist = "pAlA"
         case duration = "pDur"
         case artworkURL = "aUrl"
-        case spotifyURL = "spur"
     }
 
     enum Code {
@@ -54,7 +52,6 @@ enum SpotifyAppleEvent: Hashable, Sendable {
         // The sdef gives `shuffling enabled` and `repeating enabled` the same code, so only one value is reachable.
         static let controlsEnabled = fourCharCode("pReE")
 
-        static let stopped = fourCharCode("kPSS")
         static let playing = fourCharCode("kPSP")
         static let paused = fourCharCode("kPSp")
     }

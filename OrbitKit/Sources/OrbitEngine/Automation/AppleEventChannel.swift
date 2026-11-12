@@ -6,7 +6,7 @@ import OrbitCore
 // queue keeps commands in the order they were issued. Events are addressed by process ID, never bundle ID, so an
 // event can never launch an app that has quit in the meantime.
 final class AppleEventChannel: Sendable {
-    let bundleIdentifier: String
+    private let bundleIdentifier: String
     private let queue: DispatchQueue
     private let timeout: TimeInterval
 
@@ -20,7 +20,7 @@ final class AppleEventChannel: Sendable {
         runningProcessID() != nil
     }
 
-    func runningProcessID() -> pid_t? {
+    private func runningProcessID() -> pid_t? {
         NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier)
             .first { !$0.isTerminated }?
             .processIdentifier
@@ -77,7 +77,7 @@ final class AppleEventChannel: Sendable {
     static func error(for status: Int32) -> OrbitError {
         switch Int(status) {
         case errAEEventNotPermitted, errAEEventWouldRequireUserConsent: .automationDenied
-        case procNotFound, connectionInvalid, -609: .spotifyNotRunning
+        case procNotFound, connectionInvalid: .spotifyNotRunning
         case errAETimeout: .unexpected(detail: "Spotify didn't answer in time.")
         default: .unexpected(detail: "Apple event error \(status)")
         }
@@ -87,20 +87,17 @@ final class AppleEventChannel: Sendable {
 // NSAppleEventDescriptor is not Sendable, so replies cross the queue boundary as plain values.
 struct AppleEventReply: Sendable {
     let string: String?
-    let double: Double?
     let integer: Int?
     let appProperties: SpotifyAppProperties?
 
     init(_ descriptor: NSAppleEventDescriptor?) {
         guard let descriptor, descriptor.descriptorType != fourCharCode("null") else {
             string = nil
-            double = nil
             integer = nil
             appProperties = nil
             return
         }
         string = descriptor.stringValue
-        double = descriptor.coerce(toDescriptorType: fourCharCode("doub"))?.doubleValue
         integer = descriptor.coerce(toDescriptorType: fourCharCode("long")).map { Int($0.int32Value) }
         appProperties = descriptor.descriptorType == fourCharCode("reco") ? SpotifyAppProperties(record: descriptor) : nil
     }

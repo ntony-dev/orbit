@@ -109,18 +109,10 @@ struct AppleEventTests {
 
     // Read-only check against the real app, opt-in because it needs Spotify running and Automation consent.
     @Test(.enabled(if: ProcessInfo.processInfo.environment["ORBIT_READ_REAL_SPOTIFY"] == "1"))
-    func readsTheRealAppWithoutChangingIt() async throws {
+    func theRealAppsMillisecondDurationsAreReadAsSeconds() async throws {
         let player = SpotifyAppleScriptPlayer()
-        guard await player.isRunning() else { return }
-        let permission = await player.automationPermission(prompting: false)
-        print("permission:", permission)
-        guard permission == .granted else { return }
-        let start = ContinuousClock.now
+        guard await player.isRunning(), await player.automationPermission(prompting: false) == .granted else { return }
         let state = try await player.state()
-        let cold = ContinuousClock.now - start
-        let warmStart = ContinuousClock.now
-        _ = try await player.state()
-        print("state:", state, "cold:", cold, "warm:", ContinuousClock.now - warmStart)
         #expect(state.track?.duration ?? 0 < 3600)
     }
 }

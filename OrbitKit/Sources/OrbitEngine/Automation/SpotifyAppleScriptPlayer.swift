@@ -162,8 +162,8 @@ public struct SpotifyAppleScriptPlayer: LocalPlayer {
     }
 }
 
-// Remembers per-track details so a play/pause notification costs one event instead of eight, and caches the
-// permission so routine reads never call into TCC.
+// Remembers the current track's details so a play/pause notification costs two events instead of seven, and
+// caches the permission so routine reads never call into TCC.
 final class AutomationCache: Sendable {
     private struct State {
         var track: Track?
