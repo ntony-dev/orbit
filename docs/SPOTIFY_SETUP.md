@@ -36,7 +36,7 @@ An account that is not on the list can open Spotify's sign-in page, but its requ
 Orbit reads the Client ID from two places:
 
 - **In the app:** Settings > Spotify, in the Spotify Client ID section at the bottom. Paste the ID into the Client ID field and click Save or press Return. Orbit stores it in its preferences.
-- **At build time:** `SPOTIFY_CLIENT_ID` in `Config/Local.xcconfig`, which the build writes into the app's `Info.plist` as `SpotifyClientID`.
+- **At build time:** `SPOTIFY_CLIENT_ID` in `Config/Local.xcconfig`, which the build writes into the app's `Info.plist` as `SpotifyClientID`. `Scripts/archive.sh --friends` builds it into a disk image for the people on your user list (see [Sharing with friends](../README.md#sharing-with-friends)); the public `Scripts/archive.sh` zip never contains it.
 
 ```
 cp Config/Local.example.xcconfig Config/Local.xcconfig
@@ -52,7 +52,7 @@ Orbit reads the Client ID each time you sign in, so a change takes effect withou
 
 ## First sign-in
 
-1. Open Settings > Spotify and click Sign In…. Settings opens from Orbit's menu bar item, from the gear in the expanded player, or with Command-comma while the panel is open. You can also click Connect Spotify in the panel.
+1. Click Connect Spotify in the panel's Library tab, or open Settings > Spotify and click Sign In…. Settings opens from Orbit's menu bar item, from the gear in the expanded player, or with Command-comma while the panel is open.
 2. Orbit starts a listener on `127.0.0.1:8888` and opens Spotify's authorization page in your default browser.
 3. Check the permissions listed (see [Scopes](#scopes)) and click Agree. If you approved Orbit's Client ID before, Spotify may skip this page and go straight to the next step.
 4. Spotify sends the browser back to `http://127.0.0.1:8888/callback`. The page should say "You're signed in to Orbit." You can close the tab.

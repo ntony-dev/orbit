@@ -79,7 +79,7 @@ Measured on one Mac, with a Release build in demo mode: a collapsed pill playing
 
 - macOS 26 or later.
 - The Spotify desktop app.
-- A Spotify Client ID from a Spotify Developer app. Spotify runs such apps in Development Mode, which requires the account that owns the developer app to have Spotify Premium and allows up to five users per app. See [docs/SPOTIFY_SETUP.md](docs/SPOTIFY_SETUP.md).
+- A Spotify Client ID from a Spotify Developer app, unless someone built your copy with theirs (see [Sharing with friends](#sharing-with-friends)). Spotify runs such apps in Development Mode, which requires the account that owns the developer app to have Spotify Premium and allows up to five users per app. See [docs/SPOTIFY_SETUP.md](docs/SPOTIFY_SETUP.md).
 
 ## Install from a release
 
@@ -108,9 +108,34 @@ Do not turn off Gatekeeper to run Orbit, and do not run commands that disable it
 
 Because each ad-hoc signed build has a different signature, macOS asks again for Keychain and Automation access after you install an update. See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
+## Sharing with friends
+
+If you have your own Spotify Developer app, you can build a copy of Orbit with your Client ID inside, so the people you send it to never create an app or paste an ID. Spotify's Development Mode allows five users per app, you included.
+
+1. In the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), open your app's Settings, then User Management, and add each friend's name and the email address of their Spotify account.
+2. Build the image from a checkout whose `Config/Local.xcconfig` has your `SPOTIFY_CLIENT_ID`:
+
+   ```
+   Scripts/archive.sh --friends
+   ```
+
+   or pass the ID for this one build: `SPOTIFY_CLIENT_ID=your_client_id Scripts/archive.sh --friends`. The script signs the copy ad hoc whatever signing identity `Local.xcconfig` sets, and writes `dist/Orbit-<version>-friends.dmg`.
+3. Send that file to your friends directly, for example over AirDrop or Messages, together with the steps below.
+
+The image contains your Client ID. Everyone who uses it signs in through your Spotify app and shares its quota, and only accounts on your User Management list can sign in. Send it only to the people on that list, and never attach it to a public release; `Scripts/archive.sh` without `--friends` makes the public zip, which has no Client ID. For an update, build and send a new image.
+
+### Installing a copy a friend sent you
+
+You need macOS 26 or later and the Spotify app for Mac, and your friend needs to have added your Spotify account to their list.
+
+1. Double-click `Orbit-<version>-friends.dmg`. In the window that opens, drag Orbit onto the Applications folder next to it. Then eject the Orbit disk in Finder's sidebar.
+2. Open Orbit from your Applications folder. macOS says Apple could not verify Orbit; click Done, not Move to Trash. Open System Settings > Privacy & Security, scroll down to Security, click Open Anyway next to the message about Orbit, and confirm with your password or Touch ID. You only do this once.
+3. Orbit has no Dock icon: it is the small pill that appears on your screen, with an Orbit item in the menu bar. Click the pill to open it, click Library at the bottom, then Connect Spotify. Your browser opens Spotify's page: sign in with the Spotify account your friend added and click Agree. When the page says you are signed in to Orbit, close the tab.
+4. The first time you use Orbit's play controls while Spotify is open, macOS asks whether Orbit may control Spotify. Click Allow.
+
 ## Set up Spotify
 
-Orbit talks to Spotify's Web API with a Client ID from a Spotify Developer app. A release may have the author's Client ID built in; in that case the author has to add your Spotify account to the app's user list before you can sign in. Otherwise create your own app and paste its Client ID into Settings > Spotify.
+Orbit talks to Spotify's Web API with a Client ID from a Spotify Developer app. The public release has none built in: create your own app and paste its Client ID into Settings > Spotify. A copy someone built for you with [`--friends`](#sharing-with-friends) has their Client ID built in; they have to add your Spotify account to their app's user list before you can sign in.
 
 [docs/SPOTIFY_SETUP.md](docs/SPOTIFY_SETUP.md) walks through creating the app, adding users, where the Client ID goes, the first sign-in, and what Development Mode limits mean.
 
@@ -223,7 +248,9 @@ This makes a clean Release build with that identity, refuses an ad-hoc result, i
 Scripts/archive.sh
 ```
 
-This makes a clean Release build, signs it ad hoc whatever `Local.xcconfig` says, verifies the signature, checks that the third-party notices match the bundled packages' licenses, and writes `dist/Orbit-<version>.zip` containing `Orbit.app`, `LICENSE.txt` and `Acknowledgements.txt`. It prints the architectures, whether a Client ID is built in, and the archive's SHA-256 checksum. A `SPOTIFY_CLIENT_ID` in `Config/Local.xcconfig` is built into the archive, so everyone who uses that copy signs in through your Spotify app, needs to be on its user list and shares its quota.
+This makes a clean Release build, signs it ad hoc whatever `Local.xcconfig` says, verifies the signature (ad hoc, no team, hardened runtime), checks that the third-party notices match the bundled packages' licenses, and writes `dist/Orbit-<version>.zip` containing `Orbit.app`, `LICENSE.txt` and `Acknowledgements.txt`. It prints the architectures and the archive's SHA-256 checksum. The public archive never has a Client ID built in: the script ignores `SPOTIFY_CLIENT_ID` in `Config/Local.xcconfig` and fails if one reaches the app anyway.
+
+`Scripts/archive.sh --friends` runs the same build and checks with your Client ID built in, taken from the `SPOTIFY_CLIENT_ID` environment variable or else from `Config/Local.xcconfig`, and writes a disk image instead, `dist/Orbit-<version>-friends.dmg`. See [Sharing with friends](#sharing-with-friends).
 
 ### When to run XcodeGen
 
