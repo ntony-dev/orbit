@@ -48,24 +48,21 @@ struct AuthorizationRequest: Sendable {
 }
 
 enum AuthorizationCallback {
-    // State is checked before anything else, so a forged or stale callback can neither complete nor fail sign-in
-    // with a code or error of its own choosing.
-    static func code(from components: URLComponents, expectedState: String) throws(OrbitError) -> String {
+    // nil for a request that doesn't carry this sign-in's state. Any web page or local process can reach the
+    // loopback port, so such a request must neither complete the sign-in nor end it with an error of its choosing.
+    static func result(from components: URLComponents, expectedState: String) -> Result<String, OrbitError>? {
         let items = components.queryItems ?? []
         func value(_ name: String) -> String? {
             items.first { $0.name == name }?.value
         }
-        guard let state = value("state"), state == expectedState else {
-            throw .unexpected(detail: "The sign-in response didn't match the request Orbit made.")
-        }
+        guard let state = value("state"), state == expectedState else { return nil }
         if let error = value("error") {
-            if error == "access_denied" { throw .cancelled }
-            throw .unexpected(detail: "Spotify sign-in failed (\(error)).")
+            return .failure(error == "access_denied" ? .cancelled : .unexpected(detail: "Spotify sign-in failed (\(error))."))
         }
         guard let code = value("code"), !code.isEmpty else {
-            throw .unexpected(detail: "Spotify didn't return an authorization code.")
+            return .failure(.unexpected(detail: "Spotify didn't return an authorization code."))
         }
-        return code
+        return .success(code)
     }
 }
 

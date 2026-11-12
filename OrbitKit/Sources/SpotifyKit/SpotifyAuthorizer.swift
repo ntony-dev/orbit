@@ -234,9 +234,7 @@ public actor SpotifyAuthorizer: Authorizer {
                 }
             },
             handle: { components in
-                Result { () throws(OrbitError) in
-                    try AuthorizationCallback.code(from: components, expectedState: expectedState)
-                }
+                AuthorizationCallback.result(from: components, expectedState: expectedState)
             }
         )
         if Task.isCancelled { throw .cancelled }

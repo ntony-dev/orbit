@@ -11,8 +11,8 @@ struct LoopbackCallbackListenerTests {
         LoopbackCallbackListener(port: port, path: "/callback", timeout: timeout)
     }
 
-    private func codeHandler(_ components: URLComponents) -> Result<String, OrbitError> {
-        Result { () throws(OrbitError) in try AuthorizationCallback.code(from: components, expectedState: "s1") }
+    private func codeHandler(_ components: URLComponents) -> Result<String, OrbitError>? {
+        AuthorizationCallback.result(from: components, expectedState: "s1")
     }
 
     // The listener can return before the client has read the whole page, so the page arrives through a stream.
@@ -54,13 +54,34 @@ struct LoopbackCallbackListenerTests {
         #expect(faviconStatus.value == 404)
     }
 
-    @Test func stateMismatchFailsAndShowsTheFailurePage() async throws {
+    // Any web page or local process can reach the port, so a request without this sign-in's state must neither
+    // complete nor end the sign-in.
+    @Test func callbacksWithoutTheExpectedStateAreRefusedAndTheWaitContinues() async throws {
+        let port = LocalPorts.free()
+        let refused = Locked<[Served]>([])
+        let code = try await listener(port: port).receive(
+            whenReady: {
+                for query in ["code=evil&state=forged", "code=evil", "error=access_denied", "error=access_denied&state=forged", "<script>"] {
+                    let page = try? await LocalHTTP.get(URL(string: "http://127.0.0.1:\(port)/callback?\(query)")!)
+                    refused.set(refused.value + [page])
+                }
+                _ = try? await LocalHTTP.get(URL(string: "http://127.0.0.1:\(port)/callback?code=real&state=s1")!)
+            },
+            handle: codeHandler
+        )
+        #expect(code == "real")
+        #expect(refused.value.map { $0?.status } == [400, 400, 400, 400, 400])
+        #expect(refused.value.allSatisfy { $0?.body.contains("Sign-in didn't finish.") == true })
+        #expect(!refused.value.contains { $0?.body.contains("evil") == true || $0?.body.contains("script>") == true })
+    }
+
+    @Test func aGenuineFailureEndsTheWaitAndShowsTheFailurePage() async throws {
         let port = LocalPorts.free()
         let page = Self.pageStream()
-        await #expect(throws: OrbitError.self) {
+        await #expect(throws: OrbitError.unexpected(detail: "Spotify sign-in failed (server_error).")) {
             try await listener(port: port).receive(
                 whenReady: {
-                    page.continuation.yield(try? await LocalHTTP.get(URL(string: "http://127.0.0.1:\(port)/callback?code=abc&state=forged")!))
+                    page.continuation.yield(try? await LocalHTTP.get(URL(string: "http://127.0.0.1:\(port)/callback?error=server_error&state=s1")!))
                 },
                 handle: codeHandler
             )

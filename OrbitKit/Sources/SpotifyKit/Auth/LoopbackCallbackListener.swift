@@ -3,17 +3,19 @@ import Network
 import OrbitCore
 import Synchronization
 
-// A one-shot HTTP listener bound to 127.0.0.1 only. It answers the first request for `path`, then shuts down.
+// A one-shot HTTP listener bound to 127.0.0.1 only. It shuts down after the first request for `path` that
+// `handle` accepts.
 struct LoopbackCallbackListener: Sendable {
     let port: UInt16
     let path: String
     let timeout: Duration
 
     // `whenReady` runs once the socket is accepting, so the browser can never race ahead of the listener.
-    // `handle` decides the outcome of the callback request and therefore which page the browser shows.
+    // `handle` decides the outcome of the callback request and therefore which page the browser shows; nil
+    // refuses a request that isn't the awaited callback and keeps waiting.
     func receive<Value: Sendable>(
         whenReady: @escaping @Sendable () async throws(OrbitError) -> Void,
-        handle: @escaping @Sendable (URLComponents) -> Result<Value, OrbitError>
+        handle: @escaping @Sendable (URLComponents) -> Result<Value, OrbitError>?
     ) async throws(OrbitError) -> Value {
         let session = CallbackSession(listener: self, whenReady: whenReady, handle: handle)
         let result = await withTaskCancellationHandler {
@@ -43,14 +45,14 @@ private final class CallbackSession<Value: Sendable>: Sendable {
 
     private let configuration: LoopbackCallbackListener
     private let whenReady: @Sendable () async throws(OrbitError) -> Void
-    private let handle: @Sendable (URLComponents) -> Result<Value, OrbitError>
+    private let handle: @Sendable (URLComponents) -> Result<Value, OrbitError>?
     private let queue = DispatchQueue(label: "SpotifyKit.LoopbackCallbackListener")
     private let state = Mutex(State())
 
     init(
         listener: LoopbackCallbackListener,
         whenReady: @escaping @Sendable () async throws(OrbitError) -> Void,
-        handle: @escaping @Sendable (URLComponents) -> Result<Value, OrbitError>
+        handle: @escaping @Sendable (URLComponents) -> Result<Value, OrbitError>?
     ) {
         configuration = listener
         self.whenReady = whenReady
@@ -204,7 +206,10 @@ private final class CallbackSession<Value: Sendable>: Sendable {
             send(CallbackPage.failure, on: connection, then: nil)
             return
         }
-        let outcome = handle(components)
+        guard let outcome = handle(components) else {
+            send(CallbackPage.refused, on: connection, then: nil)
+            return
+        }
         let page: CallbackPage
         switch outcome {
         case .success: page = .success
@@ -235,10 +240,14 @@ private final class CallbackSession<Value: Sendable>: Sendable {
 }
 
 private enum CallbackPage {
-    case success, failure, notFound
+    case success, failure, refused, notFound
 
     var response: Data {
-        let status = self == .notFound ? "404 Not Found" : "200 OK"
+        let status = switch self {
+        case .success, .failure: "200 OK"
+        case .refused: "400 Bad Request"
+        case .notFound: "404 Not Found"
+        }
         let body = Data(html.utf8)
         // No-store and no-referrer keep the authorization code in the URL out of caches and outgoing requests.
         let head = [
@@ -257,7 +266,7 @@ private enum CallbackPage {
     private var html: String {
         let (title, detail) = switch self {
         case .success: ("You're signed in to Orbit.", "You can close this tab.")
-        case .failure: ("Sign-in didn't finish.", "You can close this tab and try again from Orbit.")
+        case .failure, .refused: ("Sign-in didn't finish.", "You can close this tab and try again from Orbit.")
         case .notFound: ("Not found.", "")
         }
         return """

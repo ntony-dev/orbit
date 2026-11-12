@@ -53,39 +53,32 @@ struct AuthorizationRequestTests {
 }
 
 struct AuthorizationCallbackTests {
-    private func components(_ query: String) -> URLComponents {
-        URLComponents(string: "http://127.0.0.1:8888/callback?\(query)")!
+    private func result(_ query: String) -> Result<String, OrbitError>? {
+        AuthorizationCallback.result(from: URLComponents(string: "http://127.0.0.1:8888/callback?\(query)")!, expectedState: "s1")
     }
 
-    @Test func returnsCodeWhenStateMatches() throws {
-        #expect(try AuthorizationCallback.code(from: components("code=abc123&state=s1"), expectedState: "s1") == "abc123")
+    @Test func returnsCodeWhenStateMatches() {
+        #expect(result("code=abc123&state=s1") == .success("abc123"))
     }
 
-    @Test func rejectsMismatchedOrMissingState() {
-        #expect(throws: OrbitError.self) { try AuthorizationCallback.code(from: components("code=abc&state=forged"), expectedState: "s1") }
-        #expect(throws: OrbitError.self) { try AuthorizationCallback.code(from: components("code=abc"), expectedState: "s1") }
-    }
-
-    @Test func mismatchedStateWinsOverAnErrorParameter() {
-        do {
-            _ = try AuthorizationCallback.code(from: components("error=access_denied&state=forged"), expectedState: "s1")
-            Issue.record("Expected a failure")
-        } catch {
-            #expect(error != .cancelled)
-        }
+    @Test func callbacksWithoutTheExpectedStateAreNotForThisSignIn() {
+        #expect(result("code=abc&state=forged") == nil)
+        #expect(result("code=abc") == nil)
+        #expect(result("code=abc&state=") == nil)
+        #expect(result("code=abc&state=S1") == nil)
+        #expect(result("error=access_denied&state=forged") == nil)
+        #expect(result("error=server_error") == nil)
+        #expect(result("state=forged&state=s1&code=abc") == nil)
     }
 
     @Test func userDenialIsCancellation() {
-        #expect(throws: OrbitError.cancelled) {
-            try AuthorizationCallback.code(from: components("error=access_denied&state=s1"), expectedState: "s1")
-        }
+        #expect(result("error=access_denied&state=s1") == .failure(.cancelled))
     }
 
     @Test func otherErrorsAndMissingCodeFail() {
-        #expect(throws: OrbitError.unexpected(detail: "Spotify sign-in failed (server_error).")) {
-            try AuthorizationCallback.code(from: components("error=server_error&state=s1"), expectedState: "s1")
-        }
-        #expect(throws: OrbitError.self) { try AuthorizationCallback.code(from: components("state=s1"), expectedState: "s1") }
+        #expect(result("error=server_error&state=s1") == .failure(.unexpected(detail: "Spotify sign-in failed (server_error).")))
+        #expect(result("state=s1") == .failure(.unexpected(detail: "Spotify didn't return an authorization code.")))
+        #expect(result("code=&state=s1") == .failure(.unexpected(detail: "Spotify didn't return an authorization code.")))
     }
 }
 

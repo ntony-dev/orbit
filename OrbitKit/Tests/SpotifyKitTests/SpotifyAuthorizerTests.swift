@@ -88,16 +88,25 @@ struct SpotifyAuthorizerTests {
         #expect(states == [.unknown, .authorizing, .signedIn])
     }
 
-    @Test func forgedCallbackFailsSignInWithoutExchangingACode() async {
+    @Test func forgedCallbacksNeitherEndNorHijackSignIn() async throws {
         let store = InMemoryTokenStore()
-        let authorizer = makeAuthorizer(
-            store: store,
-            transport: Self.unusedTransport,
-            browser: Self.browser(replyingWith: { _ in "code=evil&state=forged" }, captured: Locked(nil))
-        )
-        await #expect(throws: OrbitError.self) { try await authorizer.signIn() }
-        #expect(await authorizer.currentState() == .signedOut)
-        #expect(store.session == nil)
+        let transport = StubTransport { request throws(OrbitError) in
+            HTTP.response(request, json: HTTP.tokenJSON(access: "access-new", refresh: "refresh-new"))
+        }
+        let authorizer = makeAuthorizer(store: store, transport: transport, browser: { url in
+            let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            let state = query.first { $0.name == "state" }?.value ?? ""
+            let redirect = query.first { $0.name == "redirect_uri" }?.value ?? ""
+            // A hostile page races Spotify's redirect with a planted code and a forged denial.
+            for reply in ["code=evil&state=forged", "error=access_denied", "code=real&state=\(state)"] {
+                _ = try? await LocalHTTP.get(URL(string: "\(redirect)?\(reply)")!)
+            }
+            return true
+        })
+        try await authorizer.signIn()
+        #expect(await authorizer.currentState() == .signedIn)
+        #expect(store.session?.accessToken == "access-new")
+        #expect(transport.tokenRequests.map { HTTP.formFields($0)["code"] } == ["real"])
     }
 
     @Test func deniedConsentIsCancellation() async {
