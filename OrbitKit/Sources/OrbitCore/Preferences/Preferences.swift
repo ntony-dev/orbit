@@ -33,7 +33,7 @@ public final class Preferences {
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         appearance = Self.load(.appearance, from: defaults) ?? .system
-        glassPreset = Self.load(.glassPreset, from: defaults) ?? .clear
+        glassPreset = Self.load(.glassPreset, from: defaults) ?? .balanced
         backgroundOpacity = Self.load(.backgroundOpacity, from: defaults) ?? 0.5
         accent = Self.load(.accent, from: defaults) ?? .neutral
         pillSize = Self.load(.pillSize, from: defaults) ?? .regular

@@ -14,7 +14,7 @@ struct PreferencesTests {
     @Test func startsWithDocumentedDefaults() {
         let preferences = Preferences(defaults: makeDefaults())
         #expect(preferences.appearance == .system)
-        #expect(preferences.glassPreset == .clear)
+        #expect(preferences.glassPreset == .balanced)
         #expect(preferences.accent == .neutral)
         #expect(preferences.alwaysOnTop)
         #expect(preferences.clientIDOverride == nil)
@@ -43,6 +43,13 @@ struct PreferencesTests {
         #expect(reloaded.preferredDevice == DeviceReference(id: "dev", name: "Speaker"))
         #expect(reloaded.clientIDOverride == "abc")
         #expect(reloaded.syncFrequency == .whileOpen)
+    }
+
+    // Changing the default must not change the look of an install that already chose a preset.
+    @Test func aStoredGlassPresetSurvivesTheNewDefault() {
+        let defaults = makeDefaults()
+        Preferences(defaults: defaults).glassPreset = .clear
+        #expect(Preferences(defaults: defaults).glassPreset == .clear)
     }
 
     @Test func clearingAnOptionalPersistsNil() {
