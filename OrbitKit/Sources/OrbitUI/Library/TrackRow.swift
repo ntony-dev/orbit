@@ -10,6 +10,7 @@ struct TrackRow: View {
     var showsArtwork = false
     var context: SpotifyURI?
     var isInteractive = true
+    var isKeyboardSelected = false
 
     @Environment(PlaybackCoordinator.self) private var playback
     @Environment(LibraryStore.self) private var library
@@ -61,8 +62,9 @@ struct TrackRow: View {
             .padding(.horizontal, OrbitTokens.Spacing.m)
             .frame(height: showsArtwork ? OrbitTokens.Size.rowHeight - 4 : OrbitTokens.Size.trackRowHeight)
         }
-        .buttonStyle(RowButtonStyle())
+        .buttonStyle(RowButtonStyle(isSelected: isCurrent && isInteractive))
         .focusEffectDisabled()
+        .keyboardSelected(isKeyboardSelected)
         .allowsHitTesting(isInteractive)
         .disabled(!track.isPlayable)
         .onHover { isHovered = $0 && isInteractive }
@@ -72,9 +74,26 @@ struct TrackRow: View {
             Divider()
             Button("Open in Spotify") { SpotifyApp.open(track.uri) }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(track.name), \(track.artistLine), \(Formatting.time(track.duration))\(isCurrent ? ", now playing" : "")")
-        .accessibilityAction(named: "Add to Queue") { Task { await library.addToQueue(track) } }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel(isCurrent: isCurrent, isPending: isPending, failure: failure))
+        .accessibilityHint(isInteractive && track.isPlayable ? "Plays this song" : "")
+        .accessibilityAddTraits(isInteractive ? .isButton : [])
+        .accessibilityAddTraits(isCurrent ? .isSelected : [])
+        .accessibilityActions {
+            Button("Add to Queue") { Task { await library.addToQueue(track) } }
+            Button("Open in Spotify") { SpotifyApp.open(track.uri) }
+        }
+    }
+
+    private func accessibilityLabel(isCurrent: Bool, isPending: Bool, failure: OrbitError?) -> String {
+        var parts = [track.name, track.artistLine, Formatting.time(track.duration)]
+        if let number { parts.insert("\(number)", at: 0) }
+        if track.isExplicit { parts.append("explicit") }
+        if !track.isPlayable { parts.append("unavailable") }
+        if isPending { parts.append("starting") }
+        if let failure { parts.append("couldn't play: \(failure.message)") }
+        if isCurrent { parts.append(playback.snapshot.isPlaying ? "now playing" : "paused") }
+        return parts.joined(separator: ", ")
     }
 
     @ViewBuilder

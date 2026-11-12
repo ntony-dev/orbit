@@ -28,7 +28,8 @@ struct PlaylistRow: View {
             isPlaying: playback.snapshot.isPlaying,
             isPending: playback.pendingIntents.contains(.playContext(playlist.uri)),
             isConfirmed: switcher.confirmed == playlist.uri,
-            failure: switcher.failure(for: playlist.uri)
+            failure: switcher.failure(for: playlist.uri),
+            isMissing: library.missingPlaylistIDs.contains(playlist.id)
         )
     }
 
@@ -54,9 +55,23 @@ struct PlaylistRow: View {
         .onHover { isHovered = $0 }
         .animation(theme.animation(OrbitTokens.Motion.content), value: status)
         .contextMenu { menu }
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel(status))
-        .accessibilityHint(behavior == .browse ? "Shows tracks" : "Plays this playlist")
-        .accessibilityAction(named: "Play") { switchPlayback() }
+        .accessibilityHint(behavior == .browse ? "Shows its tracks" : "Plays this playlist")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(status.isCurrent ? .isSelected : [])
+        .accessibilityActions {
+            if behavior == .browse {
+                Button("Play", action: switchPlayback)
+            } else {
+                Button("Show Tracks", action: showTracks)
+            }
+            Button(library.isPinned(playlist) ? "Unpin" : "Pin", action: togglePin)
+            if isRecent {
+                Button("Remove from Recents") { library.removeRecent(playlist) }
+            }
+            Button("Open in Spotify") { SpotifyApp.open(playlist.uri) }
+        }
     }
 
     @ViewBuilder
@@ -67,6 +82,9 @@ struct PlaylistRow: View {
                     .foregroundStyle(OrbitPalette.warning)
             } else if status.isPending {
                 Text("Starting…")
+                    .foregroundStyle(.secondary)
+            } else if status.isMissing {
+                Text("No longer available on Spotify")
                     .foregroundStyle(.secondary)
             } else if status.isCurrent {
                 Text(status.isPlaying ? "Now playing" : "Paused")
@@ -97,7 +115,7 @@ struct PlaylistRow: View {
             Image(systemName: "checkmark")
                 .font(.system(size: OrbitTokens.Icon.regular, weight: .bold))
                 .foregroundStyle(theme.accent)
-                .transition(.scale.combined(with: .opacity))
+                .transition(theme.reducesMotion ? .opacity : .scale.combined(with: .opacity))
         } else if behavior == .browse {
             HStack(spacing: OrbitTokens.Spacing.xs) {
                 if isHovered && !status.isCurrent {
@@ -134,16 +152,11 @@ struct PlaylistRow: View {
     private var menu: some View {
         Button(behavior == .browse ? "Play" : "Play Now", action: switchPlayback)
         if behavior == .switchOnClick {
-            Button("Show Tracks") {
-                withAnimation(theme.animation(OrbitTokens.Motion.navigate)) {
-                    navigator.showLibrary(.playlists)
-                    navigator.push(.playlist(playlist))
-                }
-            }
+            Button("Show Tracks", action: showTracks)
         }
         Divider()
         if library.isPinned(playlist) {
-            Button("Unpin") { withAnimation(theme.animation(OrbitTokens.Motion.content)) { library.unpin(playlist) } }
+            Button("Unpin", action: togglePin)
             if let index = library.pinnedPlaylists.firstIndex(where: { $0.id == playlist.id }) {
                 Button("Move Up") { movePinned(from: index, by: -1) }
                     .disabled(index == 0)
@@ -151,7 +164,7 @@ struct PlaylistRow: View {
                     .disabled(index == library.pinnedPlaylists.count - 1)
             }
         } else {
-            Button("Pin to Top") { withAnimation(theme.animation(OrbitTokens.Motion.content)) { library.pin(playlist) } }
+            Button("Pin to Top", action: togglePin)
         }
         if isRecent {
             Button("Remove from Recents") {
@@ -171,6 +184,19 @@ struct PlaylistRow: View {
         }
     }
 
+    private func showTracks() {
+        withAnimation(theme.animation(OrbitTokens.Motion.navigate)) {
+            navigator.showLibrary(.playlists)
+            navigator.push(.playlist(playlist))
+        }
+    }
+
+    private func togglePin() {
+        withAnimation(theme.animation(OrbitTokens.Motion.content)) {
+            library.isPinned(playlist) ? library.unpin(playlist) : library.pin(playlist)
+        }
+    }
+
     private func switchPlayback() {
         let collapse: (() -> Void)? = preferences.collapsesAfterAction ? { [panel] in panel.collapse() } : nil
         Task { await switcher.play(playlist, with: playback, thenCollapse: collapse) }
@@ -185,6 +211,8 @@ struct PlaylistRow: View {
 
     private func accessibilityLabel(_ status: PlaylistRowStatus) -> String {
         var parts = [playlist.name, Formatting.playlistSubtitle(playlist)]
+        if library.isPinned(playlist) && !LikedSongs.contains(playlist) { parts.append("pinned") }
+        if status.isMissing { parts.append("no longer available") }
         if status.isPending { parts.append("starting") }
         if let failure = status.failure { parts.append("couldn't switch: \(failure.message)") }
         if status.isCurrent { parts.append(status.isPlaying ? "now playing" : "paused") }
@@ -198,6 +226,7 @@ struct PlaylistRowStatus: Equatable {
     var isPending: Bool
     var isConfirmed: Bool
     var failure: OrbitError?
+    var isMissing = false
 }
 
 struct PlaylistArtwork: View {

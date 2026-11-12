@@ -8,7 +8,14 @@ struct PlaylistDetailView: View {
     let playlist: Playlist
 
     @Environment(LibraryStore.self) private var library
+    @Environment(PlaybackCoordinator.self) private var playback
+    @Environment(PlaylistSwitcher.self) private var switcher
+    @Environment(PanelState.self) private var panel
+    @Environment(Preferences.self) private var preferences
     @Environment(\.orbitTheme) private var theme
+    @State private var selection = KeyboardSelection()
+    // The playing track's row, scrolled to the middle once when the tracks first arrive.
+    @State private var arrival: String?
 
     private var isLiked: Bool { LikedSongs.contains(playlist) }
 
@@ -17,6 +24,8 @@ struct PlaylistDetailView: View {
     }
 
     var body: some View {
+        let loaded = tracks.value ?? []
+        let keys = loaded.indices.map { "row:\($0)" }
         VStack(spacing: 0) {
             PanelTopBar { BackTitle(title: "Library") }
             PlaylistHeader(playlist: playlist, trackCount: tracks.value?.count)
@@ -27,43 +36,54 @@ struct PlaylistDetailView: View {
                 .fill(OrbitPalette.separator(contrast: theme.contrast))
                 .frame(height: 0.5)
                 .padding(.horizontal, OrbitTokens.Spacing.xl)
-            content
+            PanelScroll(reveal: selection.key ?? arrival, revealAnchor: selection.key == nil ? .center : nil) {
+                content
+            }
+            .keyboardList(selection: $selection, keys: keys) { key in
+                guard let index = keys.firstIndex(of: key), loaded[index].isPlayable else { return }
+                Task {
+                    await switcher.play(track: loaded[index], in: playlist.uri, with: playback, thenCollapse: panel.collapseAfterAction(preferences))
+                }
+            }
         }
         .task(id: playlist.id) { await load(force: false) }
+        .onChange(of: tracks.value != nil, initial: true) { _, isLoaded in
+            guard isLoaded, arrival == nil, let current = playback.snapshot.track?.uri,
+                  let index = loaded.firstIndex(where: { $0.uri == current })
+            else { return }
+            arrival = keys[index]
+        }
     }
 
     @ViewBuilder
     private var content: some View {
         switch tracks {
         case .idle, .loading:
-            SkeletonRows(count: 7, artwork: false)
+            SkeletonRows(count: 6, artwork: false)
                 .padding(.horizontal, OrbitTokens.Spacing.m)
                 .padding(.top, OrbitTokens.Spacing.s)
-                .frame(maxHeight: .infinity, alignment: .top)
         case .failed(.playlistItemsUnavailable):
             RestrictedPlaylistMessage(playlist: playlist)
-                .frame(maxHeight: .infinity)
+                .listState()
         case .failed(let error):
             StatusMessage(error: error) { Task { await load(force: true) } }
-                .frame(maxHeight: .infinity)
+                .listState()
         case .loaded(let tracks) where tracks.isEmpty:
             StatusMessage(
                 symbol: isLiked ? "heart" : "music.note.list",
                 title: isLiked ? "No liked songs yet" : "This playlist is empty",
                 message: isLiked ? "Tap the heart in the player to save a song." : nil
             )
-            .frame(maxHeight: .infinity)
+            .listState()
         case .loaded(let tracks):
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(Array(tracks.enumerated()), id: \.offset) { index, track in
-                        TrackRow(track: track, number: index + 1, context: playlist.uri)
-                    }
+            LazyVStack(spacing: 0) {
+                ForEach(Array(tracks.enumerated()), id: \.offset) { index, track in
+                    TrackRow(track: track, number: index + 1, context: playlist.uri, isKeyboardSelected: selection.key == "row:\(index)")
+                        .id("row:\(index)")
                 }
-                .padding(.horizontal, OrbitTokens.Spacing.m)
-                .padding(.vertical, OrbitTokens.Spacing.s)
             }
-            .scrollEdgeEffectStyle(.soft, for: .vertical)
+            .padding(.horizontal, OrbitTokens.Spacing.m)
+            .padding(.vertical, OrbitTokens.Spacing.s)
         }
     }
 
@@ -117,7 +137,8 @@ private struct PlaylistHeader: View {
                     }
                     .iconButton(isOn: library.isPinned(playlist), showsOnIndicator: false)
                     .help(library.isPinned(playlist) ? "Unpin from Playlists" : "Pin to Playlists")
-                    .accessibilityLabel(library.isPinned(playlist) ? "Unpin" : "Pin")
+                    .accessibilityLabel(library.isPinned(playlist) ? "Unpin \(playlist.name)" : "Pin \(playlist.name)")
+                    .accessibilityHint("Pinned playlists stay at the top of Playlists")
                     Button {
                         SpotifyApp.open(playlist.uri)
                     } label: {
@@ -134,8 +155,7 @@ private struct PlaylistHeader: View {
     }
 
     private func play() {
-        let collapse: (() -> Void)? = preferences.collapsesAfterAction ? { [panel] in panel.collapse() } : nil
-        Task { await switcher.play(playlist, with: playback, thenCollapse: collapse) }
+        Task { await switcher.play(playlist, with: playback, thenCollapse: panel.collapseAfterAction(preferences)) }
     }
 
     private func togglePlayback() {
@@ -167,6 +187,13 @@ private struct PlaylistPlayButton: View {
         }
         .capsuleButton(prominent: !isCurrent)
         .disabled(isPending)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var accessibilityLabel: String {
+        if isPending { return "Starting playlist" }
+        if isCurrent { return playback.snapshot.isPlaying ? "Pause playlist" : "Resume playlist" }
+        return hasFailed ? "Try playing the playlist again" : "Play playlist"
     }
 }
 

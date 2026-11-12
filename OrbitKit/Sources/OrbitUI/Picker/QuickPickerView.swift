@@ -3,7 +3,8 @@ import OrbitEngine
 import SwiftUI
 
 // One-click playlist switching: pinned first, then recents, then the whole library with Liked Songs on top.
-// Typing filters locally; Return plays the first match.
+// Typing filters at once (the field takes focus whenever the open panel is key), the arrow keys move a selection
+// and Return plays it, or the top match when nothing is selected.
 struct QuickPickerView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(AccountStore.self) private var account
@@ -14,19 +15,33 @@ struct QuickPickerView: View {
     @Environment(Preferences.self) private var preferences
     @Environment(\.orbitTheme) private var theme
     @State private var filter = ""
+    @State private var selection = KeyboardSelection()
+    // A playlist just pinned from a context menu, scrolled into view in its new section.
+    @State private var newPin: String?
 
     var body: some View {
         VStack(spacing: 0) {
             PanelTopBar { NowPlayingStrip() }
             AccountGate {
+                let content = content
                 VStack(spacing: 0) {
-                    SearchField(prompt: "Filter playlists", text: $filter, onSubmit: playFirstMatch) {
-                        withAnimation(theme.animation(OrbitTokens.Motion.navigate)) { _ = navigator.back() }
-                    }
+                    SearchField(
+                        prompt: "Filter playlists",
+                        text: $filter,
+                        focusesWhenKey: true,
+                        onSubmit: { playSelection(in: content) },
+                        onMove: { selection.move($0, in: content.keys) },
+                        onEscape: { withAnimation(theme.animation(OrbitTokens.Motion.navigate)) { _ = navigator.back() } }
+                    )
                     .padding(.horizontal, OrbitTokens.Spacing.xl)
                     .padding(.top, OrbitTokens.Spacing.m)
                     .padding(.bottom, OrbitTokens.Spacing.xs)
-                    content
+                    list(content)
+                }
+                .onChange(of: content.keys) { _, keys in selection.reconcile(with: keys) }
+                .onChange(of: filter) { selection.clear() }
+                .onChange(of: library.pinnedPlaylists.map(\.id)) { old, new in
+                    newPin = new.first { !old.contains($0) }.map { "pinned:\($0)" }
                 }
             }
         }
@@ -37,105 +52,94 @@ struct QuickPickerView: View {
         }
     }
 
+    private var content: PickerContent {
+        PickerContent(
+            pinned: library.pinnedPlaylists,
+            recents: library.recentPlaylists,
+            liked: LikedSongs.playlist(for: account.profile, count: library.savedTracks.value?.count),
+            library: library.playlists.value ?? [],
+            filter: filter
+        )
+    }
+
     @ViewBuilder
-    private var content: some View {
-        switch library.playlists {
-        case .idle, .loading:
-            SkeletonRows(count: 7)
-                .padding(.horizontal, OrbitTokens.Spacing.m)
-                .padding(.top, OrbitTokens.Spacing.m)
-                .frame(maxHeight: .infinity, alignment: .top)
-        case .failed(let error):
-            StatusMessage(error: error) { Task { await library.loadPlaylists() } }
-                .frame(maxHeight: .infinity)
-        case .loaded(let playlists):
-            ScrollView {
+    private func list(_ content: PickerContent) -> some View {
+        PanelScroll(reveal: selection.key ?? newPin, revealAnchor: selection.key == nil ? .center : nil) {
+            switch library.playlists {
+            case .idle, .loading:
+                SkeletonRows(count: 6)
+                    .padding(.horizontal, OrbitTokens.Spacing.m)
+                    .padding(.top, OrbitTokens.Spacing.s)
+            case .failed(let error):
+                StatusMessage(error: error) { Task { await library.loadPlaylists(force: true) } }
+                    .listState()
+            case .loaded(let playlists):
                 LazyVStack(spacing: OrbitTokens.Spacing.xxs) {
-                    if filter.isEmpty {
-                        sections(playlists)
-                    } else {
-                        matches(playlists)
-                    }
+                    rows(content, libraryIsEmpty: playlists.isEmpty)
                 }
                 .padding(.horizontal, OrbitTokens.Spacing.m)
                 .padding(.bottom, OrbitTokens.Spacing.m)
             }
-            .scrollIndicators(.automatic)
-            .scrollEdgeEffectStyle(.soft, for: .vertical)
         }
-    }
-
-    private var likedSongs: Playlist? {
-        LikedSongs.playlist(for: account.profile, count: library.savedTracks.value?.count)
     }
 
     @ViewBuilder
-    private func sections(_ playlists: [Playlist]) -> some View {
-        let pinned = library.pinnedPlaylists
-        let recents = library.recentPlaylists.filter { !library.isPinned($0) }
-        if !pinned.isEmpty {
-            SectionHeader(title: "Pinned")
-            ForEach(pinned) { playlist in
-                PlaylistRow(playlist: playlist)
-                    .draggable(playlist.id)
-                    .dropDestination(for: String.self) { ids, _ in
-                        movePinned(ids.first, before: playlist)
-                    }
+    private func rows(_ content: PickerContent, libraryIsEmpty: Bool) -> some View {
+        // While typing, the filter's top match is what Return plays, so it carries the selection until the arrows
+        // move it.
+        let target = selection.target(in: content.keys, fallsBackToFirst: content.isFiltered && panel.isKeyWindow)
+        ForEach(content.sections) { section in
+            if let title = section.title {
+                SectionHeader(title: title, trailing: section.trailing)
+            }
+            ForEach(section.entries) { entry in
+                row(entry, in: section, isSelected: entry.id == target)
+                    .id(entry.id)
             }
         }
-        if !recents.isEmpty {
-            SectionHeader(title: "Recent")
-            ForEach(recents.prefix(4)) { playlist in
-                PlaylistRow(playlist: playlist, isRecent: true)
-            }
-        }
-        SectionHeader(title: "Your Library", trailing: playlists.isEmpty ? nil : "\(playlists.count)")
-        if let likedSongs {
-            PlaylistRow(playlist: likedSongs)
-        }
-        ForEach(playlists) { playlist in
-            PlaylistRow(playlist: playlist)
-        }
-        if playlists.isEmpty {
+        if content.isFiltered, content.keys.isEmpty {
+            StatusMessage(
+                symbol: "magnifyingglass",
+                title: "No playlists match “\(filter.trimmingCharacters(in: .whitespaces))”",
+                message: "Search all of Spotify instead.",
+                actions: [StateAction(title: "Search Spotify", symbol: "magnifyingglass", isProminent: false) {
+                    navigator.searchQuery = filter
+                    navigator.wantsSearchFocus = true
+                    withAnimation(theme.animation(OrbitTokens.Motion.navigate)) { navigator.showLibrary(.search) }
+                }]
+            )
+            .listState()
+        } else if !content.isFiltered, libraryIsEmpty {
             StatusMessage(
                 symbol: "music.note.list",
                 title: "No playlists yet",
                 message: "Playlists you create or follow in Spotify show up here."
             )
-            .padding(.vertical, OrbitTokens.Spacing.xxl)
+            .padding(.vertical, OrbitTokens.Spacing.xl)
         }
     }
 
     @ViewBuilder
-    private func matches(_ playlists: [Playlist]) -> some View {
-        let found = filtered(playlists)
-        if found.isEmpty {
-            StatusMessage(
-                symbol: "magnifyingglass",
-                title: "No playlists match “\(filter)”",
-                message: "Search all of Spotify instead.",
-                actions: [StateAction(title: "Search Spotify", isProminent: false) {
-                    navigator.searchQuery = filter
-                    withAnimation(theme.animation(OrbitTokens.Motion.navigate)) { navigator.showLibrary(.search) }
-                }]
-            )
-            .padding(.vertical, OrbitTokens.Spacing.xxl)
+    private func row(_ entry: PickerContent.Entry, in section: PickerContent.Section, isSelected: Bool) -> some View {
+        let row = PlaylistRow(playlist: entry.playlist, isRecent: entry.isRecent)
+            .keyboardSelected(isSelected)
+        if section.id == "pinned" {
+            row
+                .draggable(entry.playlist.id)
+                .dropDestination(for: String.self) { ids, _ in
+                    movePinned(ids.first, before: entry.playlist)
+                }
         } else {
-            ForEach(found) { playlist in
-                PlaylistRow(playlist: playlist)
-            }
+            row
         }
     }
 
-    private func filtered(_ playlists: [Playlist]) -> [Playlist] {
-        let query = filter.trimmingCharacters(in: .whitespaces)
-        return ([likedSongs].compactMap { $0 } + playlists).filter { $0.name.localizedStandardContains(query) }
-    }
-
-    private func playFirstMatch() {
-        guard let first = filtered(library.playlists.value ?? []).first else { return }
+    private func playSelection(in content: PickerContent) {
+        guard let key = selection.target(in: content.keys, fallsBackToFirst: content.isFiltered),
+              let entry = content.entry(for: key)
+        else { return }
         let collapse: (() -> Void)? = preferences.collapsesAfterAction ? { [panel] in panel.collapse() } : nil
-        Task { await switcher.play(first, with: playback, thenCollapse: collapse) }
+        Task { await switcher.play(entry.playlist, with: playback, thenCollapse: collapse) }
     }
 
     private func movePinned(_ id: String?, before target: Playlist) {

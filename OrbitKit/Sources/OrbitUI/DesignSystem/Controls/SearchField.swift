@@ -7,7 +7,14 @@ struct SearchField: View {
     let prompt: String
     @Binding var text: String
     var focusOnAppear = false
+    // Takes focus whenever the panel is already key, without asking for key status itself, so typing filters
+    // straight away once the user has opened Orbit.
+    var focusesWhenKey = false
+    // A query is on its way; shown in the field so results that stay on screen meanwhile are not mistaken for it.
+    var isBusy = false
     var onSubmit: () -> Void = {}
+    // Up and Down Arrow move the list selection below the field while the caret stays in it.
+    var onMove: ((Int) -> Void)?
     // Called for Escape on an empty field, so the screen can step back instead of only clearing.
     var onEscape: (() -> Void)?
 
@@ -22,12 +29,21 @@ struct SearchField: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: OrbitTokens.Icon.small, weight: .semibold))
                 .foregroundStyle(.secondary)
-            TextField(prompt, text: $text)
+            // An explicit prompt style, because the plain field's default placeholder all but vanishes on glass.
+            TextField(text: $text, prompt: Text(prompt).foregroundStyle(.secondary)) { Text(prompt) }
                 .textFieldStyle(.plain)
                 .font(OrbitTokens.Typography.body)
                 .focused($isFocused)
                 .onSubmit(onSubmit)
                 .onExitCommand(perform: escape)
+                .onKeyPress(.downArrow) { move(1) }
+                .onKeyPress(.upArrow) { move(-1) }
+            if isBusy, !text.isEmpty {
+                ProgressView()
+                    .controlSize(.mini)
+                    .transition(.opacity)
+                    .accessibilityLabel("Searching")
+            }
             if !text.isEmpty {
                 Button {
                     text = ""
@@ -60,11 +76,16 @@ struct SearchField: View {
         }
         .animation(theme.animation(OrbitTokens.Motion.hover), value: isFocused)
         .animation(theme.animation(OrbitTokens.Motion.hover), value: text.isEmpty)
+        .animation(theme.animation(OrbitTokens.Motion.hover), value: isBusy)
         .onAppear {
-            if focusOnAppear { requestFocus() }
+            if focusOnAppear {
+                requestFocus()
+            } else if focusesWhenKey, panel.isKeyWindow {
+                isFocused = true
+            }
         }
         .onChange(of: panel.isKeyWindow) { _, isKey in
-            if isKey, wantsFocus { isFocused = true }
+            if isKey, wantsFocus || focusesWhenKey { isFocused = true }
             if !isKey {
                 wantsFocus = false
                 isFocused = false
@@ -82,6 +103,12 @@ struct SearchField: View {
             wantsFocus = true
             host?.setAcceptsKeyboardInput(true)
         }
+    }
+
+    private func move(_ offset: Int) -> KeyPress.Result {
+        guard let onMove else { return .ignored }
+        onMove(offset)
+        return .handled
     }
 
     private func escape() {

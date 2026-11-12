@@ -60,3 +60,10 @@ final class PlaylistSwitcher {
         await task.value
     }
 }
+
+extension PanelState {
+    // What a finished switch runs afterwards: a collapse when the user asked Orbit to get out of the way.
+    func collapseAfterAction(_ preferences: Preferences) -> (() -> Void)? {
+        preferences.collapsesAfterAction ? { [weak self] in self?.collapse() } : nil
+    }
+}
