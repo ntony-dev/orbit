@@ -36,7 +36,7 @@ struct AppearancePane: View {
             } header: {
                 Text("Glass")
             } footer: {
-                Text("macOS Liquid Glass comes in two variants, clear and regular, and Orbit can't change how strongly it blurs. Background opacity sets a layer Orbit draws behind the glass to keep text readable. Reduce Transparency and Increase Contrast in Accessibility settings take precedence.")
+                Text("macOS Liquid Glass comes in two variants, clear and regular, and Orbit can't change how strongly it blurs. Background opacity sets how solid a layer Orbit draws behind the glass is, from see-through but still readable at 0% to nearly opaque at 100%; it leaves the glass itself unchanged. Reduce Transparency and Increase Contrast in Accessibility settings take precedence.")
                     .settingsFootnote()
             }
 
