@@ -113,33 +113,34 @@ enum OrbitTokens {
         static let nowPlayingArtist = Font.system(size: 13)
     }
 
+    // Control feedback is effectively instant, navigation brisk, and the morph just long enough to read as the
+    // pill growing rather than a window being swapped.
     enum Motion {
-        static let morph = Animation.spring(duration: 0.44, bounce: 0.16)
-        static let navigate = Animation.smooth(duration: 0.32)
-        static let content = Animation.smooth(duration: 0.36)
-        static let hover = Animation.easeOut(duration: 0.14)
-        static let press = Animation.easeOut(duration: 0.08)
-        static let reduced = Animation.easeInOut(duration: 0.16)
+        static let morph = Animation.spring(duration: 0.32, bounce: 0.12)
+        static let navigate = Animation.smooth(duration: 0.22)
+        static let content = Animation.smooth(duration: 0.24)
+        static let hover = Animation.easeOut(duration: 0.07)
+        static let press = Animation.easeOut(duration: 0.04)
+        static let reduced = Animation.easeInOut(duration: 0.12)
         // The pill fades out before the surface has grown much, and the expanded content fades in once there is
         // room for it, so neither ever floats inside a surface of the wrong size.
-        static let pillFadeOut = Animation.easeOut(duration: 0.1)
-        static let surfaceFadeIn = Animation.easeOut(duration: 0.24).delay(0.08)
-        static let screenFadeOut = Animation.easeOut(duration: 0.14)
+        static let pillFadeOut = Animation.easeOut(duration: 0.07)
+        static let surfaceFadeIn = Animation.easeOut(duration: 0.18).delay(0.05)
+        static let screenFadeOut = Animation.easeOut(duration: 0.1)
         // When a morph has visibly finished, so the canvas can shrink without clipping the spring's tail.
-        static let settle: Duration = .milliseconds(560)
+        static let settle: Duration = .milliseconds(420)
         // Long enough to read "Now playing" on a switched row before the panel collapses on its own.
         static let confirmationHold: Duration = .milliseconds(700)
         static let searchDebounce: Duration = .milliseconds(320)
         static let volumeThrottle: Duration = .milliseconds(120)
         static let progressInterval: TimeInterval = 0.5
-        static let navigationOffset: CGFloat = 18
+        static let navigationOffset: CGFloat = 14
         // Collapsing is a return to rest: a firmer spring with no visible overshoot, the card's content gone
         // almost at once and the pill arriving while the surface is still closing in, so there is no empty beat.
-        static let collapse = Animation.spring(duration: 0.36, bounce: 0.04)
-        static let collapseContentFadeOut = Animation.easeOut(duration: 0.09)
-        static let collapsePillFadeIn = Animation.easeOut(duration: 0.18).delay(0.05)
-        static let fit = Animation.smooth(duration: 0.3)
-        static let selection = Animation.easeOut(duration: 0.1)
+        static let collapse = Animation.spring(duration: 0.26, bounce: 0.04)
+        static let collapseContentFadeOut = Animation.easeOut(duration: 0.07)
+        static let collapsePillFadeIn = Animation.easeOut(duration: 0.14).delay(0.03)
+        static let selection = Animation.easeOut(duration: 0.07)
         static let loadingPulse = Animation.easeInOut(duration: 0.9)
         // Shuffle, repeat, like and play/pause answer a click at once; only the color settles.
         static let toggle = Animation.easeOut(duration: 0.08)
