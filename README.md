@@ -2,25 +2,69 @@
 
 Orbit is a small floating controller for Spotify on macOS 26 and later. A translucent pill sits above your windows and expands into a player, a quick playlist picker and a compact library, so you can change what is playing without bringing Spotify's window forward. The Spotify desktop app still plays the audio; Orbit only controls it.
 
-<!--
-SCREENSHOTS GO HERE.
-Planned: the collapsed pill, the expanded player, the playlist picker and the mini library, in light and dark.
-No image files exist yet; add them under docs/images/ and reference them from this spot.
--->
+## Screenshots
+
+These were captured from Orbit's demo mode, which uses made-up playlists and artwork. The colored background is drawn by a debug option to stand in for a desktop behind the glass.
+
+<p>
+  <img src="docs/images/pill-dark.png" width="312" alt="The collapsed pill in dark mode, showing round album artwork, the song Afterglow Avenue by Lumen Drift, and a playing indicator">
+  <img src="docs/images/pill-light.png" width="312" alt="The same collapsed pill in light mode">
+</p>
+
+<p>
+  <img src="docs/images/player-dark.png" width="384" alt="The expanded player in dark mode: the playlist Night Drive at the top with a settings gear and a collapse button, album artwork, title, artist and album, a heart for Liked Songs, a seek bar, shuffle, previous, pause, next and repeat buttons, a volume slider, a This Mac device button, and Now Playing, Playlists and Library tabs">
+  <img src="docs/images/player-light.png" width="384" alt="The same expanded player in light mode">
+</p>
+
+<p>
+  <img src="docs/images/playlist-picker-dark.png" width="384" alt="The playlist picker in dark mode: a filter field, two pinned playlists, three recent playlists, then Your Library with Liked Songs first and the playing playlist, Night Drive, marked Now playing">
+  <img src="docs/images/library-dark.png" width="384" alt="The mini library in dark mode: Playlists, Liked, Queue and Search tabs, a filter field, and a list of playlists with Liked Songs at the top">
+  <img src="docs/images/playlist-detail-light.png" width="384" alt="A playlist opened from the library in light mode: Night Drive with Pause, pin and Open in Spotify buttons, and its numbered tracks with durations, the first marked as playing">
+</p>
 
 ## Features
 
-- **Pill.** Shows artwork, the track title and a playing indicator. Hovering reveals play/pause and skip buttons. Click to expand, drag to move. Two sizes.
-- **Player.** Artwork, title, artist and album; seek bar; shuffle, previous, play/pause, next and repeat (off, all, one); volume; save to or remove from Liked Songs; a device picker for Spotify Connect; the name of the playlist that is playing, which opens the playlist picker.
-- **Playlist picker.** Pinned playlists first, then recently played ones, then your whole library with Liked Songs on top. Type to filter; Return plays the first match. Orbit shows the switch as pending until it sees Spotify playing the playlist, and shows an error with a retry when it does not.
-- **Mini library.** Playlists (with their tracks, where Spotify allows it), Liked Songs, the queue, and search for songs, albums and playlists. Right-click a song to add it to the queue; right-click a playlist to pin, unpin, reorder pins, remove it from recents or open it in Spotify.
-- **Positioning.** Snapping to screen edges, optional docking at the top centre, a remembered position per display, and recovery when a display is disconnected or the saved position is offscreen.
-- **Behaviour.** Keep above other windows, hide while another app is full screen, hide when Spotify quits, collapse after choosing music, launch at login.
-- **Appearance.** System, light or dark; Clear, Balanced or Tinted glass; a background opacity slider; five accent colours plus a custom one. The glass presets use macOS's two native Liquid Glass variants, plus a backing layer and tint that Orbit draws itself. Orbit cannot change how strongly the native glass blurs. It follows Reduce Motion, Reduce Transparency and Increase Contrast.
-- **Menu bar item.** Now playing, play/pause, next, previous, open the player, playlists, search, show or hide the pill, reset its position, Settings and Quit.
+- **Pill.** Shows artwork, the track title and artist, and a playing indicator. Hovering reveals previous, play/pause and next buttons (play/pause and next only on the compact size). Click to expand, drag to move. Two sizes.
+- **Player.** Artwork, title, artist and album; seek bar; shuffle, previous, play/pause, next and repeat (off, all, one); volume; save to or remove from Liked Songs; a device list for Spotify Connect; the name of the playlist that is playing, which opens the playlist picker. A gear opens Settings.
+- **Playlist picker.** Pinned playlists first, then up to eight playlists you recently started from Orbit, then your whole library with Liked Songs on top. Type to filter; Return plays the selected or top match. Orbit shows the switch as pending until it sees Spotify playing the playlist, and shows an error with a retry when it does not.
+- **Mini library.** Playlists, Liked Songs, the queue, and search for songs, albums and playlists. Open a playlist to see its tracks, where Spotify allows it, and to play, pin or open it in Spotify. Right-click a song to play it, add it to the queue or open it in Spotify; right-click a playlist to play it, pin or unpin it, move a pin up or down, remove it from recents or open it in Spotify.
+- **Positioning.** Snapping to screen edges, optional docking at the top center, a remembered position per display, and recovery when a display is disconnected or the saved position is offscreen.
+- **Behavior.** Keep above other windows, hide while another app is full screen, hide when Spotify quits, collapse after choosing music, launch at login, and a preferred Spotify Connect device.
+- **Synchronization.** Settings > Spotify sets how often Orbit checks Spotify's servers for playback on your other devices: Automatically, Less often, or Only while Orbit is open. Refresh Now reloads your library from Spotify at once. See [How often Orbit talks to Spotify](docs/SPOTIFY_SETUP.md#how-often-orbit-talks-to-spotify).
+- **Appearance.** System, light or dark; Clear, Balanced or Tinted glass; a background opacity slider; five accent colors plus a custom one; a Reduce animation switch. The glass presets use macOS's two native Liquid Glass variants, plus a backing layer and tint that Orbit draws itself. Orbit cannot change how strongly the native glass blurs.
+- **Menu bar item.** Now playing, play/pause, next, previous, open the player, playlists, search, show or hide the pill, reset its position, About Orbit (which lists the third-party software Orbit includes and its license), Settings and Quit.
 - **Global shortcuts.** Open or close Orbit, search, play or pause, next, previous, open the playlist picker. All are off until you record a key combination in Settings > Shortcuts.
 
 Playback controls work without signing in, through macOS Automation, as long as the Spotify app is running on the same Mac. Playlists, Liked Songs, search, the queue, saving songs and switching devices need a Spotify sign-in.
+
+### Keyboard
+
+These keys work while the expanded panel is open and active, which it is after you click the pill or open it from the menu bar or a shortcut. They follow Spotify's own desktop shortcuts where there is one.
+
+| Key | What it does |
+|---|---|
+| Space | Play or pause |
+| Left / Right arrow | Seek back or forward 10 seconds (player only) |
+| Command-Left / Command-Right | Previous or next track |
+| Command-Up / Command-Down | Volume up or down by 10 |
+| Up / Down arrow | Move the selection in a list (the picker, library playlists, Liked Songs, search results, a playlist's tracks) |
+| Return | Play the selected item, or the top match while filtering |
+| Typing | Goes into the filter or search field, when the screen has one |
+| Escape | Clears the field if it has text; otherwise goes back one step (from a playlist or the device list to the screen it came from, from the picker or library to the player) and, from the player, collapses Orbit |
+| Command-comma | Open Settings |
+
+In a list, the arrow keys and Return act on the list even while its filter field has focus; other keys type into the field, so Space is not play/pause there. Holding an arrow repeats seeking, skipping and volume changes but never play/pause or Escape.
+
+### Accessibility
+
+- **VoiceOver.** Controls have labels. The pill reads as a single button that describes what is playing and offers Play or Pause, Next Track and Previous Track as actions. Playlist and song rows read as one item each and offer their right-click commands (pin, add to queue, open in Spotify and so on) as actions.
+- **Reduce Motion.** Orbit shortens its animations and replaces slides with fades. Settings > Appearance > Reduce animation does the same for Orbit alone.
+- **Reduce Transparency.** Orbit draws an almost opaque backing under the glass, whatever the opacity slider says.
+- **Increase Contrast.** Orbit raises the minimum backing opacity, draws a border around the pill and panel, and strengthens fills and selection colors.
+
+### Performance
+
+Measured on one Mac, with a Release build in demo mode: a collapsed pill playing music used about 0.1% CPU and about 27 MB of memory. These are measurements of that setup, not guarantees; a real Spotify account adds network requests, and your numbers will differ.
 
 ## Requirements
 
@@ -37,7 +81,7 @@ Playback controls work without signing in, through macOS Automation, as long as 
    shasum -a 256 ~/Downloads/Orbit-<version>.zip
    ```
 
-3. Double-click the zip to extract it in Finder, then move `Orbit.app` to `/Applications`.
+3. Double-click the zip to extract it in Finder. It contains a folder with `Orbit.app`, Orbit's license and the third-party notices. Move `Orbit.app` to `/Applications`.
 4. Open Orbit. The first launch is blocked by Gatekeeper; see below.
 5. Orbit has no Dock icon. Look for the pill on screen and the Orbit item in the menu bar.
 
@@ -85,14 +129,32 @@ Nothing is sent anywhere else. Commands to the Spotify app on your Mac go over l
 
 What stays on your Mac:
 
-- Spotify tokens, in your login keychain as an item labelled "Orbit Spotify session". Signing out deletes it. Tokens are never written to logs.
+- Spotify tokens, in your login keychain as an item labeled "Orbit Spotify session". Signing out deletes it. Tokens are never written to logs.
 - Settings, including any Client ID you enter, in Orbit's preferences (`io.github.ntony46.orbit`).
 - Pinned and recent playlists, in `~/Library/Application Support/Orbit/Library.json`.
 - An artwork cache of up to 64 MB in Orbit's Caches folder.
 
-The sign-in callback listener accepts connections only on `127.0.0.1` port 8888, only while a sign-in is in progress, and shuts down after the first callback.
+The sign-in callback listener accepts connections only on `127.0.0.1` port 8888, only while a sign-in is in progress, and shuts down after the callback for that sign-in arrives or after five minutes.
 
-To remove Orbit's access from the Spotify side as well, remove it from the apps list in your Spotify account settings.
+To remove Orbit's access from the Spotify side as well, remove it at [spotify.com/account/apps](https://www.spotify.com/account/apps/).
+
+## Security notes
+
+Orbit signs in with Authorization Code with PKCE, the OAuth flow for apps that cannot keep a client secret. What it does:
+
+- Uses PKCE with the S256 method and a fresh random verifier for each sign-in. The verifier is kept only in memory.
+- Sends a random `state` value with each sign-in and accepts only a callback that returns it.
+- Receives the callback on a listener bound to `127.0.0.1` only, not to other network interfaces. Requests with a missing or wrong `state` get an error page and are otherwise ignored; the listener keeps waiting for the real callback.
+- Has no client secret, so there is none to leak.
+- Keeps tokens only in the login keychain and in memory.
+- Refuses HTTP redirects on token and Web API requests, so a token is never re-sent to another address.
+
+Some risks come with any app that signs in through a browser and a local listener, and Orbit cannot remove them:
+
+- A Client ID is public. Any program running as you can start its own sign-in with Orbit's Client ID and its own listener on port 8888. If you approved Orbit before, Spotify may skip the consent screen and send that program a code without asking you again.
+- The authorization code ends up in your browser history as part of the callback address. On its own it is useless: exchanging it for tokens needs the PKCE verifier that only the Orbit that started the sign-in holds, in memory.
+- Signing out deletes the tokens on your Mac but cannot revoke them at Spotify. To cut off access completely, remove Orbit at [spotify.com/account/apps](https://www.spotify.com/account/apps/).
+- Malware already running as your user can read Orbit's keychain item if you approve its access request, and can take port 8888 before Orbit does. In the second case Orbit reports that the port is in use and does not open the browser, so its own sign-in never sends a code to that program.
 
 ## Known limitations
 
@@ -136,13 +198,15 @@ You need macOS 26 or later and a recent Xcode with the macOS 26 SDK (the project
 
 ### Stable signing for your own Mac
 
-Ad-hoc signatures change with every build, so macOS asks again for Keychain and Automation access after each rebuild. To stop that, sign with a certificate: uncomment the three signing lines in `Config/Local.xcconfig` and set `DEVELOPMENT_TEAM` to your certificate's team ID (the example file shows how to read it). Any Apple Development certificate works, including the free one Xcode creates when you add an Apple ID under Xcode > Settings > Accounts. macOS then keeps its grants across rebuilds signed with that certificate; grants given to an ad-hoc build do not carry over.
+macOS records the Automation grant and the keychain item's access list against the app's designated requirement, the rule that says which code counts as "this app". For an ad-hoc build that rule is the hash of that exact build, so every rebuild is a new app to macOS and it asks for Keychain and Automation access again. For an app signed with a certificate, the rule names the bundle identifier and the certificate instead, and both stay the same from one build to the next, so the grants carry over.
+
+To get that, sign with a certificate: uncomment the three signing lines in `Config/Local.xcconfig` and set `DEVELOPMENT_TEAM` to your certificate's team ID (the example file shows how to read it). Any Apple Development certificate works, including the free one Xcode creates when you add an Apple ID under Xcode > Settings > Accounts. Grants given to an ad-hoc build do not carry over, so macOS asks once more the first time you run the signed copy.
 
 ```
 Scripts/install-local.sh [--destination folder] [--quit-running] [alias-folder]
 ```
 
-This builds Release with that identity, refuses an ad-hoc result, installs it as `Orbit.app` in `/Applications` (or `--destination`) and keeps a copy in `dist/Orbit.app`. It will not replace a running copy unless you pass `--quit-running`. Given an alias folder, it also writes a Finder alias named Orbit there. Keep a single installed copy, so launch at login and the permission grants refer to one app.
+This makes a clean Release build with that identity, refuses an ad-hoc result, installs it as `Orbit.app` in `/Applications` (or `--destination`) and keeps a copy in `dist/Orbit.app`. It will not replace a running copy unless you pass `--quit-running`, which quits that copy first. Given an alias folder, it also writes a Finder alias named Orbit there rather than a second copy. Keep a single installed copy, so launch at login and the permission grants refer to one app.
 
 ### Release archive
 
@@ -150,7 +214,7 @@ This builds Release with that identity, refuses an ad-hoc result, installs it as
 Scripts/archive.sh
 ```
 
-This makes a clean Release build, signs it ad hoc whatever `Local.xcconfig` says, verifies the signature and writes `dist/Orbit-<version>.zip`. It prints the architectures, whether a Client ID is built in, and the archive's SHA-256 checksum. A `SPOTIFY_CLIENT_ID` in `Config/Local.xcconfig` is built into the archive, so everyone who uses that copy signs in through your Spotify app, needs to be on its user list and shares its quota.
+This makes a clean Release build, signs it ad hoc whatever `Local.xcconfig` says, verifies the signature, checks that the third-party notices match the bundled packages' licenses, and writes `dist/Orbit-<version>.zip` containing `Orbit.app`, `LICENSE.txt` and `Acknowledgements.txt`. It prints the architectures, whether a Client ID is built in, and the archive's SHA-256 checksum. A `SPOTIFY_CLIENT_ID` in `Config/Local.xcconfig` is built into the archive, so everyone who uses that copy signs in through your Spotify app, needs to be on its user list and shares its quota.
 
 ### When to run XcodeGen
 
@@ -191,11 +255,17 @@ Run with mock services, which needs no Spotify account, does not talk to the Spo
 open build/Build/Products/Debug/Orbit.app --args --demo
 ```
 
-Other launch arguments, mainly for screenshots and tests, are documented in `OrbitKit/Sources/OrbitShell/LaunchOptions.swift`. Project conventions are in `CLAUDE.md`.
+Other launch arguments, mainly for screenshots and tests, are documented in `OrbitKit/Sources/OrbitShell/LaunchOptions.swift` and, for Debug builds, `OrbitKit/Sources/OrbitUI/Support/UIDebugOptions.swift`. `Scripts/screenshot.sh` launches the Debug build in the background, captures one of its windows by window ID and quits it, without moving the pointer or changing focus; the screenshots above were made with it, for example:
+
+```
+Scripts/screenshot.sh docs/images/player-dark.png --demo --expanded --appearance dark --ui-backdrop gradient
+```
+
+It needs Screen Recording permission for the terminal app. Project conventions are in `CLAUDE.md`.
 
 ## Acknowledgements
 
-- [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) by Sindre Sorhus, MIT License. Used for user-assigned global shortcuts.
+- [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) by Sindre Sorhus, MIT License. Used for user-assigned global shortcuts. Its license is reproduced in `App/Acknowledgements.txt`, which Orbit shows under About Orbit in the menu bar item.
 
 ## License
 

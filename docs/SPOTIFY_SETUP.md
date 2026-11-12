@@ -35,7 +35,7 @@ An account that is not on the list can open Spotify's sign-in page, but its requ
 
 Orbit reads the Client ID from two places:
 
-- **In the app:** Settings > Spotify > Spotify Client ID. Paste the ID and click Save or press Return. Orbit stores it in its preferences.
+- **In the app:** Settings > Spotify, in the Spotify Client ID section at the bottom. Paste the ID into the Client ID field and click Save or press Return. Orbit stores it in its preferences.
 - **At build time:** `SPOTIFY_CLIENT_ID` in `Config/Local.xcconfig`, which the build writes into the app's `Info.plist` as `SpotifyClientID`.
 
 ```
@@ -52,15 +52,15 @@ Orbit reads the Client ID each time you sign in, so a change takes effect withou
 
 ## First sign-in
 
-1. Open Settings > Spotify from Orbit's menu bar item and click Sign In. You can also click Connect Spotify in the panel.
+1. Open Settings > Spotify and click Sign In…. Settings opens from Orbit's menu bar item, from the gear in the expanded player, or with Command-comma while the panel is open. You can also click Connect Spotify in the panel.
 2. Orbit starts a listener on `127.0.0.1:8888` and opens Spotify's authorization page in your default browser.
-3. Check the permissions listed (see [Scopes](#scopes)) and click Agree.
+3. Check the permissions listed (see [Scopes](#scopes)) and click Agree. If you approved Orbit's Client ID before, Spotify may skip this page and go straight to the next step.
 4. Spotify sends the browser back to `http://127.0.0.1:8888/callback`. The page should say "You're signed in to Orbit." You can close the tab.
 5. Settings > Spotify shows "Signed in as" followed by your Spotify display name.
 
-Orbit waits up to five minutes for the browser to come back. Your tokens go into your login keychain, and Orbit restores the session on the next launch and refreshes the access token as needed. Sign Out deletes the stored tokens.
+Orbit waits up to five minutes for the browser to come back. Your tokens go into your login keychain, and Orbit restores the session on the next launch and refreshes the access token as needed. Sign Out deletes the stored tokens from your Mac but cannot revoke them at Spotify.
 
-To revoke Orbit's access on Spotify's side as well, remove it from the apps list in your Spotify account settings.
+To revoke Orbit's access on Spotify's side as well, remove it at [spotify.com/account/apps](https://www.spotify.com/account/apps/). The README's [Security notes](../README.md#security-notes) describe what the sign-in protects against and what it cannot.
 
 ## Scopes
 
@@ -76,7 +76,7 @@ Orbit requests these scopes, taken from `OrbitKit/Sources/SpotifyKit/Auth/Author
 | `user-library-read` | Reading Liked Songs and whether the current track is saved |
 | `user-library-modify` | Saving the current track to Liked Songs or removing it |
 
-Orbit cannot create, edit or delete playlists, follow anything, or read your email or account details. If a later version of Orbit needs a scope your stored session was not granted, it signs you out and asks you to sign in again.
+Orbit cannot create, edit or delete playlists, follow anything, or read your email or account details. At launch Orbit checks the scopes recorded with your stored session. If one it needs is missing, for example because a newer version of Orbit asks for more, it signs you out and shows "Your Spotify session has expired." Sign in again to grant the full set.
 
 ## What Development Mode means
 
@@ -88,4 +88,12 @@ Spotify Developer apps run in Development Mode unless Spotify grants them extend
 - **Playlist tracks.** Spotify returns a playlist's tracks only if you own it or collaborate on it. For other playlists Orbit shows the name and artwork and can still play the playlist, but it shows "Spotify doesn't share the tracks of playlists you don't own." instead of a track list.
 - **Search page size.** A search returns at most 10 results per type. Orbit asks for 10 songs, 10 albums and 10 playlists.
 
-To keep quota use low, Orbit does not poll the Web API while it is hidden, polls slowly or not at all while only the pill shows, and reads every few seconds only while the panel is open and another device is playing.
+## How often Orbit talks to Spotify
+
+Playback in the Spotify app on this Mac reaches Orbit directly from the app, without Spotify's servers. To notice playback on your other devices, Orbit checks the Web API on a schedule, which you set under Settings > Spotify > Synchronization:
+
+- **Automatically** (the default). Every few seconds while the panel is open and another device is playing; less often while only the pill shows; never while Orbit is hidden. While Spotify on this Mac is playing and only the pill shows, Orbit does not check at all.
+- **Less often.** The same schedule with intervals three times as long, for less battery and quota use.
+- **Only while Orbit is open.** No checks while only the pill shows. The open panel still checks.
+
+Your list of playlists is reloaded when you open the panel, if Orbit's copy is more than five minutes old. Refresh Now, next to the setting, reloads your playlists and devices straight away, along with Liked Songs and the tracks of any playlist Orbit has already loaded, for example after you edit a playlist in Spotify.
