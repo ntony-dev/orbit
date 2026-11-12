@@ -9,13 +9,6 @@ struct PlaybackCoordinatorTests {
     let rig = Rig()
     var coordinator: PlaybackCoordinator { rig.coordinator }
 
-    private func settle() async {
-        for _ in 0..<20 {
-            await Task.yield()
-            try? await Task.sleep(for: .milliseconds(1))
-        }
-    }
-
     @Test func localAppIsAuthoritativeAndTheWebAPIAddsWhatAppleScriptCannot() async {
         await coordinator.refresh()
         let snapshot = coordinator.snapshot
@@ -49,7 +42,7 @@ struct PlaybackCoordinatorTests {
         #expect(await rig.webRequests("pause") == 0)
     }
 
-    @Test func nextPlaysTheUserQueueFirst() async {
+    @Test func nextShowsTheTrackSpotifyMovedTo() async {
         await coordinator.refresh()
         await coordinator.next()
         #expect(coordinator.snapshot.track?.id == MockFixtures.queuedTrackIDs[0])

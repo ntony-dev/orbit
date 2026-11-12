@@ -13,9 +13,10 @@ struct Rig {
 
     var engineClock: EngineClock { EngineClock(now: clock.now, sleep: clock.sleep) }
 
-    init() {
+    // `restoredState` is what the stored session restores to once `stores()` start.
+    init(restoredState: AuthState = .signedIn) {
         spotify = MockSpotify(latency: .zero, now: clock.now)
-        services = MockServices(spotify: spotify, authorizer: MockAuthorizer(latency: .zero))
+        services = MockServices(spotify: spotify, authorizer: MockAuthorizer(restoredState: restoredState, latency: .zero))
         coordinator = PlaybackCoordinator(
             localPlayer: services.localPlayer,
             api: services.api,
@@ -51,6 +52,15 @@ func eventually(_ condition: @MainActor () async -> Bool) async -> Bool {
         try? await Task.sleep(for: .milliseconds(1))
     }
     return await condition()
+}
+
+// For asserting that something does not happen: gives queued work a fixed number of turns to run first.
+@MainActor
+func settle() async {
+    for _ in 0..<20 {
+        await Task.yield()
+        try? await Task.sleep(for: .milliseconds(1))
+    }
 }
 
 extension MockFixtures {

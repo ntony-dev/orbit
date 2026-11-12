@@ -22,13 +22,6 @@ struct PlaylistSwitchTests {
         try #require(ready)
     }
 
-    private func settle() async {
-        for _ in 0..<20 {
-            await Task.yield()
-            try? await Task.sleep(for: .milliseconds(1))
-        }
-    }
-
     @Test func pendingShowsAtOnceAndSuccessIsConfirmedFromObservedState() async {
         await rig.spotify.holdCommands()
         let playback = playback
@@ -197,17 +190,9 @@ struct SignInTests {
     }
 
     @Test func signingInAfterLaunchSyncsPlaybackFromTheWebAPI() async {
-        let clock = MockClock()
-        let spotify = MockSpotify(latency: .zero, now: clock.now)
-        await spotify.setAutomationPermission(.denied)
-        let authorizer = MockAuthorizer(restoredState: .signedOut, latency: .zero)
-        let services = MockServices(spotify: spotify, authorizer: authorizer)
-        let stores = OrbitStores(
-            localPlayer: services.localPlayer,
-            api: services.api,
-            authorizer: authorizer,
-            clock: EngineClock(now: clock.now, sleep: clock.sleep)
-        )
+        let rig = Rig(restoredState: .signedOut)
+        await rig.spotify.setAutomationPermission(.denied)
+        let stores = rig.stores()
         stores.start()
         #expect(await eventually { stores.account.authState == .signedOut })
         #expect(stores.playback.snapshot.track == nil)

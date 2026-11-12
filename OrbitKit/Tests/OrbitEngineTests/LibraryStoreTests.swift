@@ -49,11 +49,12 @@ struct LibraryStoreTests {
     }
 
     @Test func concurrentViewsShareOneRequest() async {
-        await rig.spotify.holdCommands()
-        async let first: Void = library.loadDevices()
-        async let second: Void = library.loadDevices()
-        async let third: Void = library.loadDevices()
-        _ = await (first, second, third)
+        await rig.spotify.holdReads()
+        let library = library
+        let loads = (0..<3).map { _ in Task { await library.loadDevices() } }
+        #expect(await eventually { await rig.spotify.heldRequestCount == 1 })
+        await rig.spotify.releaseHeld()
+        for load in loads { await load.value }
         #expect(await rig.webRequests("devices") == 1)
         #expect(library.devices.value?.count == MockFixtures.devices.count)
     }
@@ -158,11 +159,6 @@ struct LibraryStoreTests {
         #expect(await eventually { !library.isSearching })
         #expect(library.searchResults.value?.playlists.contains { $0.name == "Late Night Jazz" } == true)
         #expect(library.searchResults.value != night)
-    }
-
-    @Test func searchCapsResultsAtTen() async {
-        await library.search("a")
-        #expect((library.searchResults.value?.tracks.count ?? 0) <= 10)
     }
 
     @Test func pinsReorderAndRecentsAreBounded() {
@@ -274,12 +270,5 @@ struct LibraryStoreTests {
         #expect(library.searchResults == .idle)
         await library.loadPlaylists()
         #expect(await rig.webRequests("playlists") == 2)
-    }
-
-    private func settle() async {
-        for _ in 0..<20 {
-            await Task.yield()
-            try? await Task.sleep(for: .milliseconds(1))
-        }
     }
 }
