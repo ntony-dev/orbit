@@ -165,7 +165,7 @@ private struct NowPlayingHeader: View {
                 )
                 .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
                 .pausedArtwork(!playback.snapshot.isPlaying)
-                .animation(theme.animation(OrbitTokens.Motion.content), value: playback.snapshot.isPlaying)
+                .animation(theme.animation(OrbitTokens.Motion.toggle), value: playback.snapshot.isPlaying)
             }
             // Title up to two lines, artist on one: the pair is centred on the artwork, so a one-line title sits
             // level with the cover's middle and a two-line one fills it, rather than leaving a hole beneath.

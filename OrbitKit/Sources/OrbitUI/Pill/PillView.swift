@@ -62,7 +62,7 @@ struct PillView: View {
         if theme.showsArtwork, let track = snapshot.track {
             ArtworkView(url: track.artworkURL, size: artworkSize, cornerRadius: artworkSize / 2, keepsPrevious: true)
                 .pausedArtwork(!snapshot.isPlaying)
-                .animation(theme.animation(OrbitTokens.Motion.content), value: snapshot.isPlaying)
+                .animation(theme.animation(OrbitTokens.Motion.toggle), value: snapshot.isPlaying)
         } else {
             Circle()
                 .fill(OrbitPalette.quietFill(contrast: theme.contrast))

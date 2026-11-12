@@ -100,7 +100,9 @@ struct ArtworkView: View {
 
 extension View {
     // Paused artwork loses some colour and light, the same in the pill and the player, so "paused" reads alike in
-    // both without relying on the play/pause glyph alone.
+    // both without relying on the play/pause glyph alone. Callers animate it with the glyph's toggle timing: the
+    // unfiltered cover renders visibly brighter at its edge than one at near-identity, and after a spring the
+    // filter was only dropped on the next playback update, so resuming could finish well after the glyph did.
     func pausedArtwork(_ isPaused: Bool) -> some View {
         saturation(isPaused ? 0.6 : 1).opacity(isPaused ? 0.88 : 1)
     }
