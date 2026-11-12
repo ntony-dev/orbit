@@ -11,6 +11,7 @@ public struct SpotifyAppleScriptPlayer: LocalPlayer {
 
     private let channel: AppleEventChannel
     private let cache: AutomationCache
+    private let hub = LocalEventHub()
 
     public init() {
         channel = AppleEventChannel(bundleIdentifier: Self.bundleIdentifier)
@@ -36,33 +37,31 @@ public struct SpotifyAppleScriptPlayer: LocalPlayer {
         SCDynamicStoreCopyComputerName(nil, nil) as String?
     }
 
+    // Both stores listen, but each notification is observed and enriched once: enriching costs a round trip of
+    // Apple events on the serial channel, ahead of whatever the user just asked for.
     public func events() -> AsyncStream<LocalPlayerEvent> {
-        let (raw, rawContinuation) = AsyncStream.makeStream(of: SpotifyEventMonitor.Signal.self, bufferingPolicy: .bufferingNewest(8))
-        let (events, continuation) = AsyncStream.makeStream(of: LocalPlayerEvent.self, bufferingPolicy: .bufferingNewest(16))
-        let monitor = SpotifyEventMonitor(bundleIdentifier: Self.bundleIdentifier, continuation: rawContinuation)
-        let player = self
-        // One consumer keeps events in posting order even when enriching a notification takes a round trip.
-        let consumer = Task {
-            for await signal in raw {
-                switch signal {
-                case .launched:
-                    player.cache.permission = nil
-                    continuation.yield(.launched)
-                case .terminated:
-                    player.cache.reset()
-                    continuation.yield(.terminated)
-                case .stateChanged(let notified):
-                    continuation.yield(.stateChanged(await player.enrich(notified)))
+        hub.events { send in
+            let (raw, rawContinuation) = AsyncStream.makeStream(of: SpotifyEventMonitor.Signal.self, bufferingPolicy: .bufferingNewest(8))
+            let monitor = SpotifyEventMonitor(bundleIdentifier: Self.bundleIdentifier, continuation: rawContinuation)
+            let player = self
+            // One consumer keeps events in posting order even when enriching a notification takes a round trip.
+            Task {
+                for await signal in raw {
+                    switch signal {
+                    case .launched:
+                        player.cache.permission = nil
+                        send(.launched)
+                    case .terminated:
+                        player.cache.reset()
+                        send(.terminated)
+                    case .stateChanged(let notified):
+                        send(.stateChanged(await player.enrich(notified)))
+                    }
                 }
+                withExtendedLifetime(monitor) {}
             }
+            Task { @MainActor in monitor.activate() }
         }
-        continuation.onTermination = { _ in
-            consumer.cancel()
-            rawContinuation.finish()
-            Task { @MainActor in monitor.invalidate() }
-        }
-        Task { @MainActor in monitor.activate() }
-        return events
     }
 
     public func state() async throws(OrbitError) -> LocalPlayerState {
@@ -192,6 +191,23 @@ enum SpotifyWindows {
             else { return false }
             return bounds.width >= minimumSide && bounds.height >= minimumSide
         }
+    }
+}
+
+// Fans one event source out to every subscriber. The source starts with the first subscription and then runs for
+// the life of the player, which is the life of the app.
+final class LocalEventHub: Sendable {
+    private let broadcaster = Broadcaster<LocalPlayerEvent>()
+    private let started = Mutex(false)
+
+    func events(startingSource start: (_ send: @escaping @Sendable (LocalPlayerEvent) -> Void) -> Void) -> AsyncStream<LocalPlayerEvent> {
+        let stream = broadcaster.stream()
+        let isFirst = started.withLock { started in
+            defer { started = true }
+            return !started
+        }
+        if isFirst { start { [broadcaster] in broadcaster.send($0) } }
+        return stream
     }
 }
 

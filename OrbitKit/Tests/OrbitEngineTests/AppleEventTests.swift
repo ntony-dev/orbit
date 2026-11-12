@@ -1,6 +1,7 @@
 import Foundation
 import OrbitCore
 @testable import OrbitEngine
+import Synchronization
 import Testing
 
 struct AppleEventTests {
@@ -105,6 +106,33 @@ struct AppleEventTests {
         let status = await received.value
         timeout.cancel()
         #expect(status == .paused)
+    }
+
+    // The account store and the coordinator both subscribe; a notification must be enriched (two Apple events
+    // with the track cached) once, not once per subscriber.
+    @Test func everySubscriberSharesOneEnrichedSource() async throws {
+        let hub = LocalEventHub()
+        let starts = Mutex(0)
+        let enrichments = Mutex(0)
+        let (signals, feed) = AsyncStream.makeStream(of: LocalPlayerState.self)
+        let start: (@escaping @Sendable (LocalPlayerEvent) -> Void) -> Void = { send in
+            starts.withLock { $0 += 1 }
+            Task {
+                for await state in signals {
+                    enrichments.withLock { $0 += 1 }
+                    send(.stateChanged(state))
+                }
+            }
+        }
+        let account = hub.events(startingSource: start)
+        let coordinator = hub.events(startingSource: start)
+        feed.yield(LocalPlayerState(status: .paused))
+        var accountIterator = account.makeAsyncIterator()
+        var coordinatorIterator = coordinator.makeAsyncIterator()
+        #expect(await accountIterator.next() == .stateChanged(LocalPlayerState(status: .paused)))
+        #expect(await coordinatorIterator.next() == .stateChanged(LocalPlayerState(status: .paused)))
+        #expect(starts.withLock { $0 } == 1)
+        #expect(enrichments.withLock { $0 } == 1)
     }
 
     // Read-only check against the real app, opt-in because it needs Spotify running and Automation consent.
