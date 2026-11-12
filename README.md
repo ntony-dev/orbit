@@ -1,6 +1,6 @@
 # Orbit
 
-Orbit is a small floating controller for Spotify on macOS 26 and later. A translucent pill sits above your windows and expands into a player, a quick playlist picker and a compact library, so you can change what is playing without bringing Spotify's window forward. The Spotify desktop app still plays the audio; Orbit only controls it.
+Orbit is a small floating controller for Spotify on macOS 26 and later. A translucent pill sits above your windows and expands into a player and a library, so you can change what is playing without bringing Spotify's window forward. The Spotify desktop app still plays the audio; Orbit only controls it.
 
 ## Screenshots
 
@@ -12,28 +12,27 @@ These were captured from Orbit's demo mode, which uses made-up playlists and art
 </p>
 
 <p>
-  <img src="docs/images/player-dark.png" width="384" alt="The expanded player in dark mode: the playlist Night Drive at the top with a settings gear and a collapse button, album artwork, title, artist and album, a heart for Liked Songs, a seek bar, shuffle, previous, pause, next and repeat buttons, a volume slider, a This Mac device button, and Now Playing, Playlists and Library tabs">
+  <img src="docs/images/player-dark.png" width="384" alt="The expanded player in dark mode: the playlist Night Drive at the top with a settings gear and a collapse button, album artwork, title, artist and album, a heart for Liked Songs, a seek bar, shuffle, previous, pause, next and repeat buttons, a volume slider with queue and device buttons, and Now Playing and Library tabs">
   <img src="docs/images/player-light.png" width="384" alt="The same expanded player in light mode">
 </p>
 
 <p>
-  <img src="docs/images/playlist-picker-dark.png" width="384" alt="The playlist picker in dark mode: a filter field, two pinned playlists, three recent playlists, then Your Library with Liked Songs first and the playing playlist, Night Drive, marked Now playing">
-  <img src="docs/images/library-dark.png" width="384" alt="The mini library in dark mode: Playlists, Liked, Queue and Search tabs, a filter field, and a list of playlists with Liked Songs at the top">
+  <img src="docs/images/playlist-picker-dark.png" width="384" alt="The library in dark mode: a search field, two pinned playlists, three recent playlists, then Your Library with Liked Songs first and the playing playlist, Night Drive, marked Now playing; each row ends with a chevron that opens its tracks">
+  <img src="docs/images/library-dark.png" width="384" alt="The library in dark mode while typing: the playlists whose names match, then Search Spotify with matching songs and albums">
   <img src="docs/images/playlist-detail-light.png" width="384" alt="A playlist opened from the library in light mode: Night Drive with Pause, pin and Open in Spotify buttons, and its numbered tracks with durations, the first marked as playing">
 </p>
 
 ## Features
 
 - **Pill.** Shows artwork, the track title and artist, and a playing indicator. Hovering reveals previous, play/pause and next buttons (play/pause and next only on the compact size). Click to expand, drag to move. Two sizes.
-- **Player.** Artwork, title, artist and album; seek bar; shuffle, previous, play/pause, next and repeat (off, all, one); volume; save to or remove from Liked Songs; a device list for Spotify Connect; the name of the playlist that is playing, which opens the playlist picker. A gear opens Settings.
-- **Playlist picker.** Pinned playlists first, then up to eight playlists you recently started from Orbit, then your whole library with Liked Songs on top. Type to filter; Return plays the selected or top match. Orbit shows the switch as pending until it sees Spotify playing the playlist, and shows an error with a retry when it does not.
-- **Mini library.** Playlists, Liked Songs, the queue, and search for songs, albums and playlists. Open a playlist to see its tracks, where Spotify allows it, and to play, pin or open it in Spotify. Right-click a song to play it, add it to the queue or open it in Spotify; right-click a playlist to play it, pin or unpin it, move a pin up or down, remove it from recents or open it in Spotify.
+- **Player.** Artwork, title and artist; seek bar with the elapsed and remaining time at its ends; shuffle, previous, play/pause, next and repeat (off, all, one); volume; save to or remove from Liked Songs; the queue of songs coming up and a device list for Spotify Connect, each opened in place by a button beside the volume slider; the name of the playlist that is playing, which opens the library. A gear opens Settings.
+- **Library.** One list: pinned playlists, then the three playlists you most recently started from Orbit, then Liked Songs and the rest of your playlists, each listed once. Click a playlist to play it; click the chevron at the end of its row to see its tracks, where Spotify allows it, and to play a single song, pin it or open it in Spotify. Typing in the search field filters your playlists at once and, after a short pause, shows Spotify's matching songs, albums and playlists below them. Orbit shows a switch as pending until it sees Spotify playing the playlist, and shows an error with a retry when it does not. Right-click a song to play it, add it to the queue or open it in Spotify; right-click a playlist to play it, show its tracks, pin or unpin it, move a pin up or down, remove it from recents or open it in Spotify. Drag pinned playlists to reorder them.
 - **Positioning.** Snapping to screen edges, optional docking at the top center, a remembered position per display, and recovery when a display is disconnected or the saved position is offscreen.
 - **Behavior.** Keep above other windows, hide while another app is full screen, hide when Spotify quits, collapse after choosing music, launch at login, and a preferred Spotify Connect device.
 - **Synchronization.** Settings > Spotify sets how often Orbit checks Spotify's servers for playback on your other devices: Automatically, Less often, or Only while Orbit is open. Refresh Now reloads your library from Spotify at once. See [How often Orbit talks to Spotify](docs/SPOTIFY_SETUP.md#how-often-orbit-talks-to-spotify).
 - **Appearance.** System, light or dark; Clear, Balanced or Tinted glass; a background opacity slider; five accent colors plus a custom one; a Reduce animation switch. The glass presets use macOS's two native Liquid Glass variants, plus a backing layer and tint that Orbit draws itself. Orbit cannot change how strongly the native glass blurs.
-- **Menu bar item.** Now playing, play/pause, next, previous, open the player, playlists, search, show or hide the pill, reset its position, About Orbit (which lists the third-party software Orbit includes and its license), Settings and Quit.
-- **Global shortcuts.** Open or close Orbit, search, play or pause, next, previous, open the playlist picker. All are off until you record a key combination in Settings > Shortcuts.
+- **Menu bar item.** Now playing, play/pause, next, previous, open the player, the library, search, show or hide the pill, reset its position, About Orbit (which lists the third-party software Orbit includes and its license), Settings and Quit.
+- **Global shortcuts.** Open or close Orbit, search, play or pause, next, previous, open the library. All are off until you record a key combination in Settings > Shortcuts.
 
 Playback controls work without signing in, through macOS Automation, as long as the Spotify app is running on the same Mac. Playlists, Liked Songs, search, the queue, saving songs and switching devices need a Spotify sign-in.
 
@@ -45,15 +44,17 @@ These keys work while the expanded panel is open and active, which it is after y
 |---|---|
 | Space | Play or pause |
 | Left / Right arrow | Seek back or forward 10 seconds (player only) |
+| Right arrow | Open the selected playlist's tracks (library) |
+| Left arrow | Go back from a playlist's tracks to the library |
 | Command-Left / Command-Right | Previous or next track |
 | Command-Up / Command-Down | Volume up or down by 10 |
-| Up / Down arrow | Move the selection in a list (the picker, library playlists, Liked Songs, search results, a playlist's tracks) |
+| Up / Down arrow | Move the selection in a list (the library, its search results, a playlist's tracks) |
 | Return | Play the selected item, or the top match while filtering |
 | Typing | Goes into the filter or search field, when the screen has one |
-| Escape | Clears the field if it has text; otherwise goes back one step (from a playlist or the device list to the screen it came from, from the picker or library to the player) and, from the player, collapses Orbit |
+| Escape | Clears the field if it has text; otherwise goes back one step (from a playlist's tracks to the library, from the queue or device list or the library to the player) and, from the player, collapses Orbit |
 | Command-comma | Open Settings |
 
-In a list, the arrow keys and Return act on the list even while its filter field has focus; other keys type into the field, so Space is not play/pause there. Holding an arrow repeats seeking, skipping and volume changes but never play/pause or Escape.
+In the library, Up, Down and Return act on the list even while the search field has focus; once the arrows have selected a row, Right arrow opens it rather than moving the cursor. Other keys type into the field, so Space is not play/pause there. Holding an arrow repeats seeking, skipping and volume changes but never play/pause or Escape.
 
 ### Accessibility
 
