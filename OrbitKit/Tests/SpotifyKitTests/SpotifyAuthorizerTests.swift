@@ -109,6 +109,19 @@ struct SpotifyAuthorizerTests {
         #expect(await authorizer.currentState() == .signedOut)
     }
 
+    @Test func signInCanBeRetriedImmediatelyAfterAFailedCallback() async throws {
+        let attempts = Locked(0)
+        let transport = StubTransport { request throws(OrbitError) in
+            HTTP.response(request, json: HTTP.tokenJSON(access: "access-new", refresh: "refresh-new"))
+        }
+        let authorizer = makeAuthorizer(transport: transport, browser: Self.browser(replyingWith: { state in
+            attempts.increment() == 1 ? "error=access_denied&state=\(state)" : "code=ok&state=\(state)"
+        }, captured: Locked(nil)))
+        await #expect(throws: OrbitError.cancelled) { try await authorizer.signIn() }
+        try await authorizer.signIn()
+        #expect(await authorizer.currentState() == .signedIn)
+    }
+
     @Test func busyCallbackPortIsReported() async {
         let occupier = LocalPorts.Occupier()
         let authorizer = makeAuthorizer(transport: Self.unusedTransport, port: occupier.port)

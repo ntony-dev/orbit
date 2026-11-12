@@ -96,32 +96,34 @@ enum Sessions {
 }
 
 enum LocalPorts {
-    private static let handedOut = Mutex<Set<UInt16>>([])
+    // Below macOS's ephemeral range (49152...65535), so no outgoing connection elsewhere in the suite can take a
+    // planned listener port as its source port, and well away from 8888 and a real sign-in.
+    private static let band: Range<UInt16> = 20_000..<40_000
+    private static let next = Mutex<UInt16>(UInt16.random(in: 20_000..<30_000))
 
-    // Asks the kernel for a free loopback port so tests never contend for 8888 with a real sign-in. The kernel can
-    // offer a just-released port again, so ports already given to a parallel test are skipped.
+    // Every call gets a distinct port that was bindable at that moment, so parallel tests never share one.
     static func free() -> UInt16 {
         while true {
-            let port = kernelAssignedPort()
-            if handedOut.withLock({ $0.insert(port).inserted }) { return port }
+            let port = next.withLock { current -> UInt16 in
+                let port = current
+                current = current + 1 < band.upperBound ? current + 1 : band.lowerBound
+                return port
+            }
+            if isBindable(port) { return port }
         }
     }
 
-    private static func kernelAssignedPort() -> UInt16 {
+    private static func isBindable(_ port: UInt16) -> Bool {
         let socket = Darwin.socket(AF_INET, SOCK_STREAM, 0)
         defer { close(socket) }
         var address = sockaddr_in()
         address.sin_family = sa_family_t(AF_INET)
         address.sin_addr.s_addr = inet_addr("127.0.0.1")
-        address.sin_port = 0
-        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
-        _ = withUnsafeMutablePointer(to: &address) {
+        address.sin_port = port.bigEndian
+        let length = socklen_t(MemoryLayout<sockaddr_in>.size)
+        return withUnsafeMutablePointer(to: &address) {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(socket, $0, length) }
-        }
-        _ = withUnsafeMutablePointer(to: &address) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(socket, $0, &length) }
-        }
-        return UInt16(bigEndian: address.sin_port)
+        } == 0
     }
 
     // Holds a port open on 127.0.0.1 the way another app would, to exercise the port-in-use path.

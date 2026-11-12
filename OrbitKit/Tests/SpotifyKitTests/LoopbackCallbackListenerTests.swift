@@ -103,6 +103,40 @@ struct LoopbackCallbackListenerTests {
         #expect(code == "again")
     }
 
+    // Each round binds the port the previous round just gave up; a listener that returned before its socket closed
+    // would fail here with port-in-use.
+    @Test func cancelledListenerReleasesThePortBeforeReturning() async throws {
+        let port = LocalPorts.free()
+        for round in 0..<20 {
+            let ready = AsyncStream.makeStream(of: Void.self)
+            let task = Task {
+                // Ends the wait below if the listener fails to bind, so a regression fails instead of hanging.
+                defer { ready.continuation.finish() }
+                return try await listener(port: port).receive(whenReady: { ready.continuation.yield() }, handle: codeHandler)
+            }
+            for await _ in ready.stream { break }
+            task.cancel()
+            do {
+                _ = try await task.value
+                Issue.record("Round \(round) returned instead of being cancelled")
+            } catch {
+                #expect(error as? OrbitError == .cancelled, "Round \(round)")
+            }
+        }
+    }
+
+    // A served callback leaves the accepted connection in TIME_WAIT; an immediate retry must still bind.
+    @Test func servedCallbackLeavesThePortImmediatelyReusable() async throws {
+        let port = LocalPorts.free()
+        for attempt in 0..<10 {
+            let code = try await listener(port: port).receive(
+                whenReady: { _ = try? await LocalHTTP.get(URL(string: "http://127.0.0.1:\(port)/callback?code=c\(attempt)&state=s1")!) },
+                handle: codeHandler
+            )
+            #expect(code == "c\(attempt)")
+        }
+    }
+
     @Test func failureFromWhenReadyEndsTheWait() async {
         let port = LocalPorts.free()
         await #expect(throws: OrbitError.unexpected(detail: "no browser")) {

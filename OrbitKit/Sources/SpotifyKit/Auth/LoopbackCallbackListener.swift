@@ -32,7 +32,12 @@ private final class CallbackSession<Value: Sendable>: Sendable {
         var isFinished = false
         var listener: NWListener?
         var timer: Task<Void, Never>?
+        // Held back until the listener reports `.cancelled`, so the port is closed before `receive` returns.
+        var pendingOutcome: Result<Value, OrbitError>?
     }
+
+    // NWListener always reports `.cancelled` after `cancel()`; this only guards against a lost state callback.
+    private static var shutdownGrace: DispatchTimeInterval { .seconds(2) }
 
     private static var maximumRequestSize: Int { 16 * 1024 }
 
@@ -68,22 +73,41 @@ private final class CallbackSession<Value: Sendable>: Sendable {
     }
 
     func finish(_ outcome: Result<Value, OrbitError>) {
-        let resolved = state.withLock { state -> (CheckedContinuation<Result<Value, OrbitError>, Never>?, NWListener?, Task<Void, Never>?)? in
+        let resolved = state.withLock { state -> (NWListener?, Task<Void, Never>?)? in
             guard !state.isFinished else { return nil }
             state.isFinished = true
-            let continuation = state.continuation
-            state.continuation = nil
-            if continuation == nil { state.outcome = outcome }
+            state.pendingOutcome = outcome
             defer {
                 state.listener = nil
                 state.timer = nil
             }
-            return (continuation, state.listener, state.timer)
+            return (state.listener, state.timer)
         }
-        guard let (continuation, listener, timer) = resolved else { return }
-        listener?.cancel()
+        guard let (listener, timer) = resolved else { return }
         timer?.cancel()
-        continuation?.resume(returning: outcome)
+        if let listener {
+            // `.cancelled` delivers the outcome once the socket is closed, so callers can rebind the port at once.
+            listener.cancel()
+            queue.asyncAfter(deadline: .now() + Self.shutdownGrace) { [weak self] in self?.deliver() }
+        } else {
+            deliver()
+        }
+    }
+
+    private func deliver() {
+        let delivery = state.withLock { state -> (CheckedContinuation<Result<Value, OrbitError>, Never>, Result<Value, OrbitError>)? in
+            guard let outcome = state.pendingOutcome else { return nil }
+            guard let continuation = state.continuation else {
+                state.outcome = outcome
+                state.pendingOutcome = nil
+                return nil
+            }
+            state.pendingOutcome = nil
+            state.continuation = nil
+            return (continuation, outcome)
+        }
+        guard let (continuation, outcome) = delivery else { return }
+        continuation.resume(returning: outcome)
     }
 
     private func start() {
@@ -94,6 +118,7 @@ private final class CallbackSession<Value: Sendable>: Sendable {
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: port)
         parameters.requiredInterfaceType = .loopback
+        // No SO_REUSEADDR, so a port another app holds, even on the wildcard address, is reported instead of shadowed.
         parameters.allowLocalEndpointReuse = false
 
         let listener: NWListener
@@ -103,18 +128,6 @@ private final class CallbackSession<Value: Sendable>: Sendable {
             finish(.failure(Self.listenerError(error, port: configuration.port)))
             return
         }
-        let proceed = state.withLock { state -> Bool in
-            guard !state.isFinished else { return false }
-            state.listener = listener
-            state.timer = Task { [weak self, timeout = configuration.timeout] in
-                try? await Task.sleep(for: timeout)
-                guard !Task.isCancelled else { return }
-                self?.finish(.failure(.unexpected(detail: "Timed out waiting for Spotify sign-in.")))
-            }
-            return true
-        }
-        guard proceed else { return }
-
         listener.stateUpdateHandler = { [weak self] newState in
             self?.listenerChanged(to: newState)
         }
@@ -126,7 +139,17 @@ private final class CallbackSession<Value: Sendable>: Sendable {
             connection.start(queue: queue)
             receive(on: connection, buffer: Data())
         }
-        listener.start(queue: queue)
+        // Started under the lock so a concurrent finish either sees no listener or one that will report `.cancelled`.
+        state.withLock { state in
+            guard !state.isFinished else { return }
+            state.listener = listener
+            state.timer = Task { [weak self, timeout = configuration.timeout] in
+                try? await Task.sleep(for: timeout)
+                guard !Task.isCancelled else { return }
+                self?.finish(.failure(.unexpected(detail: "Timed out waiting for Spotify sign-in.")))
+            }
+            listener.start(queue: queue)
+        }
     }
 
     private func listenerChanged(to newState: NWListener.State) {
@@ -142,6 +165,8 @@ private final class CallbackSession<Value: Sendable>: Sendable {
             }
         case .failed(let error), .waiting(let error):
             finish(.failure(Self.listenerError(error, port: configuration.port)))
+        case .cancelled:
+            deliver()
         default:
             break
         }
