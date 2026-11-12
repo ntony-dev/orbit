@@ -14,6 +14,8 @@ import SwiftUI
 final class PanelController: PanelHost {
     let state = PanelState()
     private let panel: FloatingPanel
+    // Kept while the panel is hidden, so its view state survives being detached from the window.
+    private var hostingView: NSView?
     private let preferences: Preferences
     private let stores: OrbitStores
     private let account: AccountStore
@@ -76,7 +78,7 @@ final class PanelController: PanelHost {
         let hostingView = NSHostingView(rootView: PanelRootView(stores: stores, panel: state, host: self, preferences: preferences))
         // The UI sizes the canvas explicitly through setCanvasSize; the hosting view must not resize the window.
         hostingView.sizingOptions = []
-        panel.contentView = hostingView
+        self.hostingView = hostingView
         observe()
         updateVisibility()
     }
@@ -262,12 +264,17 @@ final class PanelController: PanelHost {
         )
     }
 
+    // An ordered-out window keeps running its SwiftUI graph, so a repeating animation such as the playing
+    // indicator would keep laying out and rendering every frame while nobody can see it. The UI is detached
+    // from the window while the panel is hidden and attached again before it is shown.
     private func updateVisibility() {
         if visibility(presentedOnDemand: isPresentedOnDemand).showsPanel {
+            if panel.contentView !== hostingView { panel.contentView = hostingView }
             if !panel.isVisible { panel.orderFrontRegardless() }
-        } else if panel.isVisible {
+        } else if panel.isVisible || panel.contentView != nil {
             state.collapse()
             panel.orderOut(nil)
+            panel.contentView = nil
             // A collapse animation does not run in a hidden window, so the canvas is shrunk here instead.
             panel.setFrame(PanelGeometry.resize(panel.frame, to: collapsedCanvasSize, keeping: state.anchor), display: false)
         }
