@@ -63,12 +63,12 @@ final class PanelController: PanelHost {
         }
     }
 
-    // `pinnedAt` is the --panel-anchor launch argument: the canvas corner nearest to that point is pinned there
-    // and nothing is restored or remembered from it.
-    func start(pinnedAt point: CGPoint?, expanded: Bool) {
+    // `pinnedAt` is the --panel-anchor launch argument: the canvas corner nearest to that point, or `anchor` when
+    // given, is pinned there and nothing is restored or remembered from it.
+    func start(pinnedAt point: CGPoint?, anchor: PanelAnchor? = nil, expanded: Bool) {
         panel.setFrame(CGRect(origin: .zero, size: collapsedCanvasSize), display: false)
         if let point {
-            pin(at: point)
+            pin(at: point, anchor: anchor)
         } else {
             restore()
         }
@@ -97,6 +97,21 @@ final class PanelController: PanelHost {
         orderFrontIfVisible()
         takeKeyboardFocus()
     }
+
+    #if DEBUG
+    // For --morph-every: opens and closes like a user would, except that focus is never taken, so the morph can
+    // be captured while the user keeps working.
+    func morphRepeatedly(every period: Duration) {
+        suppressesFocus = true
+        observations.append(Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: period)
+                guard let self else { return }
+                if state.isExpanded { state.collapse() } else { state.expand() }
+            }
+        })
+    }
+    #endif
 
     func toggle() {
         if state.isExpanded, panel.isVisible {
@@ -213,10 +228,10 @@ final class PanelController: PanelHost {
         state.anchor = PanelPlacement.anchor(for: surface, in: display.visibleFrame)
     }
 
-    private func pin(at point: CGPoint) {
+    private func pin(at point: CGPoint, anchor: PanelAnchor?) {
         isPinned = true
         let visible = (NSScreen.screens.first { $0.frame.contains(point) } ?? NSScreen.main)?.visibleFrame ?? .zero
-        state.anchor = PanelGeometry.anchor(forCanvas: CGRect(origin: point, size: .zero), in: visible)
+        state.anchor = anchor ?? PanelGeometry.anchor(forCanvas: CGRect(origin: point, size: .zero), in: visible)
         panel.setFrame(PanelGeometry.resize(CGRect(origin: point, size: .zero), to: collapsedCanvasSize, keeping: state.anchor), display: false)
     }
 

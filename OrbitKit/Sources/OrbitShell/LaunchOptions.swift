@@ -14,6 +14,12 @@ import OrbitCore
 //   --paused, --pill-hidden  with --demo: start with the simulated playback paused, or with the pill hidden, so
 //                            idle cost can be measured in those states (they never touch the real Spotify or
 //                            the user's settings)
+//   --panel-anchor-kind K    Debug builds, with --panel-anchor: pin that anchor instead of the nearest corner;
+//                            K is top, bottom, leading, trailing (an edge's middle) or a corner such as
+//                            top-trailing, so edge-centred growth can be captured away from the screen's centre
+//   --dock-top-center        Debug builds, with --demo: start with top-centre docking on
+//   --morph-every SECONDS    Debug builds: expand and collapse on that period without ever taking keyboard
+//                            focus, so the morph and the window frame can be captured frame by frame
 // OrbitUI reads its own Debug-only --ui-* arguments for screens and looks; this shell owns every store.
 struct LaunchOptions {
     var usesMocks = false
@@ -24,6 +30,9 @@ struct LaunchOptions {
     var demoScenario: String?
     var startsPaused = false
     var startsWithPillHidden = false
+    var pinnedAnchor: PanelAnchor?
+    var docksAtTopCenter = false
+    var morphPeriod: Duration?
 
     init(arguments: [String]) {
         usesMocks = arguments.contains("--demo")
@@ -40,6 +49,11 @@ struct LaunchOptions {
         startsWithPillHidden = usesMocks && arguments.contains("--pill-hidden")
         #if DEBUG
         if usesMocks { demoScenario = Self.value(after: "--ui-scenario", in: arguments) }
+        pinnedAnchor = Self.value(after: "--panel-anchor-kind", in: arguments).flatMap(PanelAnchor.init(debugName:))
+        docksAtTopCenter = usesMocks && arguments.contains("--dock-top-center")
+        if let seconds = Self.value(after: "--morph-every", in: arguments).flatMap(Double.init), seconds > 0 {
+            morphPeriod = .milliseconds(Int(seconds * 1000))
+        }
         #endif
     }
 
@@ -48,3 +62,24 @@ struct LaunchOptions {
         return arguments[index + 1]
     }
 }
+
+#if DEBUG
+extension PanelAnchor {
+    init?(debugName: String) {
+        let parts = debugName.split(separator: "-").map(String.init)
+        var horizontal = PanelAnchor.Horizontal.center
+        var vertical = PanelAnchor.Vertical.center
+        for part in parts {
+            switch part {
+            case "top": vertical = .top
+            case "bottom": vertical = .bottom
+            case "leading": horizontal = .leading
+            case "trailing": horizontal = .trailing
+            default: return nil
+            }
+        }
+        guard parts.count == 1 || parts.count == 2, horizontal != .center || vertical != .center else { return nil }
+        self.init(horizontal: horizontal, vertical: vertical)
+    }
+}
+#endif

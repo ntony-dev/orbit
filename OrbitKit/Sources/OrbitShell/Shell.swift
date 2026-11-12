@@ -26,8 +26,9 @@ final class Shell {
     }
 
     func start(options: LaunchOptions) {
-        // Both flags exist only with --demo, whose Preferences and Spotify are throwaway.
+        // These flags exist only with --demo, whose Preferences and Spotify are throwaway.
         if options.startsWithPillHidden { preferences.isPillVisible = false }
+        if options.docksAtTopCenter { preferences.docksAtTopCenter = true }
         observeSyncFrequency()
         stores.start()
         if options.startsPaused {
@@ -37,7 +38,10 @@ final class Shell {
                 if playback.snapshot.isPlaying { await playback.togglePlayPause() }
             }
         }
-        panel.start(pinnedAt: options.anchorPoint, expanded: options.startsExpanded)
+        panel.start(pinnedAt: options.anchorPoint, anchor: options.pinnedAnchor, expanded: options.startsExpanded)
+        #if DEBUG
+        if let period = options.morphPeriod { panel.morphRepeatedly(every: period) }
+        #endif
         statusItem = StatusItemController(shell: self)
         shortcuts.start { [unowned self] in perform($0) }
         if let pane = options.settingsPane { showSettingsInBackground(pane, near: options.anchorPoint) }

@@ -35,6 +35,21 @@ struct LaunchOptionsTests {
         #expect(!real.startsPaused && !real.startsWithPillHidden)
     }
 
+    #if DEBUG
+    @Test func parsesCaptureArguments() {
+        let options = LaunchOptions(arguments: [
+            "Orbit", "--demo", "--panel-anchor", "2870,1422", "--panel-anchor-kind", "top", "--morph-every", "8", "--dock-top-center",
+        ])
+        #expect(options.pinnedAnchor == .topCenter)
+        #expect(options.morphPeriod == .seconds(8))
+        #expect(options.docksAtTopCenter)
+        #expect(LaunchOptions(arguments: ["Orbit", "--panel-anchor-kind", "bottom-trailing"]).pinnedAnchor == .bottomTrailing)
+        #expect(LaunchOptions(arguments: ["Orbit", "--panel-anchor-kind", "trailing"]).pinnedAnchor == .centerTrailing)
+        #expect(LaunchOptions(arguments: ["Orbit", "--panel-anchor-kind", "middle"]).pinnedAnchor == nil)
+        #expect(!LaunchOptions(arguments: ["Orbit", "--dock-top-center"]).docksAtTopCenter)
+    }
+    #endif
+
     @Test func settingsWithoutAPaneOpensAppearance() {
         #expect(LaunchOptions(arguments: ["Orbit", "--settings"]).settingsPane == .appearance)
         #expect(LaunchOptions(arguments: ["Orbit"]).settingsPane == nil)
