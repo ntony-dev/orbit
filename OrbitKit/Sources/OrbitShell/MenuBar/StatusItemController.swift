@@ -9,7 +9,7 @@ import OrbitUI
 @MainActor
 final class StatusItemController: NSObject, NSMenuDelegate {
     private unowned let shell: Shell
-    private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+    private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let menu = NSMenu()
     private var artwork: (url: URL, image: NSImage)?
     private var artworkLoad: Task<Void, Never>?
