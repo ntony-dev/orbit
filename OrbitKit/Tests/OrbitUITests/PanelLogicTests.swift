@@ -1,6 +1,9 @@
 import CoreGraphics
+import Observation
 import OrbitCore
 @testable import OrbitUI
+import SwiftUI
+import Synchronization
 import Testing
 
 struct CanvasPlanTests {
@@ -204,5 +207,29 @@ struct EscapeTests {
         panel.openLayerCount = 0
         panel.dismissActiveLayer()
         #expect(!panel.isExpanded)
+    }
+}
+
+@MainActor
+struct ArtworkTintTests {
+    // The root view rebuilds the theme for every view whenever something it read changes.
+    private func changes(reading preset: GlassPreset, when tint: ArtworkTint, becomes color: Color) -> Bool {
+        let changed = Mutex(false)
+        withObservationTracking {
+            _ = tint.color(for: preset)
+        } onChange: {
+            changed.withLock { $0 = true }
+        }
+        tint.color = color
+        return changed.withLock { $0 }
+    }
+
+    @Test func onlyTheTintedPresetObservesTheCoverTint() {
+        let tint = ArtworkTint()
+        #expect(!changes(reading: .balanced, when: tint, becomes: .red))
+        #expect(!changes(reading: .clear, when: tint, becomes: .blue))
+        #expect(changes(reading: .tinted, when: tint, becomes: .green))
+        #expect(tint.color(for: .tinted) == .green)
+        #expect(tint.color(for: .balanced) == nil)
     }
 }

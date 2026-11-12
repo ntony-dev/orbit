@@ -17,7 +17,7 @@ public struct PanelRootView: View {
     @State private var isShowingExpanded = false
     @State private var allocatedCanvas: CGSize = .zero
     @State private var resizeGeneration = 0
-    @State private var artworkTint: Color?
+    @State private var artworkTint = ArtworkTint()
 
     @Environment(\.accessibilityReduceMotion) private var systemReducesMotion
     @Environment(\.accessibilityReduceTransparency) private var systemReducesTransparency
@@ -102,7 +102,7 @@ public struct PanelRootView: View {
             reducesMotion: preferences.reducesAnimation || systemReducesMotion || debug.reducesMotion,
             reducesTransparency: systemReducesTransparency || debug.reducesTransparency,
             contrast: debug.increasesContrast ? .increased : systemContrast,
-            artworkTint: artworkTint,
+            artworkTint: artworkTint.color(for: debug.glassPreset ?? preferences.glassPreset),
             animationSpeed: debug.animationSpeed
         )
     }
@@ -215,7 +215,7 @@ public struct PanelRootView: View {
 
     private func loadArtworkTint() async {
         guard let url = stores.playback.snapshot.track?.artworkURL else {
-            artworkTint = nil
+            artworkTint.color = nil
             return
         }
         let key = ArtworkKey(url: url, pixelSize: ArtworkView.pixels(OrbitTokens.Size.nowPlayingArtwork, scale: 2))
@@ -223,7 +223,7 @@ public struct PanelRootView: View {
         // Pulled toward mid-grey so the tint reads as a hint of the cover, never a saturated wash.
         let muted = average * 0.6 + SIMD3(repeating: 0.4) * 0.4
         withAnimation(resolvedTheme.animation(OrbitTokens.Motion.content)) {
-            artworkTint = Color(.sRGB, red: muted.x, green: muted.y, blue: muted.z)
+            artworkTint.color = Color(.sRGB, red: muted.x, green: muted.y, blue: muted.z)
         }
     }
 
@@ -335,5 +335,17 @@ public struct PanelRootView: View {
             }
         }
         #endif
+    }
+}
+
+// The muted average of the current cover. Only the Tinted preset draws it, so the theme reads it only then: on
+// every other preset a new cover changes nothing that is observed, instead of republishing the theme to every view.
+@MainActor
+@Observable
+final class ArtworkTint {
+    var color: Color?
+
+    func color(for preset: GlassPreset) -> Color? {
+        preset == .tinted ? color : nil
     }
 }
