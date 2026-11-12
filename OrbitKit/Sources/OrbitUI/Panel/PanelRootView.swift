@@ -182,8 +182,14 @@ public struct PanelRootView: View {
         resizeGeneration += 1
         let generation = resizeGeneration
         panel.isCanvasFitted = false
-        let during = CanvasPlan.during(current: allocatedCanvas, target: surface)
-        if during != allocatedCanvas { allocateCanvas(during) }
+        // Grown on the next turn of the run loop rather than inside the update that changed the surface: a window
+        // resized from within a SwiftUI update reaches the hosting view in a later, animated update, which moves
+        // the whole canvas off its anchor while it settles. The surface has barely started moving by then, and the
+        // canvas margin covers it. Recomputed when it runs, so it only ever grows.
+        DispatchQueue.main.async {
+            let during = CanvasPlan.during(current: allocatedCanvas, target: surface)
+            if during != allocatedCanvas { allocateCanvas(during) }
+        }
         Task { @MainActor in
             try? await Task.sleep(for: OrbitTokens.Motion.settle / resolvedTheme.animationSpeed)
             guard generation == resizeGeneration else { return }
