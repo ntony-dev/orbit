@@ -50,7 +50,10 @@ public final class PlaybackCoordinator {
     public private(set) var snapshot: PlaybackSnapshot = .idle
     // Intents sent but not yet confirmed, so the UI can show progress on exactly the control that was used.
     public private(set) var pendingIntents: Set<PlaybackIntent> = []
-    public private(set) var isCurrentTrackSaved: Bool?
+    public var isCurrentTrackSaved: Bool? {
+        guard let savedState, savedState.uri == snapshot.track?.uri else { return nil }
+        return savedState.saved
+    }
     public private(set) var lastError: OrbitError?
     // Which side `snapshot` comes from; nil when nothing is playing anywhere Orbit can see.
     public private(set) var authority: PlaybackRoute?
@@ -108,7 +111,8 @@ public final class PlaybackCoordinator {
     @ObservationIgnored private var remoteFetch: Task<Void, Never>?
     @ObservationIgnored private var scheduledSync: (due: Date, task: Task<Void, Never>)?
     @ObservationIgnored private var overlayExpiry: Task<Void, Never>?
-    @ObservationIgnored private var savedState: (uri: SpotifyURI, saved: Bool)?
+    // The last saved state Orbit learned and the track it belongs to; it answers whenever that track is playing.
+    private var savedState: (uri: SpotifyURI, saved: Bool)?
 
     public init(localPlayer: any LocalPlayer, api: any SpotifyAPI, clock: EngineClock = .system, timing: Timing = Timing()) {
         self.localPlayer = localPlayer
@@ -164,7 +168,6 @@ public final class PlaybackCoordinator {
         if !available {
             remote = nil
             savedState = nil
-            isCurrentTrackSaved = nil
             syncError = nil
             webAPIPausedUntil = nil
             webPauseReason = nil
@@ -326,7 +329,7 @@ public final class PlaybackCoordinator {
             lastError = webUnavailableError
             return
         }
-        isCurrentTrackSaved = !saved
+        savedState = (uri, !saved)
         addPending(.toggleSaved)
         defer { removePending(.toggleSaved) }
         do {
@@ -335,11 +338,10 @@ public final class PlaybackCoordinator {
             } else {
                 try await api.saveToLibrary([uri])
             }
-            savedState = (uri, !saved)
             noteWebSuccess()
         } catch {
             noteWebFailure(error)
-            if snapshot.track?.uri == uri { isCurrentTrackSaved = saved }
+            if savedState?.uri == uri { savedState = (uri, saved) }
             lastError = error
         }
     }
@@ -543,7 +545,7 @@ extension PlaybackCoordinator {
         remoteFetch = task
         await task.value
         remoteFetch = nil
-        if snapshot.track?.uri != savedState?.uri { await refreshSavedState() }
+        await refreshSavedState()
         scheduleSync(after: nil)
     }
 
@@ -573,22 +575,13 @@ extension PlaybackCoordinator {
     }
 
     private func refreshSavedState() async {
-        guard let uri = snapshot.track?.uri, webUsable else {
-            if snapshot.track == nil { isCurrentTrackSaved = nil }
-            return
-        }
-        if let savedState, savedState.uri == uri {
-            isCurrentTrackSaved = savedState.saved
-            return
-        }
+        guard let uri = snapshot.track?.uri, savedState?.uri != uri, webUsable else { return }
         do {
             let saved = try await api.libraryContains([uri]).contains(uri)
             savedState = (uri, saved)
             noteWebSuccess()
-            if snapshot.track?.uri == uri { isCurrentTrackSaved = saved }
         } catch {
             noteWebFailure(error)
-            if snapshot.track?.uri == uri { isCurrentTrackSaved = nil }
         }
     }
 
@@ -756,7 +749,6 @@ extension PlaybackCoordinator {
         }
         result.availableActions = availableActions(for: result)
         if result != snapshot { snapshot = result }
-        if isCurrentTrackSaved != nil, snapshot.track?.uri != savedState?.uri { isCurrentTrackSaved = nil }
         scheduleOverlayExpiry()
     }
 

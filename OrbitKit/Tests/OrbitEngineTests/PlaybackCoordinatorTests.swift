@@ -315,6 +315,29 @@ struct PlaybackCoordinatorTests {
         #expect(coordinator.isCurrentTrackSaved == true)
     }
 
+    // While the Web API is paused the saved state cannot be looked up, but one already known still applies.
+    @Test func aTrackThatComesBackKeepsItsKnownSavedState() async throws {
+        coordinator.start()
+        await coordinator.refresh()
+        #expect(coordinator.isCurrentTrackSaved == true)
+        await rig.spotify.failWebAPI(with: .rateLimited(retryAfter: 30))
+        await coordinator.refresh()
+        let saved = try #require(await rig.spotify.currentLocalState())
+        var other = saved
+        other.track = MockFixtures.track(id: MockFixtures.queuedTrackIDs[0])
+        await rig.spotify.emitLocalState(other)
+        #expect(await eventually { coordinator.snapshot.track?.uri == other.track?.uri })
+        #expect(coordinator.isCurrentTrackSaved == nil)
+        await rig.spotify.emitLocalState(saved)
+        #expect(await eventually { coordinator.snapshot.track?.uri == saved.track?.uri })
+        #expect(await eventually { coordinator.isCurrentTrackSaved == true })
+
+        await rig.spotify.failWebAPI(with: nil)
+        rig.clock.advance(by: 31)
+        await coordinator.refresh()
+        #expect(coordinator.isCurrentTrackSaved == true)
+    }
+
     @Test func simulatedClockRollsOverAtTrackEnd() async {
         await coordinator.refresh()
         let first = coordinator.snapshot.track!
