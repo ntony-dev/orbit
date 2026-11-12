@@ -34,7 +34,7 @@ targets:
         LSApplicationCategoryType: public.app-category.music
         LSUIElement: true
         NSAppleEventsUsageDescription: Orbit controls playback in the Spotify app on this Mac.
-        NSHumanReadableCopyright: ""
+        NSHumanReadableCopyright: "Copyright © 2026 Tony Nguyen. MIT License."
         SpotifyClientID: $(SPOTIFY_CLIENT_ID)
     entitlements:
       path: App/Orbit.entitlements

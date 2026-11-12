@@ -60,6 +60,20 @@ final class Shell {
         controller.showWindow(nil)
     }
 
+    // The standard About panel, with the third-party notices bundled as Acknowledgements.txt as its credits.
+    func showAbout() {
+        var options: [NSApplication.AboutPanelOptionKey: Any] = [:]
+        if let url = Bundle.main.url(forResource: "Acknowledgements", withExtension: "txt"),
+           let text = try? String(contentsOf: url, encoding: .utf8) {
+            options[.credits] = NSAttributedString(string: text, attributes: [
+                .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+                .foregroundColor: NSColor.secondaryLabelColor,
+            ])
+        }
+        NSApp.activate()
+        NSApp.orderFrontStandardAboutPanel(options: options)
+    }
+
     // For the --settings launch argument: the window is put behind every other window and Orbit is not activated,
     // so it can be captured by window ID without disturbing whoever is using the Mac.
     private func showSettingsInBackground(_ pane: SettingsPane, near point: CGPoint?) {

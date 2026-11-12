@@ -29,7 +29,7 @@
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Orbit controls playback in the Spotify app on this Mac.</string>
 	<key>NSHumanReadableCopyright</key>
-	<string></string>
+	<string>Copyright © 2026 Tony Nguyen. MIT License.</string>
 	<key>SpotifyClientID</key>
 	<string>$(SPOTIFY_CLIENT_ID)</string>
 </dict>

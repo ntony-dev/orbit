@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		58BA78D253EF8DE486A81D9B /* Acknowledgements.txt in Resources */ = {isa = PBXBuildFile; fileRef = AA9C0BC56B43DF3419320043 /* Acknowledgements.txt */; };
 		873A3B554C2E9B9F43ACDAE0 /* OrbitShell in Frameworks */ = {isa = PBXBuildFile; productRef = AB32152898511AADF08EA672 /* OrbitShell */; };
 		89C881974BC5BE0C69109653 /* OrbitApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 951F3B84656303BDE6A889CB /* OrbitApp.swift */; };
 		C975DA1FD673A48FDF5FF19B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4E8E25B63BF1CA2A67556988 /* Assets.xcassets */; };
@@ -19,6 +20,7 @@
 		5B529C662890D4025D22DE38 /* Orbit.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Orbit.xcconfig; sourceTree = "<group>"; };
 		93E43D9E19F5EF7D480B0771 /* Orbit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Orbit.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		951F3B84656303BDE6A889CB /* OrbitApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbitApp.swift; sourceTree = "<group>"; };
+		AA9C0BC56B43DF3419320043 /* Acknowledgements.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = Acknowledgements.txt; sourceTree = "<group>"; };
 		B2CD86ED9D1FE6F6025F8690 /* Orbit.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Orbit.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -45,6 +47,7 @@
 		85A66F9411A71B01E8DCEC78 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				AA9C0BC56B43DF3419320043 /* Acknowledgements.txt */,
 				4E8E25B63BF1CA2A67556988 /* Assets.xcassets */,
 				3FAB9704229DAD9175AFB2B8 /* Info.plist */,
 				B2CD86ED9D1FE6F6025F8690 /* Orbit.entitlements */,
@@ -144,6 +147,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				58BA78D253EF8DE486A81D9B /* Acknowledgements.txt in Resources */,
 				C975DA1FD673A48FDF5FF19B /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

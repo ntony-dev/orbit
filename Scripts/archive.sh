@@ -1,5 +1,6 @@
 #!/bin/zsh
-# Builds Orbit.app from a clean Release build, signs it ad hoc and zips it into dist/Orbit-<version>.zip.
+# Builds Orbit.app from a clean Release build, signs it ad hoc and zips it into dist/Orbit-<version>.zip together
+# with Orbit's license and the third-party notices (App/Acknowledgements.txt, also shown in the About panel).
 # Usage: Scripts/archive.sh
 #
 # The archive needs no paid Apple Developer account, so it is not notarized. Gatekeeper therefore blocks the
@@ -10,6 +11,7 @@
 # The Spotify Client ID from Config/Local.xcconfig, if any, is built in; users can always enter their own in
 # Settings > Spotify. Any signing identity in Local.xcconfig is overridden here so the result is always ad hoc.
 set -euo pipefail
+setopt extended_glob
 cd "$(dirname "$0")/.."
 
 derived=build/release
@@ -46,10 +48,25 @@ client_id=$(/usr/libexec/PlistBuddy -c "Print :SpotifyClientID" "$info" 2>/dev/n
 revision=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
 [[ -z $(git status --porcelain 2>/dev/null) ]] || revision="$revision with uncommitted changes"
 
+# Every dependency's license must ship with the app. The notices file is written by hand, so this fails the
+# archive when a package is added or its license changes without the file being updated.
+notices=App/Acknowledgements.txt
+cmp -s "$notices" "$app/Contents/Resources/Acknowledgements.txt" || { echo "Orbit.app lacks $notices" >&2; exit 1; }
+for checkout in build/SourcePackages/checkouts/*(/); do
+    license=( $checkout/(#i)licen[cs]e*(N.) )
+    (( ${#license} )) || { echo "No license file in ${checkout:t}" >&2; exit 1; }
+    [[ $(<$notices) == *"$(<${license[1]})"* ]] || { echo "$notices does not reproduce ${license[1]}" >&2; exit 1; }
+done
+
 mkdir -p dist
 archive="dist/Orbit-$version.zip"
-rm -f "$archive"
-ditto -c -k --sequesterRsrc --keepParent "$app" "$archive"
+staging="$derived/Orbit-$version"
+rm -rf "$staging" "$archive"
+mkdir -p "$staging"
+ditto "$app" "$staging/Orbit.app"
+cp LICENSE "$staging/LICENSE.txt"
+cp "$notices" "$staging/Acknowledgements.txt"
+ditto -c -k --sequesterRsrc --keepParent "$staging" "$archive"
 
 echo "Built $archive from $revision ($(lipo -archs "$app/Contents/MacOS/Orbit"))"
 echo "Signature: $(codesign -dv "$app" 2>&1 | grep -E '^Signature=')"

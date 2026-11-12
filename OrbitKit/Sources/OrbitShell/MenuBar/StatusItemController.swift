@@ -60,6 +60,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         })
         menu.addItem(item("Reset Position", symbol: "arrow.down.right.and.arrow.up.left") { $0.panel.resetPosition() })
         menu.addItem(.separator())
+        menu.addItem(item("About Orbit", symbol: "info.circle") { $0.showAbout() })
         let settings = item("Settings…", symbol: "gearshape") { $0.showSettings() }
         settings.keyEquivalent = ","
         menu.addItem(settings)
