@@ -1,19 +1,53 @@
 #!/bin/zsh
-# Builds Release with the signing identity from Config/Local.xcconfig, installs it to /Applications/Orbit.app and
-# keeps a copy in dist/Orbit.app. Given a folder, it also writes a Finder alias named Orbit there.
-# Usage: Scripts/install-local.sh [alias-folder]
+# Builds Release with the signing identity from Config/Local.xcconfig, installs it as Orbit.app in a folder
+# (/Applications by default) and keeps a copy in dist/Orbit.app. Given an alias folder, it also writes a Finder
+# alias named Orbit there.
+# Usage: Scripts/install-local.sh [--destination folder] [--quit-running] [alias-folder]
 #
+# It refuses to replace a copy that is running unless --quit-running is passed, which quits that copy first.
 # For your own Mac. A stable identity keeps macOS's Automation and Keychain grants across rebuilds, so this
 # refuses an ad-hoc signature; Scripts/archive.sh makes the shareable ad-hoc zip.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+destination=/Applications
+quit_running=false
+while (( $# )); do
+    case $1 in
+        --destination) destination=${2:?--destination needs a folder}; shift 2 ;;
+        --quit-running) quit_running=true; shift ;;
+        -*) echo "Unknown option $1" >&2; exit 1 ;;
+        *) break ;;
+    esac
+done
 alias_folder=${1:-}
+[[ -d $destination ]] || { echo "No folder at $destination" >&2; exit 1; }
 [[ -z $alias_folder || -d $alias_folder ]] || { echo "No folder at $alias_folder" >&2; exit 1; }
 
 derived=build/signed
 app="$derived/Build/Products/Release/Orbit.app"
-installed=/Applications/Orbit.app
+installed="${destination:A}/Orbit.app"
+running="^$installed/Contents/MacOS/Orbit( |\$)"
+
+# Replacing the bundle under a running copy would leave it executing deleted code, so it is checked up front and
+# again just before the copy.
+check_running() {
+    local pids=$(pgrep -f "$running" || true)
+    [[ -n $pids ]] || return 0
+    if ! $quit_running; then
+        echo "$installed is running (pid ${pids//$'\n'/ }). Quit it, or pass --quit-running." >&2
+        exit 1
+    fi
+    echo "Quitting the running copy (pid ${pids//$'\n'/ })"
+    kill ${=pids}
+    for _ in {1..40}; do
+        pgrep -f "$running" >/dev/null || return 0
+        sleep 0.25
+    done
+    echo "The running copy did not quit" >&2
+    exit 1
+}
+$quit_running || check_running
 
 set +e
 xcodebuild \
@@ -40,19 +74,7 @@ rm -rf dist/Orbit.app
 mkdir -p dist
 ditto "$app" dist/Orbit.app
 
-# Replacing the bundle under a running copy would leave it executing deleted code.
-pattern="^$installed/Contents/MacOS/Orbit( |\$)"
-pids=$(pgrep -f "$pattern" || true)
-if [[ -n $pids ]]; then
-    echo "Quitting the running copy (pid ${pids//$'\n'/ })"
-    kill ${=pids}
-    for _ in {1..40}; do
-        pgrep -f "$pattern" >/dev/null || break
-        sleep 0.25
-    done
-    ! pgrep -f "$pattern" >/dev/null || { echo "The running copy did not quit" >&2; exit 1; }
-fi
-
+check_running
 rm -rf "$installed"
 ditto "$app" "$installed"
 codesign --verify --deep --strict "$installed"
