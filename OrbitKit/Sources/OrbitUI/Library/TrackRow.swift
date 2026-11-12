@@ -28,9 +28,10 @@ struct TrackRow: View {
             HStack(spacing: OrbitTokens.Spacing.m + OrbitTokens.Spacing.xxs) {
                 leading(isCurrent: isCurrent)
                 VStack(alignment: .leading, spacing: 1) {
+                    // The current track is marked by its row tint and the playing bars; an accent-coloured title
+                    // would wash out with the neutral accent on a light desktop.
                     Text(track.name)
                         .font(OrbitTokens.Typography.rowTitle)
-                        .foregroundStyle(isCurrent ? AnyShapeStyle(theme.accent) : AnyShapeStyle(.primary))
                         .lineLimit(1)
                     HStack(spacing: OrbitTokens.Spacing.xs) {
                         if track.isExplicit {
