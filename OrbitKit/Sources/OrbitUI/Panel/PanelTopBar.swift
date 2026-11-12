@@ -29,14 +29,15 @@ struct PanelTopBar<Leading: View, Accessory: View>: View {
                     Image(systemName: "chevron.down")
                 }
                 .iconButton(glyph: OrbitTokens.Icon.chrome)
+                // The chevron's ink, not its circle, ends on the margin the player's controls end on.
+                .inkAligned(.trailing, GlyphInk.symbol("chevron.down", size: OrbitTokens.Icon.chrome), in: OrbitTokens.Size.iconButton)
                 .help("Collapse")
                 .accessibilityLabel("Collapse")
                 .accessibilityIdentifier("orbit.collapse")
             }
         }
         .frame(height: OrbitTokens.Size.stripArtwork + OrbitTokens.Spacing.xs)
-        .padding(.leading, OrbitTokens.Spacing.xl)
-        .padding(.trailing, OrbitTokens.Spacing.l)
+        .padding(.horizontal, OrbitTokens.Spacing.xl)
         .padding(.top, OrbitTokens.Spacing.l + OrbitTokens.Spacing.xxs)
         .contentShape(.rect)
         .panelDraggable()

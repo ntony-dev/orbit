@@ -231,19 +231,24 @@ private struct LikeButton: View {
         let saved = playback.isCurrentTrackSaved
         let isPending = playback.pendingIntents.contains(.toggleSaved)
         let isSignedIn = account.authState.isSignedIn
+        let symbol = saved == true ? "heart.fill" : "heart"
+        let diameter = OrbitTokens.Size.iconButton + 2
+        let glyph = OrbitTokens.Icon.transport - 1
         Button {
             Task { await playback.toggleSaved() }
         } label: {
-            Image(systemName: saved == true ? "heart.fill" : "heart")
+            Image(systemName: symbol)
                 .contentTransition(.identity)
         }
         .iconButton(
-            diameter: OrbitTokens.Size.iconButton + 2,
-            glyph: OrbitTokens.Icon.transport - 1,
+            diameter: diameter,
+            glyph: glyph,
             isOn: saved == true,
             isToggle: true,
             showsOnIndicator: false
         )
+        // The heart's ink, not its circle, ends on the margin, so the circle reaches into the padding.
+        .inkAligned(.trailing, GlyphInk.symbol(symbol, size: glyph), in: diameter)
         .disabled(saved == nil || !isSignedIn)
         // The heart has already flipped while the request runs; dimming it as disabled for that moment made the
         // toggle look slow, so it only ignores clicks until Spotify answers.
@@ -273,11 +278,9 @@ private struct SeekBar: View {
         TimelineView(.animation(minimumInterval: OrbitTokens.Motion.progressInterval, paused: !snapshot.isPlaying || isScrubbing)) { context in
             let position = scrubFraction.map { $0 * duration } ?? snapshot.position(at: context.date)
             let fraction = duration > 0 ? position / duration : 0
-            // Elapsed and remaining sit at the ends of the slider's row. Each keeps the width of the widest time
-            // the track can show, in the emphasized weight, so the slider never shifts as digits change or while
-            // the time being chosen brightens during a scrub.
-            HStack(spacing: OrbitTokens.Spacing.m) {
-                TimeLabel(text: Formatting.time(position), widest: Self.widest(duration), alignment: .leading, isEmphasized: isScrubbing)
+            // The slider spans the content width; elapsed and remaining sit at its ends on a row of their own, so
+            // the bar's length never depends on how wide the times are.
+            VStack(spacing: 0) {
                 OrbitSlider(
                     value: fraction,
                     onScrub: { scrubFraction = $0 },
@@ -294,20 +297,15 @@ private struct SeekBar: View {
                     step: duration > 0 ? PlayerKeyCommand.seekStep / duration : 0.05
                 )
                 .disabled(!canSeek)
-                TimeLabel(
-                    text: "-" + Formatting.time(max(0, duration - position)),
-                    widest: "-" + Self.widest(duration),
-                    alignment: .trailing,
-                    isEmphasized: false
-                )
+                HStack(spacing: 0) {
+                    TimeLabel(text: Formatting.time(position), edge: .leading, isEmphasized: isScrubbing)
+                    Spacer(minLength: OrbitTokens.Spacing.m)
+                    TimeLabel(text: "-" + Formatting.time(max(0, duration - position)), edge: .trailing, isEmphasized: false)
+                }
+                .frame(height: OrbitTokens.Size.timecodeRow)
             }
             .animation(theme.animation(OrbitTokens.Motion.hover), value: isScrubbing)
         }
-    }
-
-    // The track's length with every digit zeroed: as wide as any time it can show, in monospaced digits.
-    static func widest(_ duration: TimeInterval) -> String {
-        String(Formatting.time(duration).map { $0.isNumber ? "0" : $0 })
     }
 
     static func spoken(_ interval: TimeInterval) -> String {
@@ -316,40 +314,57 @@ private struct SeekBar: View {
     }
 }
 
+// Previous, play and next form one group centred on the panel, spaced by their ink rather than their frames, with
+// shuffle and repeat out at the margins, as in Apple Music's mini player. The group is placed around the disc
+// rather than between spacers, so it stays centred whatever the outer glyphs measure. The buttons are declared in
+// reading order, the order VoiceOver and keyboard focus follow.
 private struct TransportRow: View {
     @Environment(PlaybackCoordinator.self) private var playback
 
     var body: some View {
         let snapshot = playback.snapshot
         let canRepeat = snapshot.allows(.toggleRepeatContext) || snapshot.allows(.toggleRepeatTrack)
-        HStack(spacing: 0) {
-            TransportButton(symbol: "shuffle", label: "Shuffle", isToggle: true, isOn: snapshot.shuffle, isEnabled: snapshot.allows(.toggleShuffle)) {
-                await playback.toggleShuffle()
-            }
-            Spacer(minLength: 0)
-            TransportButton(symbol: "backward.fill", label: "Previous", isEnabled: snapshot.allows(.skipPrevious)) {
-                await playback.previous()
-            }
-            Spacer(minLength: 0)
-            PlayPauseButton(diameter: OrbitTokens.Size.primaryTransportButton, glyph: OrbitTokens.Icon.primaryTransport - 4, isProminent: true)
-            Spacer(minLength: 0)
-            TransportButton(symbol: "forward.fill", label: "Next", isEnabled: snapshot.allows(.skipNext)) {
-                await playback.next()
-            }
-            Spacer(minLength: 0)
-            TransportButton(
-                symbol: snapshot.repeatMode == .track ? "repeat.1" : "repeat",
-                label: "Repeat",
-                help: repeatHelp(snapshot.repeatMode),
-                isToggle: true,
-                isOn: snapshot.repeatMode != .off,
-                accessibilityValue: repeatValue(snapshot.repeatMode),
-                isEnabled: canRepeat
-            ) {
-                await playback.cycleRepeat()
-            }
+        let disc = OrbitTokens.Size.primaryTransportButton
+        let shuffle = TransportButton(symbol: "shuffle", label: "Shuffle", isToggle: true, isOn: snapshot.shuffle, isEnabled: snapshot.allows(.toggleShuffle)) {
+            await playback.toggleShuffle()
         }
-        .padding(.horizontal, OrbitTokens.Spacing.xs)
+        let previous = TransportButton(
+            symbol: "backward.fill", label: "Previous", isEnabled: snapshot.allows(.skipPrevious),
+            diameter: OrbitTokens.Size.skipTransportButton, glyph: OrbitTokens.Icon.skipTransport
+        ) {
+            await playback.previous()
+        }
+        let next = TransportButton(
+            symbol: "forward.fill", label: "Next", isEnabled: snapshot.allows(.skipNext),
+            diameter: OrbitTokens.Size.skipTransportButton, glyph: OrbitTokens.Icon.skipTransport
+        ) {
+            await playback.next()
+        }
+        let repeatButton = TransportButton(
+            symbol: snapshot.repeatMode == .track ? "repeat.1" : "repeat",
+            label: "Repeat",
+            help: repeatHelp(snapshot.repeatMode),
+            isToggle: true,
+            isOn: snapshot.repeatMode != .off,
+            accessibilityValue: repeatValue(snapshot.repeatMode),
+            isEnabled: canRepeat
+        ) {
+            await playback.cycleRepeat()
+        }
+        ZStack {
+            shuffle
+                .inkAligned(.leading, shuffle.ink, in: shuffle.diameter)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            previous
+                .offset(x: TransportLayout.previousOffset(disc: disc, ink: previous.ink))
+            PlayPauseButton(diameter: disc, glyph: OrbitTokens.Icon.primaryTransport - 4, isProminent: true)
+            next
+                .offset(x: TransportLayout.nextOffset(disc: disc, ink: next.ink))
+            repeatButton
+                .inkAligned(.trailing, repeatButton.ink, in: repeatButton.diameter)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .frame(height: disc)
     }
 
     private func repeatValue(_ mode: RepeatMode) -> String {
@@ -369,6 +384,18 @@ private struct TransportRow: View {
     }
 }
 
+// Where previous and next sit around the play disc, as offsets of their centres from the disc's: each glyph's ink
+// is `Spacing.transportGroup` from the disc's edge, whatever its side bearings.
+enum TransportLayout {
+    static func previousOffset(disc: CGFloat, ink: GlyphInk) -> CGFloat {
+        -(disc / 2 + OrbitTokens.Spacing.transportGroup + ink.trailing)
+    }
+
+    static func nextOffset(disc: CGFloat, ink: GlyphInk) -> CGFloat {
+        disc / 2 + OrbitTokens.Spacing.transportGroup + ink.leading
+    }
+}
+
 // A full-width volume slider with the queue and device buttons at its end, as in Spotify: the slider gets the
 // row, and what plays next and where it plays stay one click away without taking room.
 private struct VolumeRow: View {
@@ -381,13 +408,18 @@ private struct VolumeRow: View {
         let volume = snapshot.volume.map { Double($0) / 100 }
         let canSetVolume = snapshot.allows(.setVolume) && volume != nil
         let shown = draft ?? volume ?? 0
-        HStack(spacing: OrbitTokens.Spacing.m) {
-            Image(systemName: speakerSymbol(shown, enabled: canSetVolume))
-                .font(.system(size: OrbitTokens.Icon.small, weight: .semibold))
+        let speaker = speakerSymbol(shown, enabled: canSetVolume)
+        let speakerInk = GlyphInk.symbol(speaker, size: OrbitTokens.Icon.regular)
+        HStack(spacing: 0) {
+            // Pinned by its ink to the slot's leading edge, so the speaker starts on the margin at every level.
+            Image(systemName: speaker)
+                .font(.system(size: OrbitTokens.Icon.regular, weight: .semibold))
                 .foregroundStyle(.secondary)
-                .frame(width: 16)
+                .alignmentGuide(.leading) { $0.width / 2 - speakerInk.leading }
+                .frame(width: OrbitTokens.Size.speakerSlot, alignment: .leading)
                 .contentTransition(.symbolEffect(.replace))
                 .accessibilityHidden(true)
+                .padding(.trailing, OrbitTokens.Spacing.xs)
             OrbitSlider(
                 value: shown,
                 onScrub: scrub,
@@ -398,10 +430,10 @@ private struct VolumeRow: View {
             )
             .disabled(!canSetVolume)
             .help(canSetVolume ? "Volume" : "This device doesn't support volume control")
-            HStack(spacing: OrbitTokens.Spacing.xxs) {
-                QueueButton()
-                DeviceButton(device: snapshot.device)
-            }
+            QueueButton()
+                .padding(.leading, OrbitTokens.Spacing.volumeToQueue)
+                .padding(.trailing, OrbitTokens.Spacing.queueToDevice)
+            DeviceButton(device: snapshot.device)
         }
     }
 
@@ -433,24 +465,27 @@ private struct VolumeRow: View {
     }
 }
 
+// A time at one end of the seek bar, its ink on the margin. The elapsed time's first digit changes at most once a
+// minute, so its own bearing is used; the remaining time's last digit changes every second, so its bearing is a
+// "0"'s, the shape most digits share, and the label stays still instead of shuffling as the seconds tick (a
+// final "1", which sits well inside its advance, ends about 1.5 short of the margin).
 private struct TimeLabel: View {
     let text: String
-    let widest: String
-    let alignment: Alignment
+    let edge: HorizontalEdge
     let isEmphasized: Bool
 
     var body: some View {
-        ZStack(alignment: alignment) {
-            Text(widest)
-                .font(OrbitTokens.Typography.timecodeEmphasized)
-                .hidden()
-            // While scrubbing, the time being chosen brightens so the eye has one number to follow.
-            Text(text)
-                .font(isEmphasized ? OrbitTokens.Typography.timecodeEmphasized : OrbitTokens.Typography.timecode)
-                .foregroundStyle(isEmphasized ? .primary : .secondary)
-        }
-        .fixedSize()
-        .accessibilityHidden(true)
+        let font = isEmphasized ? OrbitTokens.Typography.timecodeEmphasized : OrbitTokens.Typography.timecode
+        let bearing = edge == .leading
+            ? TextBearings.of(String(text.prefix(1)), font: font).leading
+            : TextBearings.of("0", font: font).trailing
+        // While scrubbing, the time being chosen brightens so the eye has one number to follow.
+        Text(text)
+            .font(font)
+            .foregroundStyle(isEmphasized ? .primary : .secondary)
+            .fixedSize()
+            .padding(edge == .leading ? .leading : .trailing, -bearing)
+            .accessibilityHidden(true)
     }
 }
 
@@ -471,6 +506,10 @@ private struct DrawerToggle: View {
     static let diameter = OrbitTokens.Size.iconButton
     static let glyph = OrbitTokens.Icon.regular + 1
 
+    var ink: GlyphInk {
+        GlyphInk.symbol(symbol, size: Self.glyph)
+    }
+
     var body: some View {
         let isOpen = navigator.drawer == drawer
         Button {
@@ -489,10 +528,11 @@ private struct DrawerToggle: View {
     }
 }
 
-// The songs coming up, revealed under the volume row.
+// The songs coming up, revealed under the volume row. It takes the width of its ink in the row, so the gaps either
+// side of it are the gaps the eye sees.
 private struct QueueButton: View {
     var body: some View {
-        DrawerToggle(
+        let toggle = DrawerToggle(
             drawer: .queue,
             symbol: "list.bullet",
             label: "Queue",
@@ -500,17 +540,20 @@ private struct QueueButton: View {
             hint: { $0 ? "Hides the queue" : "Shows the songs coming up" },
             identifier: "orbit.queue"
         )
+        toggle
+            .inkAligned(.leading, toggle.ink, in: DrawerToggle.diameter)
+            .inkAligned(.trailing, toggle.ink, in: DrawerToggle.diameter)
     }
 }
 
-// The glyph is the current device's kind; its name is in the tooltip, the spoken value and the list itself. It
-// pulls out by the glyph's side bearing so the glyph, not its hover circle, lines up with the end of the seek row
-// above.
+// The glyph is the current device's kind; its name is in the tooltip, the spoken value and the list itself. Its
+// ink ends at the trailing edge of a fixed slot on the margin, so every device's glyph lines up with the end of
+// the seek row above and the queue button never moves when the device changes.
 private struct DeviceButton: View {
     let device: PlaybackDevice?
 
     var body: some View {
-        DrawerToggle(
+        let toggle = DrawerToggle(
             drawer: .devices,
             symbol: device?.kind.symbol ?? "hifispeaker",
             label: "Devices",
@@ -519,7 +562,9 @@ private struct DeviceButton: View {
             hint: { $0 ? "Hides the device list" : "Shows Spotify Connect devices" },
             identifier: "orbit.devices"
         )
-        .padding(.trailing, -(DrawerToggle.diameter - DrawerToggle.glyph) / 2)
+        toggle
+            .inkAligned(.trailing, toggle.ink, in: DrawerToggle.diameter)
+            .frame(width: OrbitTokens.Size.deviceSlot, alignment: .trailing)
     }
 
     static func help(device: PlaybackDevice?, isOpen: Bool) -> String {

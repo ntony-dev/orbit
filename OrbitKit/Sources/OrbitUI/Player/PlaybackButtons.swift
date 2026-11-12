@@ -89,6 +89,8 @@ struct TransportButton: View {
     var isOn = false
     var accessibilityValue: String?
     var isEnabled = true
+    var diameter = OrbitTokens.Size.transportButton
+    var glyph = OrbitTokens.Icon.transport
     let action: () async -> Void
 
     var body: some View {
@@ -99,11 +101,15 @@ struct TransportButton: View {
             Image(systemName: symbol)
                 .contentTransition(.identity)
         }
-        .iconButton(diameter: OrbitTokens.Size.transportButton, glyph: OrbitTokens.Icon.transport, isOn: isOn, isToggle: isToggle)
+        .iconButton(diameter: diameter, glyph: glyph, isOn: isOn, isToggle: isToggle)
         .disabled(!isEnabled)
         .help(help ?? label)
         .accessibilityLabel(label)
         .accessibilityValue(accessibilityValue ?? (isToggle ? (isOn ? "On" : "Off") : ""))
         .accessibilityAddTraits(isToggle ? .isToggle : [])
+    }
+
+    var ink: GlyphInk {
+        GlyphInk.symbol(symbol, size: glyph)
     }
 }

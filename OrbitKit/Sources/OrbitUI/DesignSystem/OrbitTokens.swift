@@ -11,6 +11,11 @@ enum OrbitTokens {
         static let l: CGFloat = 12
         static let xl: CGFloat = 16
         static let xxl: CGFloat = 20
+        // Ink to ink between the play disc and the previous and next glyphs, Apple Music's mini player's proportion.
+        static let transportGroup: CGFloat = 34
+        // The volume row's visible gaps: the bar's end to the queue glyph, and the queue glyph to the device slot.
+        static let volumeToQueue: CGFloat = 10
+        static let queueToDevice: CGFloat = 12
     }
 
     enum Radius {
@@ -41,7 +46,15 @@ enum OrbitTokens {
 
         static let iconButton: CGFloat = 28
         static let transportButton: CGFloat = 36
-        static let primaryTransportButton: CGFloat = 46
+        static let skipTransportButton: CGFloat = 40
+        static let primaryTransportButton: CGFloat = 54
+        // The row of elapsed and remaining time under the seek bar: one line of the timecode font.
+        static let timecodeRow: CGFloat = 13
+        // Fixed slots in the volume row, so neither the bar nor the queue button moves when the speaker glyph
+        // changes with the level or the device glyph with the device: the speaker sits at the slot's leading edge,
+        // the device at its trailing edge.
+        static let speakerSlot: CGFloat = 20
+        static let deviceSlot: CGFloat = 22
         static let rowHeight: CGFloat = 46
         static let trackRowHeight: CGFloat = 40
         // Song rows that lead with artwork: search results and the queue.
@@ -72,7 +85,7 @@ enum OrbitTokens {
         static let deviceListVisibleRows = 4
         static let queueVisibleRows = 5
         // The player does not fit to content: its controls fill this, and a drawer or notice adds to it.
-        static let playerHeight: CGFloat = 298
+        static let playerHeight: CGFloat = 319
 
         static func pill(_ size: PillSize) -> CGSize {
             switch size {
@@ -90,6 +103,9 @@ enum OrbitTokens {
         static let small: CGFloat = 11
         static let regular: CGFloat = 13
         static let transport: CGFloat = 16
+        // Previous and next: drawn about 29.75 wide, a third wider than at the transport size, to read as a pair
+        // with the larger play disc.
+        static let skipTransport: CGFloat = 21
         static let primaryTransport: CGFloat = 22
         static let indicator: CGFloat = 14
         // Every glyph in the panel's top bar (back, settings, collapse), so the chrome reads as one set.
