@@ -98,14 +98,11 @@ public actor SpotifyAuthorizer: Authorizer {
     }
 
     public func signIn() async throws(OrbitError) {
-        if let previous = signInTask {
-            previous.cancel()
-            _ = await previous.value
-        }
-        let configured = await clientIDProvider()?.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let clientID = configured, !clientID.isEmpty else { throw .missingClientID }
-
-        let task = Task { await self.runSignIn(clientID: clientID) }
+        // Replaced before any suspension, so overlapping calls supersede one another in order instead of all
+        // starting a listener and racing for the callback port.
+        let previous = signInTask
+        previous?.cancel()
+        let task = Task { await self.runSignIn(after: previous) }
         signInTask = task
         let result = await withTaskCancellationHandler {
             await task.value
@@ -194,7 +191,12 @@ public actor SpotifyAuthorizer: Authorizer {
         return result
     }
 
-    private func runSignIn(clientID: String) async -> Result<Void, OrbitError> {
+    private func runSignIn(after superseded: Task<Result<Void, OrbitError>, Never>?) async -> Result<Void, OrbitError> {
+        _ = await superseded?.value
+        let configured = await clientIDProvider()?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if Task.isCancelled { return .failure(.cancelled) }
+        guard let clientID = configured, !clientID.isEmpty else { return .failure(.missingClientID) }
+
         let previous = currentState()
         transition(to: .authorizing)
         do throws(OrbitError) {

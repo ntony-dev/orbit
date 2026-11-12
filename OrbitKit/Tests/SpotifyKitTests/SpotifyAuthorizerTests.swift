@@ -109,6 +109,44 @@ struct SpotifyAuthorizerTests {
         #expect(transport.tokenRequests.map { HTTP.formFields($0)["code"] } == ["real"])
     }
 
+    // A double-clicked Sign In: the later call takes over, and nothing reports the port as taken by Orbit itself.
+    @Test func overlappingSignInsSupersedeInsteadOfRacingForThePort() async throws {
+        let store = InMemoryTokenStore()
+        let transport = StubTransport { request throws(OrbitError) in
+            HTTP.response(request, json: HTTP.tokenJSON(access: "access-new", refresh: "refresh-new"))
+        }
+        let clock = TestClock()
+        let authorizer = SpotifyAuthorizer(
+            clientIDProvider: {
+                try? await Task.sleep(for: .milliseconds(50))
+                return "client-123"
+            },
+            tokenStore: store,
+            transport: transport,
+            openBrowser: Self.browser(replyingWith: { "code=real&state=\($0)" }, captured: Locked(nil)),
+            callbackPort: LocalPorts.free(),
+            signInTimeout: .seconds(10),
+            now: { clock.now }
+        )
+        async let first = Self.outcome { () async throws(OrbitError) in try await authorizer.signIn() }
+        async let second = Self.outcome { () async throws(OrbitError) in try await authorizer.signIn() }
+        let outcomes: [OrbitError?] = await [first, second]
+
+        #expect(outcomes.allSatisfy { $0 == nil || $0 == .cancelled }, "\(outcomes)")
+        #expect(outcomes.contains { $0 == nil })
+        #expect(await authorizer.currentState() == .signedIn)
+        #expect(store.session?.accessToken == "access-new")
+    }
+
+    private static func outcome(_ body: () async throws(OrbitError) -> Void) async -> OrbitError? {
+        do throws(OrbitError) {
+            try await body()
+            return nil
+        } catch {
+            return error
+        }
+    }
+
     @Test func deniedConsentIsCancellation() async {
         let authorizer = makeAuthorizer(
             transport: Self.unusedTransport,
