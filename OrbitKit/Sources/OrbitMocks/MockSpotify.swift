@@ -38,12 +38,16 @@ public actor MockSpotify {
     private var volume = 64
 
     private var playlists = MockFixtures.playlists
+    private var longPlaylists: [String: [Track]] = [:]
     private var commandsHeld = false
     // Names of the Web API reads that wait for `releaseHeld()`; nil holds none, an empty set holds all.
     private var heldReads: Set<String>?
+    // Requests of the held names that still pass before holding starts.
+    private var readsLetThrough = 0
     private var heldRequests: [CheckedContinuation<Void, Never>] = []
     private var webFailure: OrbitError?
     private var requestFailures: [String: OrbitError] = [:]
+    private var requestsBeforeFailure: [String: Int] = [:]
     private var lagArmed = 0
     private var laggedReads = 0
     private var laggedSnapshot: PlaybackSnapshot?
@@ -133,8 +137,9 @@ public actor MockSpotify {
 
     // Web API reads wait too, until `releaseHeld()`, so tests can act while a load is in flight. Pass names
     // such as "playlists" to hold only those requests.
-    public func holdReads(_ names: Set<String> = []) {
+    public func holdReads(_ names: Set<String> = [], afterLetting count: Int = 0) {
         heldReads = names
+        readsLetThrough = count
     }
 
     public func releaseHeld() {
@@ -153,8 +158,9 @@ public actor MockSpotify {
     }
 
     // Only the named Web API request throws, e.g. "play" refused while state reads keep working.
-    public func failWebRequest(_ name: String, with error: OrbitError?) {
+    public func failWebRequest(_ name: String, with error: OrbitError?, afterLetting count: Int = 0) {
         requestFailures[name] = error
+        requestsBeforeFailure[name] = count
     }
 
     public func failLocalCommands(with error: OrbitError?) {
@@ -183,6 +189,18 @@ public actor MockSpotify {
         guard var track, let url = track.artworkURL else { return track }
         track.artworkURL = URL(string: url.absoluteString + "#640")
         return track
+    }
+
+    func playlistItemsPage(_ playlistID: String, _ request: PageRequest) -> Page<Track> {
+        libraryPage(longPlaylists[playlistID] ?? MockFixtures.playlistTracks[playlistID] ?? [], id: \.id, request)
+    }
+
+    // A playlist with more tracks than one page holds, appended to the library.
+    public func addPlaylist(_ playlist: Playlist, trackCount: Int) {
+        playlists.append(playlist)
+        longPlaylists[playlist.id] = (0..<trackCount).map { index in
+            Track(id: "\(playlist.id)-\(index)", name: "Song \(index + 1)", artists: ["Various"], album: playlist.name, duration: 200)
+        }
     }
 
     func playlistsPage(_ request: PageRequest) -> Page<Playlist> {
@@ -309,11 +327,19 @@ public actor MockSpotify {
         } else {
             await simulateLatency()
             if let heldReads, heldReads.isEmpty || heldReads.contains(name) {
-                await withCheckedContinuation { heldRequests.append($0) }
+                if readsLetThrough > 0 {
+                    readsLetThrough -= 1
+                } else {
+                    await withCheckedContinuation { heldRequests.append($0) }
+                }
             }
         }
         if let webFailure { throw webFailure }
-        if let failure = requestFailures[name] { throw failure }
+        if let failure = requestFailures[name] {
+            let passing = requestsBeforeFailure[name] ?? 0
+            guard passing > 0 else { throw failure }
+            requestsBeforeFailure[name] = passing - 1
+        }
     }
 
     func localCommand(_ name: String) async throws(OrbitError) {
@@ -516,7 +542,7 @@ public actor MockSpotify {
             return MockFixtures.tracks.filter { $0.id.hasPrefix((uri.id ?? "") + "-") }
         default:
             guard let playlist = playlists.first(where: { $0.uri == uri }) else { return nil }
-            return MockFixtures.playlistTracks[playlist.id]
+            return longPlaylists[playlist.id] ?? MockFixtures.playlistTracks[playlist.id]
         }
     }
 

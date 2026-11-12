@@ -22,7 +22,7 @@ public struct MockSpotifyAPI: SpotifyAPI {
         try await spotify.webRequest("playlistItems")
         guard let playlist = await spotify.libraryPlaylists().first(where: { $0.id == playlistID }) else { throw .notFound }
         guard playlist.canReadItems else { throw .playlistItemsUnavailable }
-        return MockSpotify.page(MockFixtures.playlistTracks[playlistID] ?? [], page)
+        return await spotify.playlistItemsPage(playlistID, page)
     }
 
     public func savedTracks(_ page: PageRequest) async throws(OrbitError) -> Page<Track> {

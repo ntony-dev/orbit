@@ -2,6 +2,13 @@ import Foundation
 import Observation
 import OrbitCore
 
+// A track list shows from its first page; this is what is still to come below the rows already shown.
+public enum RemainingPages: Equatable, Sendable {
+    case loading
+    // The rows already shown stay; loading again continues from the first page that failed.
+    case failed(OrbitError)
+}
+
 public enum PreferredDeviceStatus: Hashable, Sendable {
     case notSet
     // The device list has not been loaded yet, so the saved device is neither confirmed nor ruled out.
@@ -38,8 +45,11 @@ public final class LibraryStore {
     public private(set) var recentPlaylists: [Playlist] = []
     // A playlist the user cannot read resolves to `.failed(.playlistItemsUnavailable)`; it can still be played.
     public private(set) var playlistItems: [Playlist.ID: LoadState<[Track]>] = [:]
+    // Present while a list shows only its first pages; absent once the list is complete.
+    public private(set) var remainingItems: [Playlist.ID: RemainingPages] = [:]
     // Loaded only when Liked Songs is opened; the Library's row shows `likedSongsCount` without it.
     public private(set) var savedTracks: LoadState<[Track]> = .idle
+    public private(set) var remainingSavedTracks: RemainingPages?
     // Spotify's own count of saved tracks, from a one-item page.
     public private(set) var likedSongsTotal: Int?
     public private(set) var searchQuery = ""
@@ -67,6 +77,8 @@ public final class LibraryStore {
     @ObservationIgnored private var searchCache: [String: (results: SearchResults, at: Date)] = [:]
     // Playlists whose tracks are kept, least recently shown first.
     @ObservationIgnored private var itemsRecency: [Playlist.ID] = []
+    // Where a partly shown list continues.
+    @ObservationIgnored private var nextPage: [CacheKey: PageRequest] = [:]
     @ObservationIgnored private var searchTask: Task<Void, Never>?
     @ObservationIgnored private var shelfRestore: Task<Void, Never>?
     @ObservationIgnored private var shelfRevision = 0
@@ -137,6 +149,12 @@ public final class LibraryStore {
         return items
     }
 
+    public func remainingPages(for playlist: Playlist) -> RemainingPages? {
+        playlist.id == LikedSongs.playlistID ? remainingSavedTracks : remainingItems[playlist.id]
+    }
+
+    // Rows show as soon as the first page arrives and later pages append below them. A list already complete on
+    // screen is refreshed whole instead, so it never shrinks to one page and grows back.
     public func loadItems(for playlist: Playlist, force: Bool = false) async {
         if playlist.id == LikedSongs.playlistID {
             await loadSavedTracks(force: force)
@@ -146,42 +164,59 @@ public final class LibraryStore {
             playlistItems[playlist.id] = .failed(.playlistItemsUnavailable)
             return
         }
-        await load(.items(playlist.id), lifetime: timing.itemsLifetime, force: force) { [self] isCurrent in
-            if playlistItems[playlist.id]?.value == nil { playlistItems[playlist.id] = .loading }
-            let result = await loadAll { [api] (page) async throws(OrbitError) in
-                try await api.playlistItems(playlistID: playlist.id, page: page)
+        let id = playlist.id
+        await load(.items(id), lifetime: timing.itemsLifetime, force: force) { [self] isCurrent in
+            let failure = await loadPages(
+                .items(id),
+                shown: { playlistItems[id] ?? .idle },
+                remaining: { remainingItems[id] },
+                show: { list, remaining in
+                    playlistItems[id] = list
+                    remainingItems[id] = remaining
+                },
+                isCurrent: isCurrent
+            ) { [api] (page) async throws(OrbitError) in
+                try await api.playlistItems(playlistID: id, page: page)
             }
             guard isCurrent() else { return false }
-            if result.value != nil || playlistItems[playlist.id]?.value == nil || result.error == .playlistItemsUnavailable {
-                playlistItems[playlist.id] = result
-            }
-            touchItems(playlist.id)
+            touchItems(id)
             evictItems()
-            if result.error == .notFound { markMissing(playlist.uri) }
-            return result.value != nil
+            if failure == .notFound { markMissing(playlist.uri) }
+            return failure == nil
         }
     }
 
     public func loadSavedTracks(force: Bool = false) async {
         await load(.savedTracks, lifetime: timing.itemsLifetime, force: force) { [self] isCurrent in
-            if savedTracks.value == nil { savedTracks = .loading }
-            let result = await loadAll { [api] (page) async throws(OrbitError) in try await api.savedTracks(page) }
-            guard isCurrent() else { return false }
-            if result.value != nil || savedTracks.value == nil { savedTracks = result }
-            likedSongs?.itemCount = likedSongsCount
-            return result.value != nil
+            let failure = await loadPages(
+                .savedTracks,
+                shown: { savedTracks },
+                remaining: { remainingSavedTracks },
+                show: { list, remaining in
+                    savedTracks = list
+                    remainingSavedTracks = remaining
+                    likedSongs?.itemCount = likedSongsCount
+                },
+                isCurrent: isCurrent
+            ) { [api, weak self] (page) async throws(OrbitError) in
+                let loaded = try await api.savedTracks(page)
+                if let total = loaded.total { self?.likedSongsTotal = total }
+                return loaded
+            }
+            return failure == nil
         }
     }
 
     // The loaded list once Liked Songs has been opened, so the row and the list agree; until then Spotify's total,
     // which also counts the rare saved entry Spotify returns without a track.
     public var likedSongsCount: Int? {
-        savedTracks.value?.count ?? likedSongsTotal
+        if remainingSavedTracks == nil, let loaded = savedTracks.value { return loaded.count }
+        return likedSongsTotal
     }
 
     // One request whatever the size of the collection: a one-item page carries the total.
     public func loadLikedSongsCount(force: Bool = false) async {
-        if !force, savedTracks.value != nil { return }
+        if !force, savedTracks.value != nil, remainingSavedTracks == nil { return }
         await load(.likedSongsTotal, lifetime: timing.itemsLifetime, force: force) { [self] isCurrent in
             do throws(OrbitError) {
                 let page = try await api.savedTracks(PageRequest(offset: 0, limit: 1))
@@ -195,10 +230,14 @@ public final class LibraryStore {
         }
     }
 
-    // Track URIs of a context whose items are loaded, so the coordinator can recognise a confirmed switch.
+    // Track URIs of a context whose items are all loaded, so the coordinator can recognise a confirmed switch; a
+    // list still paging in would reject the tracks on its later pages.
     func knownTrackURIs(for uri: SpotifyURI) -> Set<SpotifyURI>? {
-        if LikedSongs.isLikedSongs(uri) { return savedTracks.value.map { Set($0.map(\.uri)) } }
-        guard let playlist = playlist(for: uri) else { return nil }
+        if LikedSongs.isLikedSongs(uri) {
+            guard remainingSavedTracks == nil else { return nil }
+            return savedTracks.value.map { Set($0.map(\.uri)) }
+        }
+        guard let playlist = playlist(for: uri), remainingItems[playlist.id] == nil else { return nil }
         return playlistItems[playlist.id]?.value.map { Set($0.map(\.uri)) }
     }
 
@@ -345,7 +384,10 @@ public final class LibraryStore {
         searchTask?.cancel()
         playlists = .idle
         playlistItems = [:]
+        remainingItems = [:]
+        nextPage.removeAll()
         savedTracks = .idle
+        remainingSavedTracks = nil
         likedSongsTotal = nil
         searchQuery = ""
         searchResults = .idle
@@ -446,6 +488,8 @@ public final class LibraryStore {
             }
             itemsRecency.remove(at: index)
             playlistItems[id] = nil
+            remainingItems[id] = nil
+            nextPage[.items(id)] = nil
             loadedAt[.items(id)] = nil
             excess -= 1
         }
@@ -460,6 +504,51 @@ public final class LibraryStore {
         guard excess > 0 else { return }
         for old in searchCache.sorted(by: { $0.value.at < $1.value.at }).prefix(excess).map(\.key) {
             searchCache[old] = nil
+        }
+    }
+
+    // Returns the failure, if any. A first load shows each page as it lands and a failed later page keeps the rows
+    // already shown; a partly shown list continues where it stopped; a complete list stays on screen until its
+    // refreshed replacement has loaded whole, or until Spotify says its items are unavailable.
+    private func loadPages<Item: Sendable>(
+        _ key: CacheKey,
+        shown: () -> LoadState<[Item]>,
+        remaining: () -> RemainingPages?,
+        show: (LoadState<[Item]>, RemainingPages?) -> Void,
+        isCurrent: () -> Bool,
+        fetch: (PageRequest) async throws(OrbitError) -> Page<Item>
+    ) async -> OrbitError? {
+        let onScreen = shown().value
+        let isRefresh = onScreen != nil && remaining() == nil
+        var items: [Item] = []
+        var request: PageRequest? = PageRequest()
+        if !isRefresh, let onScreen, let resume = nextPage[key] {
+            items = onScreen
+            request = resume
+            show(.loaded(onScreen), .loading)
+        } else if onScreen == nil {
+            show(.loading, nil)
+        }
+        do {
+            while let current = request {
+                let page = try await fetch(current)
+                guard isCurrent() else { return nil }
+                items += page.items
+                request = page.nextRequest(limit: current.limit)
+                nextPage[key] = request
+                if !isRefresh { show(.loaded(items), request == nil ? nil : .loading) }
+            }
+            if isRefresh { show(.loaded(items), nil) }
+            return nil
+        } catch {
+            guard isCurrent() else { return error }
+            if !isRefresh, !items.isEmpty, error != .playlistItemsUnavailable {
+                show(.loaded(items), .failed(error))
+            } else if onScreen == nil || error == .playlistItemsUnavailable {
+                nextPage[key] = nil
+                show(.failed(error), nil)
+            }
+            return error
         }
     }
 

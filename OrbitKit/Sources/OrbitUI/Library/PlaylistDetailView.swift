@@ -14,8 +14,10 @@ struct PlaylistDetailView: View {
     @Environment(Preferences.self) private var preferences
     @Environment(\.orbitTheme) private var theme
     @State private var selection = KeyboardSelection()
-    // The playing track's row, scrolled to the middle once when the tracks first arrive.
+    // The playing track's row, scrolled to the middle once when it arrives, which may be on a later page.
     @State private var arrival: String?
+    // Once the user scrolls, a later page holding the playing track no longer pulls the list to it.
+    @State private var hasScrolled = false
 
     private var isLiked: Bool { LikedSongs.contains(playlist) }
 
@@ -23,12 +25,17 @@ struct PlaylistDetailView: View {
         isLiked ? library.savedTracks : library.items(for: playlist)
     }
 
+    private var remaining: RemainingPages? {
+        library.remainingPages(for: playlist)
+    }
+
     var body: some View {
         let loaded = tracks.value ?? []
         let keys = loaded.indices.map { "row:\($0)" }
         VStack(spacing: 0) {
             PanelTopBar { BackTitle(title: "Library") }
-            PlaylistHeader(playlist: playlist, trackCount: tracks.value?.count)
+            // Spotify's count until every page is in, so the subtitle never counts up as pages land.
+            PlaylistHeader(playlist: playlist, trackCount: remaining == nil ? tracks.value?.count : (isLiked ? library.likedSongsCount : nil))
                 .padding(.horizontal, OrbitTokens.Spacing.xl)
                 .padding(.top, OrbitTokens.Spacing.xs)
                 .padding(.bottom, OrbitTokens.Spacing.m)
@@ -36,7 +43,7 @@ struct PlaylistDetailView: View {
                 .fill(OrbitPalette.separator(contrast: theme.contrast))
                 .frame(height: 0.5)
                 .padding(.horizontal, OrbitTokens.Spacing.xl)
-            PanelScroll(reveal: selection.key ?? arrival, revealAnchor: selection.key == nil ? .center : nil) {
+            PanelScroll(reveal: selection.key ?? arrival, revealAnchor: selection.key == nil ? .center : nil, onUserScroll: { hasScrolled = true }) {
                 content
             }
             .keyboardList(selection: $selection, keys: keys) { key in
@@ -47,8 +54,9 @@ struct PlaylistDetailView: View {
             }
         }
         .task(id: playlist.id) { await load(force: false) }
-        .onChange(of: tracks.value != nil, initial: true) { _, isLoaded in
-            guard isLoaded, arrival == nil, let current = playback.snapshot.track?.uri,
+        // Checked again as each page lands, so a playing track on a later page is still scrolled to.
+        .onChange(of: loaded.count, initial: true) {
+            guard arrival == nil, !hasScrolled, selection.key == nil, let current = playback.snapshot.track?.uri,
                   let index = loaded.firstIndex(where: { $0.uri == current })
             else { return }
             arrival = keys[index]
@@ -81,14 +89,32 @@ struct PlaylistDetailView: View {
                     TrackRow(track: track, number: index + 1, context: playlist.uri, isKeyboardSelected: selection.key == "row:\(index)")
                         .id("row:\(index)")
                 }
+                remainingFooter
             }
             .padding(.horizontal, OrbitTokens.Spacing.m)
             .padding(.vertical, OrbitTokens.Spacing.s)
         }
     }
 
+    // Below the rows already shown: placeholders while later pages load, and a way to continue when one fails.
+    @ViewBuilder
+    private var remainingFooter: some View {
+        switch remaining {
+        case .loading:
+            SkeletonRows(count: 3, artwork: false)
+                .padding(.top, OrbitTokens.Spacing.xs)
+        case .failed(let error):
+            StatusMessage(error: error) { Task { await library.loadItems(for: playlist) } }
+                .padding(.vertical, OrbitTokens.Spacing.l)
+        case nil:
+            EmptyView()
+        }
+    }
+
     private func load(force: Bool) async {
-        if !force, tracks.value != nil || tracks.isLoading { return }
+        // A list whose later pages failed continues when it is shown again, whatever the error offered.
+        let continues = if case .failed = remaining { true } else { false }
+        if !force, !continues, tracks.value != nil || tracks.isLoading { return }
         if isLiked {
             await library.loadSavedTracks()
         } else {

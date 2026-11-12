@@ -187,6 +187,87 @@ struct LibraryStoreTests {
         #expect(await rig.webRequests("savedTracks") == 1 + (total + 49) / 50)
     }
 
+    private static let long = Playlist(id: "pl-long", name: "Long Drive", ownerName: "Tony", itemCount: 230, canReadItems: true)
+
+    // Rows show once the first page lands and later pages append; nothing is replaced along the way.
+    @Test func aPlaylistShowsItsFirstPageWhileTheRestLoad() async {
+        await rig.spotify.addPlaylist(Self.long, trackCount: 230)
+        await library.loadPlaylists()
+        await rig.spotify.holdReads(["playlistItems"], afterLetting: 1)
+        let library = library
+        let loading = Task { await library.loadItems(for: Self.long) }
+        #expect(await eventually { library.items(for: Self.long).value?.count == 50 })
+        #expect(library.remainingPages(for: Self.long) == .loading)
+        #expect(library.knownTrackURIs(for: Self.long.uri) == nil)
+        await rig.spotify.releaseHeld()
+        await loading.value
+        let tracks = library.items(for: Self.long).value ?? []
+        #expect(tracks.count == 230)
+        #expect(tracks.map(\.id) == (0..<230).map { "pl-long-\($0)" })
+        #expect(library.remainingPages(for: Self.long) == nil)
+        #expect(library.knownTrackURIs(for: Self.long.uri)?.count == 230)
+        #expect(await rig.webRequests("playlistItems") == 5)
+    }
+
+    @Test func aFailedLaterPageKeepsTheRowsAndContinuesWhereItStopped() async {
+        await rig.spotify.addPlaylist(Self.long, trackCount: 230)
+        await rig.spotify.failWebRequest("playlistItems", with: .network(detail: "offline"), afterLetting: 2)
+        await library.loadItems(for: Self.long)
+        #expect(library.items(for: Self.long).value?.count == 100)
+        #expect(library.remainingPages(for: Self.long) == .failed(.network(detail: "offline")))
+
+        await rig.spotify.failWebRequest("playlistItems", with: nil)
+        await library.loadItems(for: Self.long)
+        #expect(library.items(for: Self.long).value?.count == 230)
+        #expect(library.remainingPages(for: Self.long) == nil)
+        #expect(await rig.webRequests("playlistItems") == 3 + 3)
+    }
+
+    // A complete list on screen is refreshed whole, so it never shrinks to one page and grows back.
+    @Test func refreshingACompleteListKeepsItUntilTheNewOneHasLoaded() async {
+        await rig.spotify.addPlaylist(Self.long, trackCount: 230)
+        await library.loadItems(for: Self.long)
+        await rig.spotify.holdReads(["playlistItems"], afterLetting: 2)
+        let library = library
+        let refreshing = Task { await library.loadItems(for: Self.long, force: true) }
+        #expect(await eventually { await rig.spotify.heldRequestCount == 1 })
+        #expect(library.items(for: Self.long).value?.count == 230)
+        #expect(library.remainingPages(for: Self.long) == nil)
+        await rig.spotify.releaseHeld()
+        await refreshing.value
+        #expect(library.items(for: Self.long).value?.count == 230)
+    }
+
+    @Test func likedSongsAppendPagesAndKeepTheirCountSteady() async throws {
+        await rig.spotify.addSavedTracks(count: 145)
+        library.setUser(MockFixtures.user)
+        await library.loadLikedSongsCount()
+        let total = await rig.spotify.savedTrackCount
+        #expect(library.likedSongsCount == total)
+        let liked = try #require(library.likedSongs)
+        await rig.spotify.holdReads(["savedTracks"], afterLetting: 1)
+        let library = library
+        let loading = Task { await library.loadItems(for: liked) }
+        #expect(await eventually { library.items(for: liked).value?.count == 50 })
+        #expect(library.remainingPages(for: liked) == .loading)
+        #expect(library.likedSongsCount == total)
+        #expect(library.knownTrackURIs(for: liked.uri) == nil)
+        await rig.spotify.releaseHeld()
+        await loading.value
+        #expect(library.items(for: liked).value?.count == total)
+        #expect(library.likedSongsCount == total)
+        #expect(library.remainingPages(for: liked) == nil)
+    }
+
+    @Test func aPlaylistWhoseItemsAreHiddenStillReportsThemUnavailable() async {
+        let hidden = Playlist(id: "pl-hidden-long", name: "Theirs", ownerName: "Someone", itemCount: 80, canReadItems: true)
+        await rig.spotify.addPlaylist(hidden, trackCount: 80)
+        await rig.spotify.failWebRequest("playlistItems", with: .playlistItemsUnavailable)
+        await library.loadItems(for: hidden)
+        #expect(library.items(for: hidden) == .failed(.playlistItemsUnavailable))
+        #expect(library.remainingPages(for: hidden) == nil)
+    }
+
     @Test func searchIsDebouncedAndOnlyTheLastQueryIsSent() async {
         for query in ["n", "ni", "nig", "night"] {
             library.updateSearch(query)

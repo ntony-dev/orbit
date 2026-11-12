@@ -31,6 +31,8 @@ struct PanelScroll<Content: View>: View {
     // Scrolled into view whenever it changes: the keyboard selection, or the current track on arrival.
     var reveal: AnyHashable?
     var revealAnchor: UnitPoint?
+    // Called when the user starts scrolling, as opposed to a reveal scrolling the list.
+    var onUserScroll: (() -> Void)?
     @ViewBuilder let content: Content
 
     @Environment(\.orbitTheme) private var theme
@@ -51,6 +53,9 @@ struct PanelScroll<Content: View>: View {
             .defaultScrollAnchor(.top, for: .sizeChanges)
             .onScrollGeometryChange(for: ScrollEdges.self, of: ScrollEdges.init) { _, new in
                 withAnimation(theme.animation(OrbitTokens.Motion.hover)) { edges = new }
+            }
+            .onScrollPhaseChange { _, phase in
+                if phase == .interacting { onUserScroll?() }
             }
             .mask { EdgeFadeMask(edges: edges) }
             .onGeometryChange(for: CGFloat.self) { $0.frame(in: .expandedSurface).minY } action: { top = $0 }
