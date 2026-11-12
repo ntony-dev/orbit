@@ -25,7 +25,7 @@ public struct MockLocalPlayer: LocalPlayer {
     }
 
     public func state() async throws(OrbitError) -> LocalPlayerState {
-        try await spotify.localState()
+        try await spotify.readLocalState()
     }
 
     public func play() async throws(OrbitError) {

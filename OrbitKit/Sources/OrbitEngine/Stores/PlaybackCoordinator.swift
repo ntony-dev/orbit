@@ -81,6 +81,7 @@ public final class PlaybackCoordinator {
     @ObservationIgnored private let api: any SpotifyAPI
     @ObservationIgnored private let clock: EngineClock
     @ObservationIgnored private let timing: Timing
+    @ObservationIgnored private let availability: LocalAvailabilityCheck
 
     @ObservationIgnored private var local: LocalObservation?
     @ObservationIgnored private var localRunning = false
@@ -123,11 +124,16 @@ public final class PlaybackCoordinator {
     // The last saved state Orbit learned and the track it belongs to; it answers whenever that track is playing.
     private var savedState: (uri: SpotifyURI, saved: Bool)?
 
-    public init(localPlayer: any LocalPlayer, api: any SpotifyAPI, clock: EngineClock = .system, timing: Timing = Timing()) {
+    public convenience init(localPlayer: any LocalPlayer, api: any SpotifyAPI, clock: EngineClock = .system, timing: Timing = Timing()) {
+        self.init(localPlayer: localPlayer, api: api, clock: clock, timing: timing, availability: LocalAvailabilityCheck(localPlayer: localPlayer))
+    }
+
+    init(localPlayer: any LocalPlayer, api: any SpotifyAPI, clock: EngineClock, timing: Timing, availability: LocalAvailabilityCheck) {
         self.localPlayer = localPlayer
         self.api = api
         self.clock = clock
         self.timing = timing
+        self.availability = availability
     }
 
     public func start() {
@@ -501,8 +507,9 @@ extension PlaybackCoordinator {
     }
 
     private func refreshLocalAvailability() async {
-        localRunning = await localPlayer.isRunning()
-        localPermission = localRunning ? await localPlayer.automationPermission(prompting: false) : .requiresSpotifyRunning
+        let status = await availability.run()
+        localRunning = status.isRunning
+        localPermission = status.permission
         if localDeviceName == nil { localDeviceName = await localPlayer.connectDeviceName() }
         recompute()
     }

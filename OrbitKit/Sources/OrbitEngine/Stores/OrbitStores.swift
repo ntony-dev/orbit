@@ -21,9 +21,10 @@ public final class OrbitStores {
         shelfFile: LibraryShelfFile? = nil,
         clock: EngineClock = .system
     ) {
-        playback = PlaybackCoordinator(localPlayer: localPlayer, api: api, clock: clock)
+        let availability = LocalAvailabilityCheck(localPlayer: localPlayer)
+        playback = PlaybackCoordinator(localPlayer: localPlayer, api: api, clock: clock, timing: .init(), availability: availability)
         library = LibraryStore(api: api, shelfFile: shelfFile, clock: clock)
-        account = AccountStore(authorizer: authorizer, api: api, localPlayer: localPlayer)
+        account = AccountStore(authorizer: authorizer, api: api, localPlayer: localPlayer, availability: availability)
         playback.setWebAPIAvailable(false)
 
         let library = library
@@ -78,7 +79,9 @@ public final class OrbitStores {
         })
         observations.append(Task {
             var previous: AutomationPermission?
-            for await permission in Observations({ account.automationPermission }) {
+            // The first read only replaces the placeholder; the coordinator checked at the same moment.
+            for await permission in Observations({ account.hasReadLocalStatus ? account.automationPermission : nil }) {
+                guard let permission else { continue }
                 defer { previous = permission }
                 guard previous != nil, permission != previous else { continue }
                 await playback.refresh()

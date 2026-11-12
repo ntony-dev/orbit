@@ -56,6 +56,9 @@ public actor MockSpotify {
     // Every Web API request and AppleScript command, in order, so tests can assert routing and request counts.
     public private(set) var webRequests: [String] = []
     public private(set) var localCommands: [String] = []
+    // Automation permission checks and AppleScript state reads, each a trip over the real app's serial channel.
+    public private(set) var permissionChecks = 0
+    public private(set) var stateReads = 0
 
     public init(latency: Duration = .milliseconds(120), now: @escaping @Sendable () -> Date = { .now }) {
         self.latency = latency
@@ -306,7 +309,7 @@ public actor MockSpotify {
 
     func localCommand(_ name: String) async throws(OrbitError) {
         // Like the real player, a command asks for Automation permission if it was never asked; the user accepts.
-        _ = permission(prompting: true)
+        _ = resolvePermission(prompting: true)
         try requireRunning()
         localCommands.append(name)
         await awaitCommandTurn()
@@ -332,6 +335,11 @@ public actor MockSpotify {
     var running: Bool { isRunning }
 
     func permission(prompting: Bool) -> AutomationPermission {
+        permissionChecks += 1
+        return resolvePermission(prompting: prompting)
+    }
+
+    private func resolvePermission(prompting: Bool) -> AutomationPermission {
         guard isRunning else { return .requiresSpotifyRunning }
         if prompting, automationPermission == .notDetermined { automationPermission = .granted }
         return automationPermission
@@ -349,6 +357,11 @@ public actor MockSpotify {
             device.volumePercent = device.supportsVolume ? volume : nil
             return device
         }
+    }
+
+    func readLocalState() throws(OrbitError) -> LocalPlayerState {
+        stateReads += 1
+        return try localState()
     }
 
     func localState() throws(OrbitError) -> LocalPlayerState {

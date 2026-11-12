@@ -11,16 +11,24 @@ public final class AccountStore {
     public private(set) var isSpotifyInstalled = true
     public private(set) var isSpotifyRunning = false
     public private(set) var lastError: OrbitError?
+    // False until the first local status read, so the permission's placeholder is never taken for a change.
+    private(set) var hasReadLocalStatus = false
 
     @ObservationIgnored private let authorizer: any Authorizer
     @ObservationIgnored private let api: any SpotifyAPI
     @ObservationIgnored private let localPlayer: any LocalPlayer
+    @ObservationIgnored private let availability: LocalAvailabilityCheck
     @ObservationIgnored private var tasks: [Task<Void, Never>] = []
 
-    public init(authorizer: any Authorizer, api: any SpotifyAPI, localPlayer: any LocalPlayer) {
+    public convenience init(authorizer: any Authorizer, api: any SpotifyAPI, localPlayer: any LocalPlayer) {
+        self.init(authorizer: authorizer, api: api, localPlayer: localPlayer, availability: LocalAvailabilityCheck(localPlayer: localPlayer))
+    }
+
+    init(authorizer: any Authorizer, api: any SpotifyAPI, localPlayer: any LocalPlayer, availability: LocalAvailabilityCheck) {
         self.authorizer = authorizer
         self.api = api
         self.localPlayer = localPlayer
+        self.availability = availability
     }
 
     public func start() {
@@ -63,9 +71,12 @@ public final class AccountStore {
     }
 
     public func refreshLocalStatus() async {
-        isSpotifyInstalled = await localPlayer.isInstalled()
-        isSpotifyRunning = await localPlayer.isRunning()
-        automationPermission = await localPlayer.automationPermission(prompting: false)
+        async let installed = localPlayer.isInstalled()
+        let status = await availability.run()
+        isSpotifyInstalled = await installed
+        isSpotifyRunning = status.isRunning
+        automationPermission = status.permission
+        hasReadLocalStatus = true
     }
 
     public func requestAutomationPermission() async {
