@@ -4,8 +4,11 @@
 // Users can also enter one in Orbit's settings, which takes precedence over this build-time value.
 SPOTIFY_CLIENT_ID = your_client_id_here
 
-// Optional: sign with a real identity instead of ad-hoc. A stable signature stops macOS from re-asking for
-// Keychain and Automation access after every build.
-// CODE_SIGN_STYLE = Automatic
+// Optional: sign with a real identity instead of ad hoc. A stable signature stops macOS from re-asking for
+// Keychain and Automation access after every build. Any Apple Development certificate works, including the free
+// one Xcode creates for an Apple ID. DEVELOPMENT_TEAM is the certificate's Organizational Unit, not the code in
+// parentheses in its name; this prints it:
+//   security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject
+// CODE_SIGN_STYLE = Manual
 // CODE_SIGN_IDENTITY = Apple Development
 // DEVELOPMENT_TEAM = ABCDE12345
