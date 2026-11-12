@@ -48,12 +48,32 @@ struct OrbitTheme {
     var backingOpacity: Double {
         if reducesTransparency { return 0.94 }
         let ceiling: Double = switch glassPreset {
-        case .clear: 0.62
+        // Lower than Balanced because Clear also carries the legibility floor below.
+        case .clear: 0.5
         case .balanced: 0.58
         case .tinted: 0.34
         }
         let value = min(1, max(0, backgroundOpacity)) * ceiling
         return isHighContrast ? max(value, 0.6) : value
+    }
+
+    // Native glass keeps the tone of whatever is behind it, so white text over a bright page or dark text over a
+    // terminal can fall below 3:1. Apple pairs clear glass with a dimming layer for exactly this; Orbit's is a floor
+    // under the user's backing, so 0% still shows the desktop's shapes and colors but never at the cost of the
+    // text. Regular glass already pulls toward a mid tone and needs less.
+    func legibilityFloor(for scheme: ColorScheme) -> Double {
+        if reducesTransparency { return 0 }
+        return switch (glassPreset, scheme) {
+        case (.clear, .dark): 0.56
+        case (.clear, _): 0.46
+        case (_, .dark): 0.45
+        case (_, _): 0.3
+        }
+    }
+
+    // Opacity of the single fill drawn under the glass: the user's backing composited over the legibility floor.
+    func surfaceFill(for scheme: ColorScheme) -> Double {
+        1 - (1 - backingOpacity) * (1 - legibilityFloor(for: scheme))
     }
 }
 

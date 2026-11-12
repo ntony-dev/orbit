@@ -1,11 +1,13 @@
 import SwiftUI
 
 // A round glyph button: hover and pressed fills, an accent ring for keyboard focus, and an accent glyph plus dot
-// when `isOn`, so a toggle's state never depends on color alone.
+// when `isOn`, so a toggle's state never depends on color alone. A toggle that is off recedes to the secondary
+// style, so with the neutral accent "on" still reads as brighter rather than only as a dot.
 struct IconButtonStyle: ButtonStyle {
     var diameter: CGFloat = OrbitTokens.Size.iconButton
     var glyphSize: CGFloat = OrbitTokens.Icon.regular
     var isOn = false
+    var isToggle = false
     var showsOnIndicator = true
 
     func makeBody(configuration: Configuration) -> some View {
@@ -20,13 +22,14 @@ private struct IconButtonBody: View {
     @Environment(\.orbitTheme) private var theme
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.isFocused) private var isFocused
+    @Environment(\.colorScheme) private var colorScheme
     @State private var isHovered = false
 
     var body: some View {
         configuration.label
             .font(.system(size: style.glyphSize, weight: .semibold))
             .symbolRenderingMode(.hierarchical)
-            .foregroundStyle(style.isOn ? AnyShapeStyle(theme.accent) : AnyShapeStyle(.primary))
+            .foregroundStyle(glyphStyle)
             .frame(width: style.diameter, height: style.diameter)
             .background {
                 Circle().fill(fill)
@@ -46,10 +49,18 @@ private struct IconButtonBody: View {
             }
             .contentShape(Circle())
             .scaleEffect(configuration.isPressed && !theme.reducesMotion ? 0.9 : 1)
-            .opacity(isEnabled ? 1 : 0.3)
+            .opacity(isEnabled ? 1 : OrbitPalette.disabledOpacity(colorScheme, contrast: theme.contrast))
             .onHover { hovering in isHovered = hovering && isEnabled }
             .animation(theme.animation(OrbitTokens.Motion.hover), value: isHovered)
             .animation(theme.animation(OrbitTokens.Motion.press), value: configuration.isPressed)
+            .animation(theme.animation(OrbitTokens.Motion.hover), value: style.isOn)
+    }
+
+    private var glyphStyle: AnyShapeStyle {
+        if style.isOn, isEnabled { return AnyShapeStyle(theme.accent) }
+        // A disabled glyph dims from the primary color, so an unavailable toggle is not dimmed twice.
+        if style.isToggle, isEnabled, !isHovered { return AnyShapeStyle(.secondary) }
+        return AnyShapeStyle(.primary)
     }
 
     private var fill: Color {
@@ -120,6 +131,7 @@ private struct CapsuleButtonBody: View {
     @Environment(\.orbitTheme) private var theme
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.isFocused) private var isFocused
+    @Environment(\.colorScheme) private var colorScheme
     @State private var isHovered = false
 
     var body: some View {
@@ -128,14 +140,14 @@ private struct CapsuleButtonBody: View {
             .labelStyle(.titleAndIcon)
             .lineLimit(1)
             .padding(.horizontal, OrbitTokens.Spacing.l)
-            .frame(height: 26)
+            .frame(height: OrbitTokens.Size.capsuleButton)
             .foregroundStyle(isProminent ? AnyShapeStyle(OrbitPalette.prominentGlyph) : AnyShapeStyle(.primary))
             .background { Capsule().fill(fill) }
             .overlay {
                 if isFocused { Capsule().strokeBorder(theme.accent, lineWidth: 2).padding(-3) }
             }
             .contentShape(Capsule())
-            .opacity(isEnabled ? 1 : 0.4)
+            .opacity(isEnabled ? 1 : OrbitPalette.disabledOpacity(colorScheme, contrast: theme.contrast))
             .scaleEffect(configuration.isPressed && !theme.reducesMotion ? 0.97 : 1)
             .onHover { hovering in isHovered = hovering && isEnabled }
             .animation(theme.animation(OrbitTokens.Motion.hover), value: isHovered)
@@ -161,9 +173,10 @@ extension View {
         diameter: CGFloat = OrbitTokens.Size.iconButton,
         glyph: CGFloat = OrbitTokens.Icon.regular,
         isOn: Bool = false,
+        isToggle: Bool = false,
         showsOnIndicator: Bool = true
     ) -> some View {
-        buttonStyle(IconButtonStyle(diameter: diameter, glyphSize: glyph, isOn: isOn, showsOnIndicator: showsOnIndicator))
+        buttonStyle(IconButtonStyle(diameter: diameter, glyphSize: glyph, isOn: isOn, isToggle: isToggle, showsOnIndicator: showsOnIndicator))
             .focusEffectDisabled()
     }
 

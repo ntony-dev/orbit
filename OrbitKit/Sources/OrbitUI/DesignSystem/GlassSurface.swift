@@ -8,6 +8,7 @@ struct GlassSurface<Content: View>: View {
     @ViewBuilder let content: Content
 
     @Environment(\.orbitTheme) private var theme
+    @Environment(\.colorScheme) private var colorScheme
 
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: OrbitTokens.Radius.surface, style: .continuous)
@@ -16,7 +17,7 @@ struct GlassSurface<Content: View>: View {
     var body: some View {
         ZStack {
             // Drawn beneath the glass, so the glass refracts it like any other backdrop rather than being veiled.
-            shape.fill(OrbitPalette.backing.opacity(theme.backingOpacity))
+            shape.fill(OrbitPalette.backing.opacity(theme.surfaceFill(for: colorScheme)))
             content
                 .frame(width: size.width, height: size.height)
                 .clipShape(shape)

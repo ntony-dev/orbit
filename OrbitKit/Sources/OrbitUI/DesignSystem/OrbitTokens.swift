@@ -50,6 +50,12 @@ enum OrbitTokens {
         static let sliderTrackActive: CGFloat = 6
         static let sliderHitHeight: CGFloat = 18
         static let sliderKnob: CGFloat = 12
+        static let capsuleButton: CGFloat = 26
+        static let pillControlCompact: CGFloat = 26
+        static let pillControlRegular: CGFloat = 30
+        static let playingIndicator: CGFloat = 20
+        // Width over which a title too long for its space fades out instead of ending in an ellipsis.
+        static let truncationFade: CGFloat = 18
 
         // Bounds for screens that size to their content: short enough that five liked songs leave no hole, tall
         // enough that a long library still shows ten rows.
@@ -83,6 +89,7 @@ enum OrbitTokens {
         static let regular: CGFloat = 13
         static let transport: CGFloat = 16
         static let primaryTransport: CGFloat = 22
+        static let indicator: CGFloat = 14
     }
 
     enum Typography {
@@ -95,6 +102,7 @@ enum OrbitTokens {
         static let captionEmphasized = Font.system(size: 11, weight: .semibold)
         static let sectionHeading = Font.system(size: 11, weight: .semibold)
         static let timecode = Font.system(size: 10.5, weight: .medium).monospacedDigit()
+        static let timecodeEmphasized = Font.system(size: 10.5, weight: .semibold).monospacedDigit()
         static let pillTitleCompact = Font.system(size: 12, weight: .semibold)
         static let pillTitleRegular = Font.system(size: 13, weight: .semibold)
         static let pillSubtitle = Font.system(size: 11)
