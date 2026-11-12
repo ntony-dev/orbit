@@ -97,8 +97,9 @@ struct TransportButton: View {
         Button {
             Task { await action() }
         } label: {
+            // Toggles answer at once: the glyph swaps without a symbol effect and only the color eases.
             Image(systemName: symbol)
-                .contentTransition(.symbolEffect(.replace))
+                .contentTransition(.identity)
         }
         .iconButton(diameter: OrbitTokens.Size.transportButton, glyph: OrbitTokens.Icon.transport, isOn: isOn, isToggle: isToggle)
         .disabled(!isEnabled)

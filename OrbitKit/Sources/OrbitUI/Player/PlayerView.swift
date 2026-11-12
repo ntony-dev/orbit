@@ -206,7 +206,6 @@ private struct NowPlayingHeader: View {
 private struct LikeButton: View {
     @Environment(PlaybackCoordinator.self) private var playback
     @Environment(AccountStore.self) private var account
-    @Environment(\.orbitTheme) private var theme
 
     var body: some View {
         let saved = playback.isCurrentTrackSaved
@@ -216,8 +215,7 @@ private struct LikeButton: View {
             Task { await playback.toggleSaved() }
         } label: {
             Image(systemName: saved == true ? "heart.fill" : "heart")
-                .contentTransition(.symbolEffect(.replace))
-                .symbolEffect(.bounce, value: theme.reducesMotion ? false : saved == true)
+                .contentTransition(.identity)
         }
         .iconButton(
             diameter: OrbitTokens.Size.iconButton + 2,
@@ -226,7 +224,10 @@ private struct LikeButton: View {
             isToggle: true,
             showsOnIndicator: false
         )
-        .disabled(saved == nil || isPending || !isSignedIn)
+        .disabled(saved == nil || !isSignedIn)
+        // The heart has already flipped while the request runs; dimming it as disabled for that moment made the
+        // toggle look slow, so it only ignores clicks until Spotify answers.
+        .allowsHitTesting(!isPending)
         .help(help(saved: saved, isSignedIn: isSignedIn))
         .accessibilityLabel("Liked Songs")
         .accessibilityValue(saved == true ? "Saved" : "Not saved")

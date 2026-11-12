@@ -2,7 +2,9 @@ import SwiftUI
 
 // A round glyph button: hover and pressed fills, an accent ring for keyboard focus, and an accent glyph plus dot
 // when `isOn`, so a toggle's state never depends on color alone. A toggle that is off recedes to the secondary
-// style, so with the neutral accent "on" still reads as brighter rather than only as a dot.
+// style, so with the neutral accent "on" still reads as brighter rather than only as a dot. Toggles draw in one
+// flat color: hierarchical rendering paints the whole of `repeat.1` as a secondary layer, so repeat-one looked
+// dimmer than repeat-all in the same accent.
 struct IconButtonStyle: ButtonStyle {
     var diameter: CGFloat = OrbitTokens.Size.iconButton
     var glyphSize: CGFloat = OrbitTokens.Icon.regular
@@ -28,7 +30,7 @@ private struct IconButtonBody: View {
     var body: some View {
         configuration.label
             .font(.system(size: style.glyphSize, weight: .semibold))
-            .symbolRenderingMode(.hierarchical)
+            .symbolRenderingMode(style.isToggle ? .monochrome : .hierarchical)
             .foregroundStyle(glyphStyle)
             .frame(width: style.diameter, height: style.diameter)
             .background {
@@ -53,7 +55,7 @@ private struct IconButtonBody: View {
             .onHover { hovering in isHovered = hovering && isEnabled }
             .animation(theme.animation(OrbitTokens.Motion.hover), value: isHovered)
             .animation(theme.animation(OrbitTokens.Motion.press), value: configuration.isPressed)
-            .animation(theme.animation(OrbitTokens.Motion.hover), value: style.isOn)
+            .animation(theme.animation(OrbitTokens.Motion.toggle), value: style.isOn)
     }
 
     private var glyphStyle: AnyShapeStyle {

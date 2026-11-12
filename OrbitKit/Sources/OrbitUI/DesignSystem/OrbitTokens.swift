@@ -135,6 +135,8 @@ enum OrbitTokens {
         static let fit = Animation.smooth(duration: 0.3)
         static let selection = Animation.easeOut(duration: 0.1)
         static let loadingPulse = Animation.easeInOut(duration: 0.9)
+        // Shuffle, repeat, like and play/pause answer a click at once; only the color settles.
+        static let toggle = Animation.easeOut(duration: 0.08)
     }
 }
 
