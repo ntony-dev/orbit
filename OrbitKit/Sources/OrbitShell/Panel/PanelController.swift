@@ -50,7 +50,8 @@ final class PanelController: PanelHost {
         positions = preferences.remembersPosition ? preferences.savedPositions : [:]
         displayID = preferences.remembersPosition ? preferences.panelDisplayID : nil
         panel = FloatingPanel(contentRect: .zero)
-        // Escape steps back one layer (picker to player) and collapses only from the player itself.
+        // Escape steps back one layer (a playlist to the library, the library to the player) and collapses only
+        // from the player itself.
         panel.onCancel = { [state] in state.dismissActiveLayer() }
         // Runs before the panel handles the click, so a click on an open but unfocused panel also makes it key.
         panel.onMouseDown = { [weak self] in

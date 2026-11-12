@@ -64,7 +64,7 @@ final class Shell {
         switch action {
         case .toggleOrbit: panel.toggle()
         case .focusSearch: panel.present(.search)
-        case .openPlaylistPicker: panel.present(.playlistPicker)
+        case .openLibrary: panel.present(.playlistPicker)
         case .togglePlayback: Task { await playback.togglePlayPause() }
         case .nextTrack: Task { await playback.next() }
         case .previousTrack: Task { await playback.previous() }

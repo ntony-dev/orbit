@@ -1,7 +1,10 @@
 import KeyboardShortcuts
 
 enum ShortcutAction: String, CaseIterable, Sendable {
-    case toggleOrbit, focusSearch, togglePlayback, nextTrack, previousTrack, openPlaylistPicker
+    // The raw value names the stored shortcut, so the library's keeps the picker's name and a combination
+    // recorded before the picker joined the library still works.
+    case toggleOrbit, focusSearch, togglePlayback, nextTrack, previousTrack
+    case openLibrary = "openPlaylistPicker"
 
     var title: String {
         switch self {
@@ -10,7 +13,7 @@ enum ShortcutAction: String, CaseIterable, Sendable {
         case .togglePlayback: "Play or pause"
         case .nextTrack: "Next track"
         case .previousTrack: "Previous track"
-        case .openPlaylistPicker: "Open playlist picker"
+        case .openLibrary: "Open Library"
         }
     }
 }

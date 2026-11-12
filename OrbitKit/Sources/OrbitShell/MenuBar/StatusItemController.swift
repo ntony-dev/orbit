@@ -51,7 +51,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
                           enabled: snapshot.allows(.skipPrevious)) { $0.perform(.previousTrack) })
         menu.addItem(.separator())
         menu.addItem(item("Open Player", symbol: "rectangle.portrait", shortcut: .toggleOrbit) { $0.panel.present(.player) })
-        menu.addItem(item("Playlists…", symbol: "music.note.list", shortcut: .openPlaylistPicker) { $0.panel.present(.playlistPicker) })
+        menu.addItem(item("Library…", symbol: "square.stack", shortcut: .openLibrary) { $0.panel.present(.playlistPicker) })
         menu.addItem(item("Search…", symbol: "magnifyingglass", shortcut: .focusSearch) { $0.panel.present(.search) })
         menu.addItem(.separator())
         let showsPill = shell.preferences.isPillVisible

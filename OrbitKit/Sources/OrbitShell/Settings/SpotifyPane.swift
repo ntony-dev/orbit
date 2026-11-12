@@ -173,7 +173,7 @@ struct SpotifyPane: View {
     private var pinnedSection: some View {
         Section {
             if library.pinnedPlaylists.isEmpty {
-                Text("Pin playlists to keep them at the top of the playlist picker.")
+                Text("Pin playlists to keep them at the top of Orbit's library.")
                     .foregroundStyle(.secondary)
             }
             ForEach(Array(library.pinnedPlaylists.enumerated()), id: \.element.id) { index, playlist in
@@ -240,7 +240,7 @@ struct SpotifyPane: View {
         }
     }
 
-    // Liked Songs first, as in the picker; it is not part of the playlist list Spotify returns.
+    // Liked Songs first, as in the library; it is not part of the playlist list Spotify returns.
     private var pinnablePlaylists: [Playlist] {
         ([library.likedSongs].compactMap(\.self) + (library.playlists.value ?? [])).filter { !library.isPinned($0) }
     }
