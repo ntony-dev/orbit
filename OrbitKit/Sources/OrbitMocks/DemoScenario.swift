@@ -12,6 +12,12 @@ public enum DemoScenario: String, CaseIterable, Sendable {
     case rateLimited = "rate-limited"
     case emptyLibrary = "empty-library"
     case switchFails = "switch-fails"
+    // First launch: Spotify is open, macOS has not asked about Automation yet and no account is connected, so
+    // Orbit knows nothing about playback until the user allows it.
+    case automationNotAsked = "automation-not-asked"
+    // Automation not asked yet, but signed in, so the Web API still shows what plays and the player asks inline.
+    case automationNotAskedPlaying = "automation-not-asked-playing"
+    case paused
 
     public struct Services: Sendable {
         public let localPlayer: any LocalPlayer
@@ -22,11 +28,18 @@ public enum DemoScenario: String, CaseIterable, Sendable {
     public func services() async -> Services {
         await Task.detached(priority: .userInitiated) { MockArtwork.render(MockFixtures.artwork) }.value
         let spotify = MockSpotify()
-        let authorizer = MockAuthorizer(restoredState: self == .signedOut ? .signedOut : .signedIn)
+        let signedOut = self == .signedOut || self == .automationNotAsked
+        let authorizer = MockAuthorizer(restoredState: signedOut ? .signedOut : .signedIn)
         let localPlayer = MockLocalPlayer(spotify: spotify)
         switch self {
         case .automationDenied: await spotify.setAutomationPermission(.denied)
+        case .automationNotAsked, .automationNotAskedPlaying: await spotify.setAutomationPermission(.notDetermined)
         case .spotifyClosed: await spotify.simulateQuit()
+        case .paused: await spotify.setPlaying(false)
+        // The desktop app is this Mac's active device, so a switch goes over AppleScript first. Spotify accepts the
+        // command and never starts the playlist, the way it silently refuses a context, so the switch fails on
+        // confirmation; a Web API switch fails outright below.
+        case .switchFails: await spotify.ignorePlayCommands(true)
         default: break
         }
         await spotify.startClock()
