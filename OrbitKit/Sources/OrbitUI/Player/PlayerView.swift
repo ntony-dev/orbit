@@ -154,9 +154,11 @@ private struct NowPlayingHeader: View {
                 .pausedArtwork(!playback.snapshot.isPlaying)
                 .animation(theme.animation(OrbitTokens.Motion.content), value: playback.snapshot.isPlaying)
             }
-            VStack(alignment: .leading, spacing: OrbitTokens.Spacing.xxs) {
-                Text(track?.name ?? "")
-                    .font(OrbitTokens.Typography.title)
+            // Title up to two lines, artist on one: the pair is centred on the artwork, so a one-line title sits
+            // level with the cover's middle and a two-line one fills it, rather than leaving a hole beneath.
+            VStack(alignment: .leading, spacing: OrbitTokens.Spacing.xs) {
+                Text(title(track))
+                    .font(OrbitTokens.Typography.nowPlayingTitle)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: OrbitTokens.Spacing.xs) {
@@ -166,14 +168,10 @@ private struct NowPlayingHeader: View {
                             .foregroundStyle(.secondary)
                     }
                     Text(track?.artistLine ?? "")
-                        .font(OrbitTokens.Typography.subheadline)
+                        .font(OrbitTokens.Typography.nowPlayingArtist)
                         .foregroundStyle(.secondary)
                         .fadingTruncation()
                 }
-                Text(track?.album ?? "")
-                    .font(OrbitTokens.Typography.caption)
-                    .foregroundStyle(.tertiary)
-                    .fadingTruncation()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .id(track?.id)
@@ -196,10 +194,14 @@ private struct NowPlayingHeader: View {
         )
     }
 
+    private func title(_ track: Track?) -> String {
+        UIDebugOptions.current.trackTitle ?? track?.name ?? ""
+    }
+
     private func trackDescription(_ track: Track?) -> String {
         guard let track else { return "" }
         let explicit = track.isExplicit ? "Explicit" : nil
-        return [track.name, track.artistLine, track.album, explicit].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+        return [title(track), track.artistLine, explicit].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
     }
 }
 

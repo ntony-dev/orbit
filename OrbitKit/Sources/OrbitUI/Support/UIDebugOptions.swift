@@ -5,6 +5,9 @@ import SwiftUI
 // Debug-only launch arguments that put the UI into a known state for screenshots without simulated input, and
 // without writing to the user's Preferences:
 //   --ui-screen player|picker|library|liked|queue|search|devices|playlist:<id>
+//                                  (devices is the player with its device list open)
+//   --ui-track-title <text>        the title the player shows for the current track, so long titles can be
+//                                  captured with the demo's short ones
 //   --ui-query <text>              the library search query, so search results can be captured
 //   --ui-hover                     show the pill's hover controls
 //   --ui-scenario <name>           with --demo only, read by the shell, which builds the scenario's stores:
@@ -29,6 +32,7 @@ import SwiftUI
 struct UIDebugOptions {
     var screen: String?
     var searchQuery: String?
+    var trackTitle: String?
     var forcesPillHover = false
     var glassPreset: GlassPreset?
     var backgroundOpacity: Double?
@@ -59,6 +63,7 @@ struct UIDebugOptions {
         }
         screen = value("--ui-screen")
         searchQuery = value("--ui-query")
+        trackTitle = value("--ui-track-title")
         forcesPillHover = arguments.contains("--ui-hover")
         glassPreset = value("--ui-glass").flatMap(GlassPreset.init(rawValue:))
         backgroundOpacity = value("--ui-opacity").flatMap(Double.init)

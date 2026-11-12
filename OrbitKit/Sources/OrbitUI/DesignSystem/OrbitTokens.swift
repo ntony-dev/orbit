@@ -105,6 +105,10 @@ enum OrbitTokens {
         static let pillTitleRegular = Font.system(size: 13, weight: .semibold)
         static let pillSubtitle = Font.system(size: 11)
         static let segment = Font.system(size: 12, weight: .medium)
+        // The player's title and artist: two steps apart in size and weight, so the pair reads as one block with
+        // a clear lead whether the title takes one line or two.
+        static let nowPlayingTitle = Font.system(size: 16, weight: .semibold)
+        static let nowPlayingArtist = Font.system(size: 13)
     }
 
     enum Motion {
