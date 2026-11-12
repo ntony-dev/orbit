@@ -195,6 +195,15 @@ public actor MockSpotify {
         rejectsLikedSongsContext = rejects
     }
 
+    // A collection the size of a long-time listener's, appended after the fixture tracks.
+    public func addSavedTracks(count: Int) {
+        savedTracks += (0..<count).map { index in
+            Track(id: "saved-\(index)", name: "Saved Song \(index + 1)", artists: ["Various"], album: "Saved", duration: 200)
+        }
+    }
+
+    public var savedTrackCount: Int { savedTracks.count }
+
     func savedTrackURIs(limit: Int) -> [SpotifyURI] {
         Array(savedTracks.prefix(limit).map(\.uri))
     }

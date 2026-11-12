@@ -57,8 +57,8 @@ struct LibraryView: View {
         .task(id: account.authState) {
             guard account.authState.isSignedIn else { return }
             if case .idle = library.playlists { await library.loadPlaylists() }
-            // Liked Songs shows its count on its row.
-            if case .idle = library.savedTracks { await library.loadSavedTracks() }
+            // Liked Songs shows its count on its row; its tracks load only when it is opened.
+            if library.likedSongsCount == nil { await library.loadLikedSongsCount() }
         }
     }
 
@@ -66,7 +66,7 @@ struct LibraryView: View {
         LibraryContent(
             pinned: library.pinnedPlaylists,
             recents: library.recentPlaylists,
-            liked: LikedSongs.playlist(for: account.profile, count: library.savedTracks.value?.count),
+            liked: LikedSongs.playlist(for: account.profile, count: library.likedSongsCount),
             library: library.playlists.value ?? [],
             query: navigator.searchQuery,
             results: library.searchResults.value

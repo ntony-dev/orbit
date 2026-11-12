@@ -233,7 +233,11 @@ struct SpotifyPane: View {
         await withDiscardingTaskGroup { group in
             group.addTask { await library.loadPlaylists(force: true) }
             group.addTask { await library.loadDevices(force: true) }
-            if refetchesLikedSongs { group.addTask { await library.loadSavedTracks(force: true) } }
+            if refetchesLikedSongs {
+                group.addTask { await library.loadSavedTracks(force: true) }
+            } else {
+                group.addTask { await library.loadLikedSongsCount(force: true) }
+            }
             for playlist in opened {
                 group.addTask { await library.loadItems(for: playlist, force: true) }
             }

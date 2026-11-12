@@ -38,7 +38,10 @@ public final class LibraryStore {
     public private(set) var recentPlaylists: [Playlist] = []
     // A playlist the user cannot read resolves to `.failed(.playlistItemsUnavailable)`; it can still be played.
     public private(set) var playlistItems: [Playlist.ID: LoadState<[Track]>] = [:]
+    // Loaded only when Liked Songs is opened; the Library's row shows `likedSongsCount` without it.
     public private(set) var savedTracks: LoadState<[Track]> = .idle
+    // Spotify's own count of saved tracks, from a one-item page.
+    public private(set) var likedSongsTotal: Int?
     public private(set) var searchQuery = ""
     // Keeps showing the previous query's results while a newer one loads, so refining never flashes empty;
     // `isSearching` says a newer query is still on its way.
@@ -70,7 +73,7 @@ public final class LibraryStore {
     @ObservationIgnored private var generation = 0
 
     private enum CacheKey: Hashable {
-        case playlists, savedTracks, queue, devices
+        case playlists, savedTracks, likedSongsTotal, queue, devices
         case items(Playlist.ID)
     }
 
@@ -165,8 +168,30 @@ public final class LibraryStore {
             let result = await loadAll { [api] (page) async throws(OrbitError) in try await api.savedTracks(page) }
             guard isCurrent() else { return false }
             if result.value != nil || savedTracks.value == nil { savedTracks = result }
-            if let count = result.value?.count { likedSongs?.itemCount = count }
+            likedSongs?.itemCount = likedSongsCount
             return result.value != nil
+        }
+    }
+
+    // The loaded list once Liked Songs has been opened, so the row and the list agree; until then Spotify's total,
+    // which also counts the rare saved entry Spotify returns without a track.
+    public var likedSongsCount: Int? {
+        savedTracks.value?.count ?? likedSongsTotal
+    }
+
+    // One request whatever the size of the collection: a one-item page carries the total.
+    public func loadLikedSongsCount(force: Bool = false) async {
+        if !force, savedTracks.value != nil { return }
+        await load(.likedSongsTotal, lifetime: timing.itemsLifetime, force: force) { [self] isCurrent in
+            do throws(OrbitError) {
+                let page = try await api.savedTracks(PageRequest(offset: 0, limit: 1))
+                guard isCurrent(), let total = page.total else { return false }
+                likedSongsTotal = total
+                likedSongs?.itemCount = likedSongsCount
+                return true
+            } catch {
+                return false
+            }
         }
     }
 
@@ -306,7 +331,7 @@ public final class LibraryStore {
             return
         }
         guard likedSongs?.uri != .likedSongs(userID: profile.id) else { return }
-        likedSongs = LikedSongs.playlist(userID: profile.id, ownerName: profile.displayName, itemCount: savedTracks.value?.count)
+        likedSongs = LikedSongs.playlist(userID: profile.id, ownerName: profile.displayName, itemCount: likedSongsCount)
     }
 
     // Drops everything that came from the signed-in account; pins and recents are local and stay.
@@ -321,6 +346,7 @@ public final class LibraryStore {
         playlists = .idle
         playlistItems = [:]
         savedTracks = .idle
+        likedSongsTotal = nil
         searchQuery = ""
         searchResults = .idle
         isSearching = false

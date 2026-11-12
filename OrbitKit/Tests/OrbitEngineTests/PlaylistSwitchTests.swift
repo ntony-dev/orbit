@@ -146,6 +146,51 @@ struct PlaylistSwitchTests {
         #expect(stores.library.recentPlaylists.first?.id == LikedSongs.playlistID)
     }
 
+    // Liked Songs' tracks are loaded only when the user opens it. Without them, the one-track check that fills the
+    // heart says whether what plays still belongs to Liked Songs, one request per track as before.
+    @Test func likedSongsAsATrackListKeepsItsContextWithoutLoadingTheCollection() async throws {
+        let liked = try #require(stores.library.likedSongs)
+        await rig.spotify.rejectLikedSongsContext(true)
+        await rig.spotify.simulateRemotePlayback(on: "dev-kitchen")
+        await rig.spotify.simulateQuit()
+        await playback.refresh()
+        #expect(playback.authority == .webAPI)
+        let playback = playback
+        let switching = Task { await playback.play(playlist: liked) }
+        for _ in 0..<16 {
+            rig.clock.advance(by: 0.5)
+            await settle()
+        }
+        #expect(await switching.value)
+        #expect(playback.snapshot.context?.uri == liked.uri)
+        #expect(stores.library.savedTracks == .idle)
+        #expect(await rig.webRequests("savedTracks") == 0)
+
+        // Songs the user queued play first and are not saved; the check answers within a request.
+        for _ in MockFixtures.queuedTrackIDs {
+            await playback.next()
+            for _ in 0..<4 {
+                rig.clock.advance(by: 0.5)
+                await settle()
+            }
+            #expect(playback.isCurrentTrackSaved == false)
+            #expect(playback.snapshot.context == nil)
+        }
+
+        let checks = await rig.webRequests("libraryContains")
+        let queued = playback.snapshot.track?.uri
+        await playback.next()
+        for _ in 0..<8 {
+            rig.clock.advance(by: 0.5)
+            await settle()
+            // From the first read that shows the next saved song, before its check has answered.
+            if playback.snapshot.track?.uri != queued { #expect(playback.snapshot.context?.uri == liked.uri) }
+        }
+        #expect(playback.snapshot.track.map { MockFixtures.savedTrackIDs.contains($0.id) } == true)
+        #expect(playback.isCurrentTrackSaved == true)
+        #expect(await rig.webRequests("libraryContains") == checks + 1)
+    }
+
     // A playlist deleted since the library loaded fails clearly and is flagged, so pins and recents can show it.
     @Test func aDeletedPlaylistFailsAndIsFlaggedMissing() async {
         stores.library.pin(target)

@@ -147,6 +147,46 @@ struct LibraryStoreTests {
         #expect(await rig.webRequests("search") == 6)
     }
 
+    // The Library shows Liked Songs' count on its row; that must not page through the whole collection.
+    @Test(arguments: [0, 2_000])
+    func openingTheLibraryCostsTheSameRequestsHoweverManySongsAreLiked(extra: Int) async throws {
+        await rig.spotify.addSavedTracks(count: extra)
+        let stores = rig.stores()
+        stores.start()
+        #expect(await eventually { stores.library.playlists.value != nil && stores.library.likedSongs != nil })
+        await settle()
+        let before = await rig.spotify.webRequests.count
+
+        // What the Library tab's task does when it first appears.
+        await stores.library.loadPlaylists()
+        if stores.library.likedSongsCount == nil { await stores.library.loadLikedSongsCount() }
+        await settle()
+
+        #expect(await rig.spotify.webRequests.count - before == 1)
+        #expect(await rig.webRequests("savedTracks") == 1)
+        let total = await rig.spotify.savedTrackCount
+        #expect(stores.library.likedSongsCount == total)
+        #expect(stores.library.likedSongs?.itemCount == total)
+        #expect(stores.library.savedTracks == .idle)
+
+        // Shown again: the count is known, so nothing more is asked.
+        if stores.library.likedSongsCount == nil { await stores.library.loadLikedSongsCount() }
+        #expect(await rig.webRequests("savedTracks") == 1)
+    }
+
+    @Test func likedSongsTracksLoadOnlyWhenOpened() async throws {
+        await rig.spotify.addSavedTracks(count: 120)
+        library.setUser(MockFixtures.user)
+        await library.loadLikedSongsCount()
+        let liked = try #require(library.likedSongs)
+        #expect(library.items(for: liked) == .idle)
+        await library.loadItems(for: liked)
+        let total = await rig.spotify.savedTrackCount
+        #expect(library.items(for: liked).value?.count == total)
+        #expect(library.likedSongsCount == total)
+        #expect(await rig.webRequests("savedTracks") == 1 + (total + 49) / 50)
+    }
+
     @Test func searchIsDebouncedAndOnlyTheLastQueryIsSent() async {
         for query in ["n", "ni", "nig", "night"] {
             library.updateSearch(query)

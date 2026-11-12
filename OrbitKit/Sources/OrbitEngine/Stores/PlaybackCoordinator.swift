@@ -123,6 +123,9 @@ public final class PlaybackCoordinator {
     @ObservationIgnored private var overlayExpiry: Task<Void, Never>?
     // The last saved state Orbit learned and the track it belongs to; it answers whenever that track is playing.
     private var savedState: (uri: SpotifyURI, saved: Bool)?
+    // What Spotify answered for the current track, unaffected by toggles since: whether it belongs to Liked Songs
+    // when that plays as a plain track list, without loading the whole collection.
+    @ObservationIgnored private var likedMembership: (uri: SpotifyURI, saved: Bool)?
 
     public convenience init(localPlayer: any LocalPlayer, api: any SpotifyAPI, clock: EngineClock = .system, timing: Timing = Timing()) {
         self.init(localPlayer: localPlayer, api: api, clock: clock, timing: timing, availability: LocalAvailabilityCheck(localPlayer: localPlayer))
@@ -184,6 +187,7 @@ public final class PlaybackCoordinator {
             remote = nil
             localDeviceID = nil
             savedState = nil
+            likedMembership = nil
             syncError = nil
             webAPIPausedUntil = nil
             webPauseReason = nil
@@ -653,10 +657,19 @@ extension PlaybackCoordinator {
         do {
             let saved = try await api.libraryContains([uri]).contains(uri)
             savedState = (uri, saved)
+            likedMembership = (uri, saved)
             noteWebSuccess()
+            recompute()
         } catch {
             noteWebFailure(error)
         }
+    }
+
+    // Nil when unknown: the collection is loaded only when the user opens it, and the one-track check that fills
+    // the heart has not answered for this track yet.
+    private func isInLikedSongs(_ track: SpotifyURI, known context: SpotifyURI) -> Bool? {
+        if let likedMembership, likedMembership.uri == track { return likedMembership.saved }
+        return contextTracks?(context)?.contains(track)
     }
 
     private func noteWebFailure(_ error: OrbitError) {
@@ -735,8 +748,10 @@ extension PlaybackCoordinator {
         if let context = result.context {
             result.context = named(context)
         } else if let known = knownContext, LikedSongs.isLikedSongs(known.context.uri), let track = result.track?.uri,
-                  contextTracks?(known.context.uri)?.contains(track) == true {
+                  isInLikedSongs(track, known: known.context.uri) ?? true {
             // Liked Songs started as a track list still belongs to Liked Songs for as long as it plays saved tracks.
+            // What plays after Orbit started it is almost always one of them, so a track not answered for yet
+            // counts as saved until the check that fills the heart says otherwise.
             result.context = known.context
         }
         return result
