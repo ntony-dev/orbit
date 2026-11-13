@@ -73,9 +73,7 @@ struct BackTitle: View {
 
     var body: some View {
         HStack(spacing: OrbitTokens.Spacing.xs) {
-            Button {
-                withAnimation(theme.animation(OrbitTokens.Motion.navigate)) { _ = navigator.back() }
-            } label: {
+            Button(action: goBack) {
                 Image(systemName: "chevron.left")
             }
             .iconButton(glyph: OrbitTokens.Icon.chrome)
@@ -83,18 +81,32 @@ struct BackTitle: View {
             .help("Back")
             .accessibilityLabel("Back")
             .keyboardShortcut("[", modifiers: .command)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(title)
-                    .font(OrbitTokens.Typography.headline)
-                    .lineLimit(1)
-                if let subtitle {
-                    Text(subtitle)
-                        .font(OrbitTokens.Typography.caption)
-                        .foregroundStyle(.secondary)
+            // The title names where Back leads, so it is a second, larger target for the same action. Assistive
+            // technologies already have the chevron.
+            Button(action: goBack) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(title)
+                        .font(OrbitTokens.Typography.headline)
                         .lineLimit(1)
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(OrbitTokens.Typography.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
+                .frame(minHeight: OrbitTokens.Size.iconButton)
+                .contentShape(.rect)
             }
+            .buttonStyle(.plain)
+            .focusEffectDisabled()
+            .help("Back")
+            .accessibilityHidden(true)
         }
+    }
+
+    private func goBack() {
+        withAnimation(theme.animation(OrbitTokens.Motion.navigate)) { _ = navigator.back() }
     }
 }
 
