@@ -2,7 +2,7 @@ import AppKit
 import QuartzCore
 import SwiftUI
 
-// Equalizer bars that rise and fall while playing; a still pause glyph otherwise. The pill shows this whenever
+// Equalizer bars that rise and fall while playing; a still glyph otherwise. The pill shows this whenever
 // music plays, which is Orbit's resting state, so the motion is a Core Animation loop committed once and run by
 // the render server. A SwiftUI symbol effect here re-rendered the hosting view and the glass every frame and cost
 // a quarter of a core while the app sat idle.
@@ -10,6 +10,9 @@ struct PlayingIndicator: View {
     let isPlaying: Bool
     // Over artwork the bars are drawn in white on a scrim, where the accent could vanish.
     var tint: Color?
+    // A list row marks its paused item with the state. The pill passes the play glyph instead, the action a click
+    // on its hover control would take, so the resting pill and the hovered one show the same symbol.
+    var pausedSymbol = "pause.fill"
 
     @Environment(\.orbitTheme) private var theme
 
@@ -18,7 +21,7 @@ struct PlayingIndicator: View {
             if isPlaying {
                 EqualizerBars(color: tint ?? theme.accent, animates: !theme.reducesMotion)
             } else {
-                Image(systemName: "pause.fill")
+                Image(systemName: pausedSymbol)
                     .font(.system(size: OrbitTokens.Icon.small, weight: .semibold))
                     .foregroundStyle(.secondary)
             }

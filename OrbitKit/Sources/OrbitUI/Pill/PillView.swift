@@ -115,7 +115,7 @@ struct PillView: View {
             }
             .transition(.opacity.combined(with: .scale(scale: 0.85, anchor: .trailing)))
         } else if status.hasTrack {
-            PlayingIndicator(isPlaying: snapshot.isPlaying)
+            PlayingIndicator(isPlaying: snapshot.isPlaying, pausedSymbol: "play.fill")
                 .frame(width: OrbitTokens.Size.playingIndicator)
                 .transition(.opacity)
         }
