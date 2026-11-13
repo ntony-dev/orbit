@@ -129,8 +129,8 @@ struct LibraryContentTests {
         #expect(content.sections.map(\.id) == ["library"])
     }
 
-    // Clicking any playlist row plays it; only playlists, Liked Songs and Spotify's playlists also open into a
-    // track list, from their chevron or Right Arrow. Songs and albums only play.
+    // Return plays any row; only playlists, Liked Songs and Spotify's playlists also open into a track list, from
+    // a click on the row or Right Arrow. Songs and albums only play.
     @Test func onlyPlaylistRowsOpenIntoTracks() {
         let results = SearchResults(tracks: [MockFixtures.tracks[0]], albums: [MockFixtures.albums[0]], playlists: [library[6]])
         let content = LibraryContent(pinned: [], recents: [], liked: liked, library: library, query: "drive", results: results)

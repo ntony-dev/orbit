@@ -2,9 +2,10 @@ import OrbitCore
 import OrbitEngine
 import SwiftUI
 
-// One playlist in the library. Switching playlists is what Orbit is for, so the whole row plays it on one click;
-// the chevron at its end, always visible, opens its tracks. Pending, failed, confirmed and current states are all
-// visible on the row, and the playing row keeps its equalizer beside the chevron.
+// One playlist in the library, with Spotify's two targets: the cover plays it, and the rest of the row opens its
+// tracks. Under the pointer the cover dims and shows the play glyph, so the split is visible before a click.
+// Pending, failed, confirmed and current states are all visible on the row, and the playing row keeps its
+// equalizer beside the chevron.
 struct PlaylistRow: View {
     let playlist: Playlist
     var isRecent = false
@@ -31,9 +32,15 @@ struct PlaylistRow: View {
 
     var body: some View {
         let status = status
-        Button(action: switchPlayback) {
+        let showsHover = isHovered || UIDebugOptions.current.hoveredPlaylistID == playlist.id
+        Button(action: showTracks) {
             HStack(spacing: OrbitTokens.Spacing.l) {
-                PlaylistArtwork(playlist: playlist, size: OrbitTokens.Size.rowArtwork)
+                CoverPlayButton(
+                    playlist: playlist,
+                    pauses: status.isCurrent && status.isPlaying,
+                    isRevealed: showsHover,
+                    action: { coverAction(status) }
+                )
                 VStack(alignment: .leading, spacing: 1) {
                     Text(playlist.name)
                         .font(OrbitTokens.Typography.rowTitle)
@@ -44,7 +51,10 @@ struct PlaylistRow: View {
                 HStack(spacing: OrbitTokens.Spacing.xxs) {
                     indicator(status)
                         .frame(minWidth: OrbitTokens.Size.playingIndicator)
-                    ShowTracksButton(playlist: playlist, action: showTracks)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: OrbitTokens.Icon.small, weight: .semibold))
+                        .foregroundStyle(showsHover ? .secondary : .tertiary)
+                        .frame(width: OrbitTokens.Size.playingIndicator)
                 }
             }
             .padding(.leading, OrbitTokens.Spacing.m)
@@ -57,11 +67,11 @@ struct PlaylistRow: View {
         .contextMenu { menu }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel(status))
-        .accessibilityHint("Plays this playlist")
+        .accessibilityHint("Shows this playlist's tracks")
         .accessibilityAddTraits(.isButton)
         .accessibilityAddTraits(status.isCurrent ? .isSelected : [])
         .accessibilityActions {
-            Button("Show Tracks", action: showTracks)
+            Button("Play", action: switchPlayback)
             Button(library.isPinned(playlist) ? "Unpin" : "Pin", action: togglePin)
             if isRecent {
                 Button("Remove from Recents") { library.removeRecent(playlist) }
@@ -95,7 +105,7 @@ struct PlaylistRow: View {
         .contentTransition(.opacity)
     }
 
-    // What the row says about playback, beside the chevron; hovering previews the click with a play glyph.
+    // What the row says about playback, beside the chevron.
     @ViewBuilder
     private func indicator(_ status: PlaylistRowStatus) -> some View {
         if status.isPending {
@@ -106,7 +116,7 @@ struct PlaylistRow: View {
             Image(systemName: "exclamationmark.circle.fill")
                 .font(.system(size: OrbitTokens.Icon.regular))
                 .foregroundStyle(OrbitPalette.warning)
-                .help("Click to try again")
+                .help("Click the cover to try again")
                 .transition(.opacity)
         } else if status.isConfirmed {
             Image(systemName: "checkmark")
@@ -115,11 +125,6 @@ struct PlaylistRow: View {
                 .transition(theme.reducesMotion ? .opacity : .scale.combined(with: .opacity))
         } else if status.isCurrent {
             PlayingIndicator(isPlaying: status.isPlaying)
-        } else if isHovered {
-            Image(systemName: "play.fill")
-                .font(.system(size: OrbitTokens.Icon.small))
-                .foregroundStyle(.secondary)
-                .transition(.opacity)
         } else if library.isPinned(playlist) && !LikedSongs.contains(playlist) {
             Image(systemName: "pin.fill")
                 .font(.system(size: OrbitTokens.Icon.small - 2))
@@ -163,6 +168,15 @@ struct PlaylistRow: View {
         }
     }
 
+    // The playlist already in the player is paused or resumed where it is; starting it again would restart it.
+    private func coverAction(_ status: PlaylistRowStatus) {
+        if status.isCurrent, !status.isPending {
+            Task { await playback.togglePlayPause() }
+        } else {
+            switchPlayback()
+        }
+    }
+
     private func switchPlayback() {
         Task { await switcher.play(playlist, with: playback, thenCollapse: panel.collapseAfterAction(preferences)) }
     }
@@ -185,19 +199,52 @@ struct PlaylistRow: View {
     }
 }
 
-// The row's second action: a full-size icon button, so opening a playlist is as easy to hit as playing it, and
-// quiet at rest, so the row still reads as one target that plays.
-private struct ShowTracksButton: View {
+// The cover as the row's play button. The scrim and glyph are white on black whatever the accent, because they sit
+// on arbitrary artwork; the cover deepens under the pointer to show that it, not the row, is what plays.
+private struct CoverPlayButton: View {
     let playlist: Playlist
+    let pauses: Bool
+    let isRevealed: Bool
     let action: () -> Void
+
+    @Environment(\.orbitTheme) private var theme
+    @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: "chevron.right")
+            PlaylistArtwork(playlist: playlist, size: OrbitTokens.Size.rowArtwork)
+                .overlay {
+                    if isRevealed {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: OrbitTokens.Radius.artwork, style: .continuous)
+                                .fill(.black.opacity(isHovered ? 0.58 : 0.42))
+                            Image(systemName: pauses ? "pause.fill" : "play.fill")
+                                .font(.system(size: OrbitTokens.Icon.regular, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .scaleEffect(isHovered && !theme.reducesMotion ? 1.12 : 1)
+                        }
+                        .transition(.opacity)
+                    }
+                }
         }
-        .iconButton(glyph: OrbitTokens.Icon.small, recedesAtRest: true)
-        .help("Show Tracks")
-        .accessibilityLabel("Show tracks of \(playlist.name)")
+        .buttonStyle(CoverButtonStyle())
+        .focusEffectDisabled()
+        .onHover { isHovered = $0 }
+        .animation(theme.animation(OrbitTokens.Motion.hover), value: isHovered)
+        .animation(theme.animation(OrbitTokens.Motion.hover), value: isRevealed)
+        .help(pauses ? "Pause" : "Play \(playlist.name)")
+        .accessibilityLabel(pauses ? "Pause" : "Play \(playlist.name)")
+    }
+}
+
+private struct CoverButtonStyle: ButtonStyle {
+    @Environment(\.orbitTheme) private var theme
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .contentShape(.rect)
+            .scaleEffect(configuration.isPressed && !theme.reducesMotion ? 0.94 : 1)
+            .animation(theme.animation(OrbitTokens.Motion.press), value: configuration.isPressed)
     }
 }
 

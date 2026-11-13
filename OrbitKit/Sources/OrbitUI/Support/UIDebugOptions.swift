@@ -12,6 +12,7 @@ import SwiftUI
 //                                  captured with the demo's short ones
 //   --ui-query <text>              the library's search query, so filtering and Spotify results can be captured
 //   --ui-hover                     show the pill's hover controls
+//   --ui-hover-row <playlist-id>   show that library row as it is under the pointer
 //   --ui-scenario <name>           with --demo only, read by the shell, which builds the scenario's stores:
 //                                  signed-out, automation-denied, automation-not-asked,
 //                                  automation-not-asked-playing, spotify-closed, idle, paused, rate-limited,
@@ -43,6 +44,7 @@ struct UIDebugOptions {
     var searchQuery: String?
     var trackTitle: String?
     var forcesPillHover = false
+    var hoveredPlaylistID: String?
     var glassPreset: GlassPreset?
     var backgroundOpacity: Double?
     var accent: AccentChoice?
@@ -78,6 +80,7 @@ struct UIDebugOptions {
         searchQuery = value("--ui-query")
         trackTitle = value("--ui-track-title")
         forcesPillHover = arguments.contains("--ui-hover")
+        hoveredPlaylistID = value("--ui-hover-row")
         glassPreset = value("--ui-glass").flatMap(GlassPreset.init(rawValue:))
         backgroundOpacity = value("--ui-opacity").flatMap(Double.init)
         accent = value("--ui-accent").flatMap { name in
