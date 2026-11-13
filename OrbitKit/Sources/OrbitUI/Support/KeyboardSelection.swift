@@ -74,9 +74,16 @@ private struct KeyboardListNavigation: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .focusable()
-            .focusEffectDisabled()
-            .focused($isFocused)
+            // The focus sits on an invisible sibling of the rows, as on the player: were the list itself focused,
+            // every row and button in it would report focus and draw its ring whenever the panel is key. Key
+            // presses still rise from the sibling to the handler below.
+            .background {
+                Color.clear
+                    .focusable(interactions: .edit)
+                    .focused($isFocused)
+                    .focusEffectDisabled()
+                    .accessibilityHidden(true)
+            }
             .onAppear { if panel.isKeyWindow { isFocused = true } }
             .onChange(of: panel.isKeyWindow) { _, isKey in isFocused = isKey }
             .onChange(of: keys) { _, keys in selection.reconcile(with: keys) }
