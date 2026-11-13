@@ -50,7 +50,7 @@ public final class Preferences {
         panelDisplayID = Self.load(.panelDisplayID, from: defaults) ?? nil
         hidesInFullscreen = Self.load(.hidesInFullscreen, from: defaults) ?? true
         hidesWhenSpotifyQuits = Self.load(.hidesWhenSpotifyQuits, from: defaults) ?? false
-        collapsesAfterAction = Self.load(.collapsesAfterAction, from: defaults) ?? true
+        collapsesAfterAction = Self.load(.collapsesAfterAction, from: defaults) ?? false
         collapsesOnOutsideClick = Self.load(.collapsesOnOutsideClick, from: defaults) ?? false
         syncFrequency = Self.load(.syncFrequency, from: defaults) ?? .standard
         preferredDevice = Self.load(.preferredDevice, from: defaults) ?? nil

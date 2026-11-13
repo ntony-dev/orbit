@@ -16,7 +16,7 @@ struct PreferencesTests {
         #expect(preferences.appearance == .system)
         #expect(preferences.glassPreset == .balanced)
         #expect(!preferences.collapsesOnOutsideClick)
-        #expect(preferences.collapsesAfterAction)
+        #expect(!preferences.collapsesAfterAction)
         #expect(preferences.accent == .neutral)
         #expect(preferences.alwaysOnTop)
         #expect(preferences.clientIDOverride == nil)
