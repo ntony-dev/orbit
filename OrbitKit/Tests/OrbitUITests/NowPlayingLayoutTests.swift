@@ -16,7 +16,7 @@ struct NowPlayingLayoutTests {
     @Test func thePlayerIsExactlyTheStackOfItsRows() {
         let spacing = OrbitTokens.Spacing.self
         let size = OrbitTokens.Size.self
-        let topBar = spacing.l + spacing.xxs + size.stripArtwork + spacing.xs
+        let topBar = spacing.headerTop + size.stripArtwork + spacing.xs
         let track = spacing.s + size.nowPlayingArtwork
         let progress = spacing.m + spacing.xxs + size.sliderHitHeight + size.timecodeRow
         let transport = spacing.xs + size.primaryTransportButton
@@ -24,13 +24,13 @@ struct NowPlayingLayoutTests {
         let slackAboveTabs = spacing.s
         let tabs = spacing.s + size.segmentHeight + spacing.l
         #expect(topBar + track + progress + transport + volume + slackAboveTabs + tabs == size.playerHeight)
-        #expect(size.playerHeight == 319)
+        #expect(size.playerHeight == 314)
     }
 
     @Test func theSurfaceAndCanvasFollowThePlayerHeight() {
         let surface = PanelNavigator().screenSize
-        #expect(surface == CGSize(width: 344, height: 319))
-        #expect(PanelMetrics.canvas(for: surface) == CGSize(width: 384, height: 359))
+        #expect(surface == CGSize(width: 344, height: 314))
+        #expect(PanelMetrics.canvas(for: surface) == CGSize(width: 384, height: 354))
     }
 
     @Test func theTimeRowHoldsALineOfTheTimecodeFont() {

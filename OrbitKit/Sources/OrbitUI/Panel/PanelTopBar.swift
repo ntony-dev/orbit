@@ -38,7 +38,7 @@ struct PanelTopBar<Leading: View, Accessory: View>: View {
         }
         .frame(height: OrbitTokens.Size.stripArtwork + OrbitTokens.Spacing.xs)
         .padding(.horizontal, OrbitTokens.Spacing.xl)
-        .padding(.top, OrbitTokens.Spacing.l + OrbitTokens.Spacing.xxs)
+        .padding(.top, OrbitTokens.Spacing.headerTop)
         .contentShape(.rect)
         .panelDraggable()
     }

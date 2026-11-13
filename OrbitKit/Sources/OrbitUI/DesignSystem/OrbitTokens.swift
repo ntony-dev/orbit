@@ -16,6 +16,8 @@ enum OrbitTokens {
         // The volume row's visible gaps: the bar's end to the queue glyph, and the queue glyph to the device slot.
         static let volumeToQueue: CGFloat = 10
         static let queueToDevice: CGFloat = 12
+        // The expanded surface's top edge to the header strip.
+        static let headerTop: CGFloat = 9
     }
 
     enum Radius {
@@ -85,7 +87,7 @@ enum OrbitTokens {
         static let deviceListVisibleRows = 4
         static let queueVisibleRows = 5
         // The player does not fit to content: its controls fill this, and a drawer or notice adds to it.
-        static let playerHeight: CGFloat = 319
+        static let playerHeight: CGFloat = 314
 
         static func pill(_ size: PillSize) -> CGSize {
             switch size {
