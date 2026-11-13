@@ -115,7 +115,7 @@ public struct MockSpotifyAPI: SpotifyAPI {
 
     public func queue() async throws(OrbitError) -> PlaybackQueue {
         try await spotify.webRequest("queue")
-        return await spotify.queue()
+        return await spotify.queueRead()
     }
 
     public func addToQueue(_ uri: SpotifyURI, deviceID: String?) async throws(OrbitError) {

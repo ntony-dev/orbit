@@ -90,8 +90,9 @@ public final class PlaybackCoordinator {
     @ObservationIgnored var contextTracks: ((SpotifyURI) -> Set<SpotifyURI>?)?
     @ObservationIgnored var preferredDeviceID: (() -> String?)?
     @ObservationIgnored var automationDenied: (() -> Void)?
-    // Runs once after a skip to a queued song moved playback, so the queue is read again exactly once.
-    @ObservationIgnored var skippedAhead: (@MainActor () async -> Void)?
+    // Runs once after a skip to a queued song moved playback, with the song now playing, so the queue is read
+    // again once rather than for every song passed over.
+    @ObservationIgnored var skippedAhead: (@MainActor (SpotifyURI?) async -> Void)?
 
     @ObservationIgnored private let localPlayer: any LocalPlayer
     @ObservationIgnored private let api: any SpotifyAPI
@@ -305,7 +306,7 @@ public final class PlaybackCoordinator {
             // AppleScript cannot say which context or device; one Web API read for the song landed on can.
             if sent.route == .local { scheduleSync(after: .seconds(1)) }
         }
-        await skippedAhead?()
+        await skippedAhead?(snapshot.track?.uri)
         return failure.map { .failed($0) } ?? .landed
     }
 

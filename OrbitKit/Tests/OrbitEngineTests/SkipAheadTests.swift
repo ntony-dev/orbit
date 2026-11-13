@@ -210,6 +210,22 @@ struct SkipAheadTests {
         #expect(seen.map { $0?.uri } == [original?.uri, queue[4].uri])
     }
 
+    @Test func aQueueThatTrailsTheAppIsReadOnceMoreAfterAPause() async throws {
+        let stores = rig.stores()
+        stores.start()
+        #expect(await eventually { stores.account.authState.isSignedIn && stores.playback.snapshot.context != nil })
+        await stores.library.loadQueue()
+        let queue = try #require(stores.library.queue.value?.upcoming)
+        await rig.spotify.lagQueue(reads: 1)
+        let reloads = await rig.webRequests("queue")
+        let playback = stores.playback
+
+        #expect(await waitingOut { await playback.skipAhead(by: 2, to: queue[1].uri) } == .landed)
+
+        #expect(await rig.webRequests("queue") == reloads + 2)
+        #expect(stores.library.queue.value?.current?.uri == queue[1].uri)
+    }
+
     @Test func aStaleQueueLandsElsewhereSaysSoAndReloads() async throws {
         let stores = rig.stores()
         stores.start()

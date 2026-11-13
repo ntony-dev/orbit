@@ -29,6 +29,8 @@ public final class LibraryStore {
         public var playlistsLifetime: TimeInterval = 300
         public var itemsLifetime: TimeInterval = 300
         public var queueLifetime: TimeInterval = 10
+        // How far the Web API's queue can trail the app on this Mac after a skip.
+        public var queueSettleDelay: Duration = .milliseconds(700)
         public var devicesLifetime: TimeInterval = 15
         public var searchLifetime: TimeInterval = 120
         public var searchDebounce: Duration = .milliseconds(300)
@@ -284,6 +286,15 @@ public final class LibraryStore {
                 return false
             }
         }
+    }
+
+    // After the coordinator moved playback. A queue that still starts from another song is the Web API trailing
+    // what the app already plays, so it is read once more after a pause rather than shown.
+    func reloadQueue(playing current: SpotifyURI?) async {
+        await loadQueue(force: true)
+        guard let current, let loaded = queue.value, loaded.current?.uri != current else { return }
+        do { try await clock.sleep(timing.queueSettleDelay) } catch { return }
+        await loadQueue(force: true)
     }
 
     @discardableResult

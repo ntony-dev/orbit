@@ -53,6 +53,8 @@ public actor MockSpotify {
     private var lagArmed = 0
     private var laggedReads = 0
     private var laggedSnapshot: PlaybackSnapshot?
+    private var laggedQueue: PlaybackQueue?
+    private var laggedQueueReads = 0
     private var localFailure: OrbitError?
     private var localCommandsBeforeFailure = 0
     private var ignoresPlayCommands = false
@@ -571,6 +573,19 @@ public actor MockSpotify {
         if let volumePercent = device.volumePercent { volume = volumePercent }
         if play { setPlaying(true) }
         emitChange()
+    }
+
+    // The next `reads` queue reads describe the queue as it is now, however playback moves meanwhile, as the Web
+    // API can trail the app on this Mac for a moment.
+    public func lagQueue(reads: Int) {
+        laggedQueue = queue()
+        laggedQueueReads = reads
+    }
+
+    func queueRead() -> PlaybackQueue {
+        guard laggedQueueReads > 0, let laggedQueue else { return queue() }
+        laggedQueueReads -= 1
+        return laggedQueue
     }
 
     func queue() -> PlaybackQueue {

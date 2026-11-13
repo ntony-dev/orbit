@@ -43,9 +43,9 @@ public final class OrbitStores {
         }
         playback.automationDenied = { Task { await account.refreshLocalStatus() } }
         // Forced, because the queue cached a moment ago describes the song before the skips.
-        playback.skippedAhead = {
+        playback.skippedAhead = { playing in
             guard account.authState.isSignedIn else { return }
-            await library.loadQueue(force: true)
+            await library.reloadQueue(playing: playing)
         }
     }
 
