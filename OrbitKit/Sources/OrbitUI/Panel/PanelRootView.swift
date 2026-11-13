@@ -59,6 +59,7 @@ public struct PanelRootView: View {
         .background {
             if let backdrop = debug.backdrop { DebugBackdrop(style: backdrop) }
         }
+        .environment(\.isPanelResizing, !panel.isCanvasFitted)
         .modifier(PanelEnvironment(
             stores: stores, panel: panel, host: host, preferences: preferences,
             navigator: navigator, switcher: switcher, theme: theme

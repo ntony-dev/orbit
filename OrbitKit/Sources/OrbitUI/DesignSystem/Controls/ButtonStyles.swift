@@ -27,7 +27,9 @@ private struct IconButtonBody: View {
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.isFocused) private var isFocused
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.isPanelResizing) private var isPanelResizing
     @State private var isHovered = false
+    @State private var isPointerInside = false
 
     var body: some View {
         configuration.label
@@ -54,7 +56,16 @@ private struct IconButtonBody: View {
             .contentShape(Circle())
             .scaleEffect(configuration.isPressed && !theme.reducesMotion ? 0.9 : 1)
             .opacity(isEnabled ? 1 : OrbitPalette.disabledOpacity(colorScheme, contrast: theme.contrast))
-            .onHover { hovering in isHovered = hovering && isEnabled }
+            // While the panel's window is changing size (a drawer opening), the pointer is reported over buttons it
+            // is not on for a frame, which flashed their hover fill. An entry during a resize waits until the panel
+            // has settled and shows only if the pointer is still there; leaving always applies at once.
+            .onHover { hovering in
+                isPointerInside = hovering
+                if !hovering || !isPanelResizing { isHovered = hovering && isEnabled }
+            }
+            .onChange(of: isPanelResizing) { _, isResizing in
+                if !isResizing { isHovered = isPointerInside && isEnabled }
+            }
             .animation(theme.animation(OrbitTokens.Motion.hover), value: isHovered)
             .animation(theme.animation(OrbitTokens.Motion.press), value: configuration.isPressed)
             .animation(theme.animation(OrbitTokens.Motion.toggle), value: style.isOn)
@@ -173,6 +184,8 @@ private struct CapsuleButtonBody: View {
 extension EnvironmentValues {
     // Lets row content reveal secondary actions (play glyph, pin) only while the pointer is over the row.
     @Entry var isRowHovered = false
+    // True from the moment the panel's surface starts changing size until its window has settled around it.
+    @Entry var isPanelResizing = false
 }
 
 extension View {
