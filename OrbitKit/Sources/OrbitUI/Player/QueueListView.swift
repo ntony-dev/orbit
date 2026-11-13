@@ -21,11 +21,12 @@ struct QueueListView: View {
             .fixedSize(horizontal: false, vertical: true)
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { navigator.recordDrawerHeight($0, for: .queue) }
             // Reloaded on each track change, which is when the queue actually moves; there is no polling. The
-            // store keeps the previous queue on screen while it reloads. A skip to a queued song changes the
+            // store keeps the previous queue on screen while it reloads, and reuses its cache only while that
+            // still starts from the song playing. A skip to a queued song changes the
             // track once, at the end, and the coordinator's own reload then answers this one too.
             .task(id: playback.snapshot.track?.id) {
                 guard account.authState.isSignedIn else { return }
-                await library.loadQueue()
+                await library.loadQueue(following: playback.snapshot.track?.uri)
             }
             .task { await runDebugSkip() }
             .accessibilityElement(children: .contain)

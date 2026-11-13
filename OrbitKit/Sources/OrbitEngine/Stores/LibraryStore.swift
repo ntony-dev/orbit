@@ -288,11 +288,17 @@ public final class LibraryStore {
         }
     }
 
-    // After the coordinator moved playback. A queue that still starts from another song is the Web API trailing
-    // what the app already plays, so it is read once more after a pause rather than shown.
-    func reloadQueue(playing current: SpotifyURI?) async {
+    // The queue for whoever follows playback: the cached one is reused only while it still starts from the song
+    // playing, so a skip inside the cache's lifetime never leaves the previous queue on screen. A fresh read that
+    // still starts from another song is the Web API trailing what the app already plays, so it is read once more
+    // after a pause rather than shown.
+    public func loadQueue(following current: SpotifyURI?) async {
+        guard let current, let cached = queue.value, cached.current?.uri != current else {
+            await loadQueue()
+            return
+        }
         await loadQueue(force: true)
-        guard let current, let loaded = queue.value, loaded.current?.uri != current else { return }
+        guard let loaded = queue.value, loaded.current?.uri != current else { return }
         do { try await clock.sleep(timing.queueSettleDelay) } catch { return }
         await loadQueue(force: true)
     }

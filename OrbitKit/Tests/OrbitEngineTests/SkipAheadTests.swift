@@ -175,14 +175,35 @@ struct SkipAheadTests {
         #expect(await rig.localCommands("next track") == PlaybackCoordinator.Timing().skipAheadLimit + 1)
     }
 
-    // What the queue drawer does: it reloads, unforced, whenever the current song changes.
+    // What the queue drawer does: whenever the current song changes it asks for the queue that follows it.
     private func emulateQueueDrawer(_ stores: OrbitStores, seen: @escaping @MainActor (Track?) -> Void) -> Task<Void, Never> {
         Task {
             for await track in Observations({ stores.playback.snapshot.track }) {
                 seen(track)
-                await stores.library.loadQueue()
+                await stores.library.loadQueue(following: track?.uri)
             }
         }
+    }
+
+    @Test func anOrdinarySkipInsideTheCachesLifetimeStillRefreshesTheQueue() async throws {
+        let stores = rig.stores()
+        stores.start()
+        #expect(await eventually { stores.account.authState.isSignedIn && stores.playback.snapshot.context != nil })
+        await stores.library.loadQueue()
+        let queue = try #require(stores.library.queue.value?.upcoming)
+        let drawer = emulateQueueDrawer(stores) { _ in }
+        defer { drawer.cancel() }
+        await settle()
+        let reloads = await rig.webRequests("queue")
+
+        await stores.playback.next()
+        #expect(await eventually { stores.library.queue.value?.current?.uri == queue[0].uri })
+
+        #expect(stores.library.queue.value?.upcoming.first?.uri == queue[1].uri)
+        #expect(await rig.webRequests("queue") == reloads + 1)
+        // The same song again is answered from the cache.
+        await stores.library.loadQueue(following: queue[0].uri)
+        #expect(await rig.webRequests("queue") == reloads + 1)
     }
 
     @Test func theQueueIsReloadedOnceAfterAFiveSongSkip() async throws {
