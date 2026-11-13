@@ -12,7 +12,7 @@ import SwiftUI
 //                                  captured with the demo's short ones
 //   --ui-query <text>              the library's search query, so filtering and Spotify results can be captured
 //   --ui-hover                     show the pill's hover controls
-//   --ui-hover-row <playlist-id>   show that library row as it is under the pointer
+//   --ui-hover-row <id>            show that playlist's or album's library row as it is under the pointer
 //   --ui-hover-track <track-id>    show every row of that track (in the queue, search results or a track list)
 //                                  as it is under the pointer; al-paper-kites-1 heads the demo queue
 //   --ui-skip-to <index>           with --demo only: half a second after the queue drawer lists its songs, skip

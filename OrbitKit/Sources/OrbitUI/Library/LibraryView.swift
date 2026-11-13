@@ -232,9 +232,15 @@ private struct AlbumRow: View {
         let isPending = playback.pendingIntents.contains(.playContext(album.uri))
         let failure = switcher.failure(for: album.uri)
         let artists = album.artists.joined(separator: ", ")
-        Button(action: play) {
+        Button { activate(isCurrent: isCurrent, isPending: isPending) } label: {
             HStack(spacing: OrbitTokens.Spacing.l) {
                 ArtworkView(url: album.artworkURL, size: OrbitTokens.Size.rowArtwork, placeholderSymbol: "square.stack")
+                    .overlay {
+                        HoveredCoverGlyph(
+                            pauses: isCurrent && playback.snapshot.isPlaying,
+                            isForced: UIDebugOptions.current.hoveredPlaylistID == album.id
+                        )
+                    }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(album.name)
                         .font(OrbitTokens.Typography.rowTitle)
@@ -276,7 +282,42 @@ private struct AlbumRow: View {
         return parts.joined(separator: ", ")
     }
 
+    // The album already in the player is paused or resumed where it is; starting it again would restart it.
+    private func activate(isCurrent: Bool, isPending: Bool) {
+        if isCurrent, !isPending {
+            Task { await playback.togglePlayPause() }
+        } else {
+            play()
+        }
+    }
+
     private func play() {
         Task { await switcher.play(context: album.uri, with: playback, thenCollapse: panel.collapseAfterAction(preferences)) }
+    }
+}
+
+// What a click on the row does, shown over its cover while the pointer is on the row: the same dimmed cover and
+// white glyph a playlist's cover and a song's cover show. White on black whatever the accent, since it sits on
+// arbitrary artwork.
+private struct HoveredCoverGlyph: View {
+    let pauses: Bool
+    var isForced = false
+
+    @Environment(\.isRowHovered) private var isRowHovered
+    @Environment(\.orbitTheme) private var theme
+
+    var body: some View {
+        let isShown = isRowHovered || isForced
+        ZStack {
+            if isShown {
+                RoundedRectangle(cornerRadius: OrbitTokens.Radius.artwork, style: .continuous)
+                    .fill(.black.opacity(0.42))
+                Image(systemName: pauses ? "pause.fill" : "play.fill")
+                    .font(.system(size: OrbitTokens.Icon.regular, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+        }
+        .transition(.opacity)
+        .animation(theme.animation(OrbitTokens.Motion.hover), value: isShown)
     }
 }
