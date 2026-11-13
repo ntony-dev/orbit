@@ -40,6 +40,8 @@ public actor MockSpotify {
     private var playlists = MockFixtures.playlists
     private var longPlaylists: [String: [Track]] = [:]
     private var commandsHeld = false
+    // Commands that still pass before holding starts.
+    private var commandsLetThrough = 0
     // Names of the Web API reads that wait for `releaseHeld()`; nil holds none, an empty set holds all.
     private var heldReads: Set<String>?
     // Requests of the held names that still pass before holding starts.
@@ -52,6 +54,7 @@ public actor MockSpotify {
     private var laggedReads = 0
     private var laggedSnapshot: PlaybackSnapshot?
     private var localFailure: OrbitError?
+    private var localCommandsBeforeFailure = 0
     private var ignoresPlayCommands = false
     private(set) var rejectsLikedSongsContext = false
     private var pageSizeLimit: Int?
@@ -131,8 +134,9 @@ public actor MockSpotify {
     }
 
     // Commands wait here until `releaseHeld()`, so tests can interleave notifications with commands in flight.
-    public func holdCommands() {
+    public func holdCommands(afterLetting count: Int = 0) {
         commandsHeld = true
+        commandsLetThrough = count
     }
 
     // Web API reads wait too, until `releaseHeld()`, so tests can act while a load is in flight. Pass names
@@ -144,6 +148,7 @@ public actor MockSpotify {
 
     public func releaseHeld() {
         commandsHeld = false
+        commandsLetThrough = 0
         heldReads = nil
         let held = heldRequests
         heldRequests.removeAll()
@@ -163,8 +168,9 @@ public actor MockSpotify {
         requestsBeforeFailure[name] = count
     }
 
-    public func failLocalCommands(with error: OrbitError?) {
+    public func failLocalCommands(with error: OrbitError?, afterLetting count: Int = 0) {
         localFailure = error
+        localCommandsBeforeFailure = count
     }
 
     // Play commands are accepted but nothing starts, as when Spotify silently refuses a context.
@@ -349,12 +355,18 @@ public actor MockSpotify {
         localCommands.append(name)
         await awaitCommandTurn()
         try requireRunning()
-        if let localFailure { throw localFailure }
+        guard let localFailure else { return }
+        guard localCommandsBeforeFailure > 0 else { throw localFailure }
+        localCommandsBeforeFailure -= 1
     }
 
     private func awaitCommandTurn() async {
         await simulateLatency()
         guard commandsHeld else { return }
+        guard commandsLetThrough == 0 else {
+            commandsLetThrough -= 1
+            return
+        }
         await withCheckedContinuation { heldRequests.append($0) }
     }
 

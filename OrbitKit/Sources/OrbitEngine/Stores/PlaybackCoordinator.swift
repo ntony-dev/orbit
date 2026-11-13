@@ -9,6 +9,16 @@ public enum PlaybackIntent: Hashable, Sendable {
     case transfer(deviceID: String)
 }
 
+// How a skip to a queued song ended, judged by the operation itself rather than the shared `lastError`.
+public enum SkipAheadResult: Hashable, Sendable {
+    case landed
+    // Another skip to a queued song was still running, so this one sent nothing.
+    case ignored
+    // `.playbackNotConfirmed` when every skip went through but Spotify was not seen on the song asked for, as
+    // when the queue changed after it was shown.
+    case failed(OrbitError)
+}
+
 public enum PlaybackRoute: String, Hashable, Sendable {
     // AppleScript to the Spotify app on this Mac.
     case local
@@ -44,7 +54,11 @@ public final class PlaybackCoordinator {
         public var overlayGrace: Duration = .seconds(3)
         public var webSettleDelay: Duration = .milliseconds(700)
         public var trackChangeTimeout: Duration = .milliseconds(1500)
+        // How long Spotify's own notification of a track change gets before the state is read instead.
+        public var notificationGrace: Duration = .milliseconds(300)
         public var defaultBackoff: TimeInterval = 30
+        // Spotify's queue endpoint lists about twenty songs; nothing on screen can ask for more.
+        public var skipAheadLimit = 30
 
         public init() {}
     }
@@ -76,6 +90,8 @@ public final class PlaybackCoordinator {
     @ObservationIgnored var contextTracks: ((SpotifyURI) -> Set<SpotifyURI>?)?
     @ObservationIgnored var preferredDeviceID: (() -> String?)?
     @ObservationIgnored var automationDenied: (() -> Void)?
+    // Runs once after a skip to a queued song moved playback, so the queue is read again exactly once.
+    @ObservationIgnored var skippedAhead: (@MainActor () async -> Void)?
 
     @ObservationIgnored private let localPlayer: any LocalPlayer
     @ObservationIgnored private let api: any SpotifyAPI
@@ -110,6 +126,7 @@ public final class PlaybackCoordinator {
     @ObservationIgnored private var commandEpoch = 0
     // Set while a skip is in flight, so a seek issued meanwhile lands on the new track rather than the old one.
     @ObservationIgnored private var skipInFlight: (from: SpotifyURI?, id: Int)?
+    @ObservationIgnored private var skipAheadID: Int?
     @ObservationIgnored private var switchGeneration = 0
     @ObservationIgnored private var switchWaiterID: Int?
     @ObservationIgnored private var webPauseReason: OrbitError?
@@ -231,6 +248,65 @@ public final class PlaybackCoordinator {
 
     public func previous() async {
         await changeTrack(.previous, local: { try await $0.previousTrack() }, web: { try await $0.skipToPrevious(deviceID: $1) })
+    }
+
+    // Spotify cannot jump to a queued song, so reaching one is "next" once per song up to it, sent as one
+    // operation: every skip takes the route the first one took, with no read-back, Web API read or saved-state
+    // check between them, and the player keeps showing the song it was on, so the songs passed over never reach
+    // the screen or load their artwork. One reconciliation and one queue reload follow the last skip. A second
+    // call while one runs is ignored, because its count was taken from a queue that is about to change.
+    @discardableResult
+    public func skipAhead(by count: Int, to target: SpotifyURI) async -> SkipAheadResult {
+        guard skipAheadID == nil else { return .ignored }
+        let id = nextCommandID()
+        skipAheadID = id
+        let intent = PlaybackIntent.playTrack(target)
+        addPending(intent)
+        defer {
+            skipAheadID = nil
+            removePending(intent)
+        }
+        let held = snapshot
+        overlays[.track] = Overlay(id: id, apply: { snapshot in
+            snapshot.track = held.track
+            snapshot.context = held.context
+            snapshot.isPlaying = held.isPlaying
+            snapshot.position = held.position
+            snapshot.sampledAt = held.sampledAt
+        }, isSatisfied: { _ in false })
+        recompute()
+        let skips = min(max(1, count), timing.skipAheadLimit)
+        let local: LocalCommand = { try await $0.nextTrack() }
+        let web: WebCommand = { try await $0.skipToNext(deviceID: $1) }
+        let sent = await enqueue { [self] () async -> (route: PlaybackRoute?, failure: OrbitError?) in
+            var route: PlaybackRoute?
+            for _ in 0..<skips {
+                let result = await deliver(local: route == .webAPI ? nil : local, web: route == .local ? nil : web)
+                commandEpoch += 1
+                switch result {
+                case .success(let used): route = used
+                case .failure(let error): return (route, error)
+                }
+            }
+            return (route, nil)
+        }
+        var landed = false
+        if let route = sent.route {
+            landed = await reconcileSkips(over: route, reaching: sent.failure == nil ? target : nil)
+        }
+        if overlays[.track]?.id == id { overlays[.track] = nil }
+        let failure = sent.failure ?? (landed ? nil : OrbitError.playbackNotConfirmed)
+        lastError = failure
+        recompute()
+        // Nothing moved, so the queue on screen is still true.
+        guard sent.route != nil else { return .failed(failure ?? .playbackNotConfirmed) }
+        if interfaceVisibility != .hidden {
+            Task { await refreshSavedState() }
+            // AppleScript cannot say which context or device; one Web API read for the song landed on can.
+            if sent.route == .local { scheduleSync(after: .seconds(1)) }
+        }
+        await skippedAhead?()
+        return failure.map { .failed($0) } ?? .landed
     }
 
     public func seek(to position: TimeInterval) async {
@@ -414,6 +490,8 @@ public final class PlaybackCoordinator {
 extension PlaybackCoordinator {
     private enum Field: Hashable {
         case playing, position, shuffle, repeatMode, volume, device
+        // Holds the song on screen while a skip to a queued song passes over the ones before it.
+        case track
     }
 
     private struct Overlay {
@@ -564,7 +642,8 @@ extension PlaybackCoordinator {
             position: state.position,
             isLocal: true
         ))
-        guard interfaceVisibility != .hidden else { return }
+        // A skip to a queued song reconciles once at the end, not for each song it passes over.
+        guard interfaceVisibility != .hidden, skipAheadID == nil else { return }
         if trackChanged {
             // AppleScript cannot say which context is playing or which device; one Web API read per track can.
             scheduleSync(after: .seconds(1))
@@ -1186,12 +1265,37 @@ extension PlaybackCoordinator {
     }
 
     // The Web API reflects a new context a moment after the command; a few spaced reads catch it without polling hard.
-    private func pollUntilConfirmed() async {
-        for delay in [0.4, 0.8, 1.5, 2.5] {
+    private func pollUntilConfirmed(delays: [TimeInterval] = [0.4, 0.8, 1.5, 2.5]) async {
+        for delay in delays {
             do { try await clock.sleep(.seconds(delay)) } catch { return }
             if Task.isCancelled { return }
             await refreshRemote()
         }
+    }
+
+    // Returns whether playback was seen on `target`; without one it only reads back where playback stopped.
+    // Spotify posts its notifications in order, so the one naming the target arrives after those for the songs
+    // passed over: waiting for it, rather than reading at once, means none of them can land afterwards and show a
+    // song already skipped. The state read is only the fallback for a notification that does not come. On the Web
+    // API, a few spaced reads stop at the first one showing the target.
+    private func reconcileSkips(over route: PlaybackRoute, reaching target: SpotifyURI?) async -> Bool {
+        guard let target else {
+            if route == .local { await readLocalState() } else { scheduleSync(after: timing.webSettleDelay) }
+            return false
+        }
+        if route == .local, local?.state.track?.uri == target { return true }
+        // Either starts once the waiter below is registered, since this actor only yields when it suspends.
+        let reads = route == .local
+            ? Task { [weak self, clock, timing] in
+                do { try await clock.sleep(timing.notificationGrace) } catch { return }
+                await self?.readLocalState()
+            }
+            : Task { [weak self, timing] in
+                await self?.pollUntilConfirmed(delays: [timing.webSettleDelay.timeInterval, 1, 1.5, 2.5])
+            }
+        defer { reads.cancel() }
+        let timeout = route == .local ? timing.trackChangeTimeout : timing.confirmationTimeout
+        return await waitFor(timeout: timeout) { $0.track == target }
     }
 
     private func adopt(context uri: SpotifyURI, name: String?) {
