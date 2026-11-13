@@ -418,11 +418,16 @@ public final class PlaybackCoordinator {
 
     @discardableResult
     public func play(track: Track, in context: SpotifyURI? = nil) async -> Bool {
-        let target: PlayTarget = context.map { .context($0, offset: .track(track.uri)) } ?? .tracks([track.uri])
+        // The Web API answers 204 to a bare list of track URIs and then plays nothing, so a song chosen on its own
+        // (a search result, a queued song) is started inside its album, at that song. With no album to name, the
+        // app on this Mac is asked first: its `play track` does start a lone song.
+        let container = context ?? track.albumURI
+        let target: PlayTarget = container.map { .context($0, offset: .track(track.uri)) } ?? .tracks([track.uri])
         return await start(
             .playTrack(track.uri),
-            local: { try await $0.play(track: track.uri, inContext: context) },
+            local: { try await $0.play(track: track.uri, inContext: container) },
             web: { try await $0.play(target, deviceID: $1) },
+            preferring: container == nil ? .local : .webAPI,
             confirmed: { observation, _ in observation.track == track.uri }
         ) { [weak self] in
             if let context { self?.adopt(context: context, name: nil) }
@@ -1206,6 +1211,7 @@ extension PlaybackCoordinator {
         _ intent: PlaybackIntent,
         local: @escaping LocalCommand,
         web: @escaping WebCommand,
+        preferring preference: RoutePreference = .webAPI,
         confirmed: @escaping (ObservedState, SpotifyURI?) -> Bool,
         onSuccess: @escaping () -> Void
     ) async -> Bool {
@@ -1219,7 +1225,7 @@ extension PlaybackCoordinator {
             guard generation == switchGeneration else { return nil }
             let before = snapshot.track?.uri
             let wasShowing = localCommandsUsable ? await localPlayer.isShowingWindow() : true
-            let result = await deliver(local: local, web: web, preferring: .webAPI)
+            let result = await deliver(local: local, web: web, preferring: preference)
             commandEpoch += 1
             if result == .success(.local), !wasShowing { tuckSpotifyAway() }
             return SentCommand(trackBefore: before, result: result)

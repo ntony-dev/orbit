@@ -73,12 +73,26 @@ struct PlaybackRoutingTests {
         let inPlaylist = try #require(MockFixtures.playlistTracks[target.id]?[2])
         let target = target
         #expect(await waitingOut { await coordinator.play(track: inPlaylist, in: target.uri) })
+        // A song on its own goes out inside its album: the Web API accepts a bare list of tracks and plays nothing.
         let single = try #require(MockFixtures.track(id: "al-linen-1"))
         #expect(await waitingOut { await coordinator.play(track: single) })
         #expect(coordinator.snapshot.track?.uri == single.uri)
+        #expect(coordinator.snapshot.context?.uri == single.albumURI)
         #expect(await rig.webRequests("play") == 2)
         #expect(await rig.localCommands("play track") == 0)
         #expect(await rig.spotify.windowRaises == 0)
+    }
+
+    @Test func aSongWithNoAlbumToNameIsStartedByTheAppOnThisMac() async throws {
+        await rig.spotify.simulateIdleLocalDevice()
+        await begin()
+        let coordinator = coordinator
+        var orphan = try #require(MockFixtures.track(id: "al-linen-2"))
+        orphan.albumURI = nil
+        #expect(await waitingOut { await coordinator.play(track: orphan) })
+        #expect(coordinator.snapshot.track?.uri == orphan.uri)
+        #expect(await rig.webRequests("play") == 0)
+        #expect(await rig.localCommands("play track") == 1)
     }
 
     @Test func aDeviceIDSpotifyNoLongerKnowsIsLookedUpAgain() async {

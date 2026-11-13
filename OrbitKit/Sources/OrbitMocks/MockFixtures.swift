@@ -51,6 +51,7 @@ public enum MockFixtures {
                 name: seed.0,
                 artists: [album.artist],
                 album: album.name,
+                albumURI: SpotifyURI(.album, id: album.id),
                 artworkURL: MockArtwork.url(for: album.id),
                 duration: TimeInterval(seed.1),
                 isExplicit: album.id == "al-iron-tempo" && index == 1

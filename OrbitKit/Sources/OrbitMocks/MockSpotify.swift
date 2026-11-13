@@ -639,6 +639,15 @@ public actor MockSpotify {
         isPlaying = true
     }
 
+    func stopWithNothingLoaded() {
+        nowPlaying = nil
+        context = nil
+        contextTracks = []
+        contextIndex = 0
+        isPlaying = false
+        emitChange()
+    }
+
     private func restartCurrent() {
         positionAtSample = 0
         sampledAt = now()

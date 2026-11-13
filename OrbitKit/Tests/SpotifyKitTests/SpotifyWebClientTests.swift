@@ -136,6 +136,7 @@ struct WebClientDecodingTests {
         #expect(track.name == "Night Drive")
         #expect(track.artists == ["Nova", "Echo"])
         #expect(track.album == "Blue Hours")
+        #expect(track.albumURI == SpotifyURI(.album, id: "alb1"))
         #expect(track.artworkURL == URL(string: "https://i.scdn.co/image/alb1-300"))
         #expect(track.duration == 215)
         #expect(track.isExplicit)

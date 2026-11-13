@@ -30,6 +30,9 @@ extension PlayableDTO {
             name: name,
             artists: isEpisode ? [showName].compactMap { $0 } : artists?.names ?? [],
             album: (isEpisode ? showName : album?.name) ?? "",
+            albumURI: isEpisode ? nil : album.flatMap { album in
+                album.uri.map(SpotifyURI.init(rawValue:)) ?? album.id.map { SpotifyURI(.album, id: $0) }
+            },
             artworkURL: isEpisode
                 ? (images?.preferredImageURL() ?? show?.images?.preferredImageURL())
                 : album?.images?.preferredImageURL(),

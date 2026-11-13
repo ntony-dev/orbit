@@ -6,6 +6,8 @@ public struct Track: Identifiable, Hashable, Codable, Sendable {
     public var name: String
     public var artists: [String]
     public var album: String
+    // The album the track belongs to, when Spotify named it: a song chosen on its own is started inside it.
+    public var albumURI: SpotifyURI?
     public var artworkURL: URL?
     public var duration: TimeInterval
     public var isExplicit: Bool
@@ -18,6 +20,7 @@ public struct Track: Identifiable, Hashable, Codable, Sendable {
         name: String,
         artists: [String],
         album: String,
+        albumURI: SpotifyURI? = nil,
         artworkURL: URL? = nil,
         duration: TimeInterval,
         isExplicit: Bool = false,
@@ -28,6 +31,7 @@ public struct Track: Identifiable, Hashable, Codable, Sendable {
         self.name = name
         self.artists = artists
         self.album = album
+        self.albumURI = albumURI
         self.artworkURL = artworkURL
         self.duration = duration
         self.isExplicit = isExplicit

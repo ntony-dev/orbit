@@ -69,6 +69,11 @@ public struct MockSpotifyAPI: SpotifyAPI {
             try await spotify.play(.tracks(uris, offset: trackOffset))
             return
         }
+        // As the real Web API does: a bare list of track URIs is accepted with a 204, and then nothing plays.
+        if case .tracks = target {
+            await spotify.stopWithNothingLoaded()
+            return
+        }
         try await spotify.play(target)
     }
 
