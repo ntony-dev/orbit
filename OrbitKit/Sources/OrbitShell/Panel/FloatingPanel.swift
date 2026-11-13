@@ -24,6 +24,12 @@ final class FloatingPanel: NSPanel {
         animationBehavior = .none
     }
 
+    // macOS draws Liquid Glass in a frosted, inactive state in any window that is not key, which this panel is
+    // while the pill is collapsed and after a click elsewhere, so Clear glass was only clear with keyboard focus.
+    // AppKit asks the window this undocumented question to pick the state; should the hook ever go away, the glass
+    // falls back to the system's behavior and nothing else changes.
+    @objc(_hasActiveAppearance) private func hasActiveGlassAppearance() -> Bool { true }
+
     override var canBecomeKey: Bool { acceptsKey }
     override var canBecomeMain: Bool { false }
 
