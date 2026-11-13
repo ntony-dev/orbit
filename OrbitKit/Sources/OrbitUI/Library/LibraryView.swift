@@ -247,8 +247,8 @@ private struct AlbumRow: View {
                 Spacer(minLength: OrbitTokens.Spacing.s)
                 if isPending {
                     ProgressView().controlSize(.mini)
-                } else if isCurrent {
-                    PlayingIndicator(isPlaying: playback.snapshot.isPlaying)
+                } else if isCurrent, playback.snapshot.isPlaying {
+                    PlayingIndicator(isPlaying: true)
                 }
             }
             .padding(.horizontal, OrbitTokens.Spacing.m)

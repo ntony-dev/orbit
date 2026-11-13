@@ -123,8 +123,10 @@ struct PlaylistRow: View {
                 .font(.system(size: OrbitTokens.Icon.regular, weight: .bold))
                 .foregroundStyle(theme.accent)
                 .transition(theme.reducesMotion ? .opacity : .scale.combined(with: .opacity))
-        } else if status.isCurrent {
-            PlayingIndicator(isPlaying: status.isPlaying)
+        } else if status.isCurrent, status.isPlaying {
+            // Paused, the subtitle already says so and the cover offers to resume; a pause glyph here read as a
+            // third control.
+            PlayingIndicator(isPlaying: true)
         } else if library.isPinned(playlist) && !LikedSongs.contains(playlist) {
             Image(systemName: "pin.fill")
                 .font(.system(size: OrbitTokens.Icon.small - 2))
