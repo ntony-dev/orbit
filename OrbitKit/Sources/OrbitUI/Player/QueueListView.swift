@@ -3,14 +3,17 @@ import OrbitEngine
 import SwiftUI
 
 // What plays next, revealed in place under the player's volume row by the queue button, like the device list:
-// the player already shows the current song, so only the songs after it are listed. Spotify cannot jump to a
-// queued song, so the rows are not buttons; right-clicking one still opens it in Spotify. The list reports its
-// height so the surface grows by exactly that much.
+// the player already shows the current song, so only the songs after it are listed. Clicking a song skips to it
+// as Spotify's own queue does, dropping the songs before it; Spotify has no command for that, so the coordinator
+// sends "next" once per song up to it. The list reports its height so the surface grows by exactly that much.
 struct QueueListView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(PlaybackCoordinator.self) private var playback
     @Environment(AccountStore.self) private var account
     @Environment(PanelNavigator.self) private var navigator
+    @Environment(PlaylistSwitcher.self) private var switcher
+    @Environment(PanelState.self) private var panel
+    @Environment(Preferences.self) private var preferences
 
     var body: some View {
         content
@@ -18,11 +21,13 @@ struct QueueListView: View {
             .fixedSize(horizontal: false, vertical: true)
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { navigator.recordDrawerHeight($0, for: .queue) }
             // Reloaded on each track change, which is when the queue actually moves; there is no polling. The
-            // store keeps the previous queue on screen while it reloads.
+            // store keeps the previous queue on screen while it reloads. A skip to a queued song changes the
+            // track once, at the end, and the coordinator's own reload then answers this one too.
             .task(id: playback.snapshot.track?.id) {
                 guard account.authState.isSignedIn else { return }
                 await library.loadQueue()
             }
+            .task { await runDebugSkip() }
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Queue")
     }
@@ -68,8 +73,14 @@ struct QueueListView: View {
                 SectionHeader(title: "Up Next", trailing: Formatting.songCount(queue.upcoming.count))
                 let rows = ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(Array(queue.upcoming.enumerated()), id: \.offset) { _, track in
-                            TrackRow(track: track, showsArtwork: true, isInteractive: false)
+                        ForEach(Array(queue.upcoming.enumerated()), id: \.offset) { index, track in
+                            TrackRow(
+                                track: track,
+                                showsArtwork: true,
+                                action: TrackRow.Action(title: "Skip to This Song", hint: "Skips to this song") {
+                                    skip(to: index, in: queue.upcoming)
+                                }
+                            )
                         }
                     }
                 }
@@ -79,6 +90,40 @@ struct QueueListView: View {
                     .frame(height: CGFloat(visible) * OrbitTokens.Size.artworkTrackRowHeight)
                     .scrollDisabled(queue.upcoming.count <= OrbitTokens.Size.queueVisibleRows)
             }
+        }
+    }
+
+    // The song at `index` is `index + 1` skips away: one for each song before it and one for itself.
+    private func skip(to index: Int, in upcoming: [Track], collapses: Bool = true) {
+        let track = upcoming[index]
+        let collapse = collapses ? panel.collapseAfterAction(preferences) : nil
+        Task {
+            switcher.dismissFailure(for: track.uri)
+            let result = await playback.skipAhead(by: index + 1, to: track.uri)
+            await switcher.settle(track.uri, PlaylistSwitcher.Outcome(result), collapse: collapse)
+        }
+    }
+
+    private func runDebugSkip() async {
+        #if DEBUG
+        guard let index = UIDebugOptions.current.skipQueueIndex else { return }
+        for _ in 0..<50 where library.queue.value == nil {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        try? await Task.sleep(for: .milliseconds(500))
+        guard let upcoming = library.queue.value?.upcoming, upcoming.indices.contains(index) else { return }
+        skip(to: index, in: upcoming, collapses: false)
+        #endif
+    }
+}
+
+private extension PlaylistSwitcher.Outcome {
+    init(_ result: SkipAheadResult) {
+        switch result {
+        case .landed: self = .started
+        // The skip already running speaks for the row that was clicked first.
+        case .ignored: self = .superseded
+        case .failed(let error): self = .failed(error)
         }
     }
 }

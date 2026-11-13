@@ -3,13 +3,21 @@ import OrbitEngine
 import SwiftUI
 
 // A track in a playlist, Liked Songs, search results or the queue. Clicking plays it (inside `context` when
-// there is one); unplayable tracks are shown but disabled rather than hidden.
+// there is one), or runs `action` where a click means something else, as in the queue; unplayable tracks are
+// shown but disabled rather than hidden.
 struct TrackRow: View {
+    // What a click does instead of playing the track, named for the context menu and VoiceOver.
+    struct Action {
+        let title: String
+        let hint: String
+        let perform: () -> Void
+    }
+
     let track: Track
     var number: Int?
     var showsArtwork = false
     var context: SpotifyURI?
-    var isInteractive = true
+    var action: Action?
     var isKeyboardSelected = false
 
     @Environment(PlaybackCoordinator.self) private var playback
@@ -24,9 +32,10 @@ struct TrackRow: View {
         let isCurrent = playback.snapshot.track?.uri == track.uri
         let isPending = playback.pendingIntents.contains(.playTrack(track.uri)) || playback.pendingIntents.contains(.playContext(track.uri))
         let failure = switcher.failure(for: track.uri)
-        Button(action: play) {
+        let showsHover = isHovered || UIDebugOptions.current.hoveredTrackID == track.id
+        Button(action: perform) {
             HStack(spacing: OrbitTokens.Spacing.m + OrbitTokens.Spacing.xxs) {
-                leading(isCurrent: isCurrent)
+                leading(isCurrent: isCurrent, showsHover: showsHover)
                 VStack(alignment: .leading, spacing: 1) {
                     // The current track is marked by its row tint and the playing bars; an accent-coloured title
                     // would wash out with the neutral accent on a light desktop.
@@ -63,25 +72,31 @@ struct TrackRow: View {
             .padding(.horizontal, OrbitTokens.Spacing.m)
             .frame(height: showsArtwork ? OrbitTokens.Size.artworkTrackRowHeight : OrbitTokens.Size.trackRowHeight)
         }
-        .buttonStyle(RowButtonStyle(isSelected: isCurrent && isInteractive))
+        // The queue lists what comes after the current track, so a repeat of it there is not the one playing.
+        .buttonStyle(RowButtonStyle(isSelected: isCurrent && action == nil))
         .focusEffectDisabled()
         .keyboardSelected(isKeyboardSelected)
-        .allowsHitTesting(isInteractive)
         .disabled(!track.isPlayable)
-        .onHover { isHovered = $0 && isInteractive }
+        .onHover { isHovered = $0 }
         .contextMenu {
-            if isInteractive { Button("Play", action: play) }
-            Button("Add to Queue") { Task { await library.addToQueue(track) } }
+            if let action {
+                Button(action.title, action: action.perform)
+            } else {
+                Button("Play", action: play)
+                Button("Add to Queue") { Task { await library.addToQueue(track) } }
+            }
             Divider()
             Button("Open in Spotify") { SpotifyApp.open(track.uri) }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel(isCurrent: isCurrent, isPending: isPending, failure: failure))
-        .accessibilityHint(isInteractive && track.isPlayable ? "Plays this song" : "")
-        .accessibilityAddTraits(isInteractive ? .isButton : [])
+        .accessibilityHint(track.isPlayable ? action?.hint ?? "Plays this song" : "")
+        .accessibilityAddTraits(.isButton)
         .accessibilityAddTraits(isCurrent ? .isSelected : [])
         .accessibilityActions {
-            Button("Add to Queue") { Task { await library.addToQueue(track) } }
+            if action == nil {
+                Button("Add to Queue") { Task { await library.addToQueue(track) } }
+            }
             Button("Open in Spotify") { SpotifyApp.open(track.uri) }
         }
     }
@@ -97,22 +112,28 @@ struct TrackRow: View {
         return parts.joined(separator: ", ")
     }
 
+    // Artwork rows dim the cover and show the play glyph like a playlist's cover in the Library, so every list
+    // with covers reads the same under the pointer.
     @ViewBuilder
-    private func leading(isCurrent: Bool) -> some View {
+    private func leading(isCurrent: Bool, showsHover: Bool) -> some View {
         if showsArtwork {
             ArtworkView(url: track.artworkURL, size: OrbitTokens.Size.rowArtwork - 4, cornerRadius: OrbitTokens.Radius.artworkSmall)
                 .overlay {
-                    if isCurrent || isHovered {
-                        RoundedRectangle(cornerRadius: OrbitTokens.Radius.artworkSmall, style: .continuous)
-                            .fill(.black.opacity(0.38))
-                        leadingGlyph(isCurrent: isCurrent, tint: .white)
-                            .foregroundStyle(.white)
+                    if isCurrent || showsHover {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: OrbitTokens.Radius.artworkSmall, style: .continuous)
+                                .fill(.black.opacity(0.42))
+                            leadingGlyph(isCurrent: isCurrent, size: OrbitTokens.Icon.regular, tint: .white)
+                                .foregroundStyle(.white)
+                        }
+                        .transition(.opacity)
                     }
                 }
+                .animation(theme.animation(OrbitTokens.Motion.hover), value: showsHover)
         } else if let number {
             ZStack {
-                if isCurrent || isHovered {
-                    leadingGlyph(isCurrent: isCurrent)
+                if isCurrent || showsHover {
+                    leadingGlyph(isCurrent: isCurrent, size: OrbitTokens.Icon.small)
                 } else {
                     Text("\(number)")
                         .font(OrbitTokens.Typography.timecode)
@@ -124,17 +145,24 @@ struct TrackRow: View {
     }
 
     @ViewBuilder
-    private func leadingGlyph(isCurrent: Bool, tint: Color? = nil) -> some View {
+    private func leadingGlyph(isCurrent: Bool, size: CGFloat, tint: Color? = nil) -> some View {
         if isCurrent {
             PlayingIndicator(isPlaying: playback.snapshot.isPlaying, tint: tint)
         } else {
             Image(systemName: "play.fill")
-                .font(.system(size: OrbitTokens.Icon.small))
+                .font(.system(size: size, weight: showsArtwork ? .semibold : .regular))
+        }
+    }
+
+    private func perform() {
+        if let action {
+            action.perform()
+        } else {
+            play()
         }
     }
 
     private func play() {
-        guard isInteractive else { return }
         let collapse: (() -> Void)? = preferences.collapsesAfterAction ? { [panel] in panel.collapse() } : nil
         Task { await switcher.play(track: track, in: context, with: playback, thenCollapse: collapse) }
     }

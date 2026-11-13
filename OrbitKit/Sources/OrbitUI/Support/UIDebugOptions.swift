@@ -13,6 +13,11 @@ import SwiftUI
 //   --ui-query <text>              the library's search query, so filtering and Spotify results can be captured
 //   --ui-hover                     show the pill's hover controls
 //   --ui-hover-row <playlist-id>   show that library row as it is under the pointer
+//   --ui-hover-track <track-id>    show every row of that track (in the queue, search results or a track list)
+//                                  as it is under the pointer; al-paper-kites-1 heads the demo queue
+//   --ui-skip-to <index>           with --demo only: half a second after the queue drawer lists its songs, skip
+//                                  to the one at that index as a click would, without collapsing, so the drawer
+//                                  can be captured after the skip; it runs each time the drawer appears
 //   --ui-scenario <name>           with --demo only, read by the shell, which builds the scenario's stores:
 //                                  signed-out, automation-denied, automation-not-asked,
 //                                  automation-not-asked-playing, spotify-closed, idle, paused, rate-limited,
@@ -45,6 +50,7 @@ struct UIDebugOptions {
     var trackTitle: String?
     var forcesPillHover = false
     var hoveredPlaylistID: String?
+    var hoveredTrackID: String?
     var glassPreset: GlassPreset?
     var backgroundOpacity: Double?
     var accent: AccentChoice?
@@ -61,6 +67,7 @@ struct UIDebugOptions {
     var repeatMode: RepeatMode?
     var deviceID: String?
     var trackDuration: TimeInterval?
+    var skipQueueIndex: Int?
     var animationSpeed: Double = 1
 
     #if DEBUG
@@ -81,6 +88,7 @@ struct UIDebugOptions {
         trackTitle = value("--ui-track-title")
         forcesPillHover = arguments.contains("--ui-hover")
         hoveredPlaylistID = value("--ui-hover-row")
+        hoveredTrackID = value("--ui-hover-track")
         glassPreset = value("--ui-glass").flatMap(GlassPreset.init(rawValue:))
         backgroundOpacity = value("--ui-opacity").flatMap(Double.init)
         accent = value("--ui-accent").flatMap { name in
@@ -103,6 +111,7 @@ struct UIDebugOptions {
             repeatMode = value("--ui-repeat").flatMap { ["all": RepeatMode.context, "one": .track][$0] }
             deviceID = value("--ui-device")
             trackDuration = value("--ui-track-duration").flatMap(TimeInterval.init).flatMap { $0 > 0 ? $0 : nil }
+            skipQueueIndex = value("--ui-skip-to").flatMap { Int($0) }.flatMap { $0 >= 0 ? $0 : nil }
         }
         animationSpeed = value("--ui-slow").flatMap(Double.init).map { min(1, max(0.02, $0)) } ?? 1
     }
