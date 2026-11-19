@@ -8,5 +8,8 @@ xcuserdata/
 *.xcuserstate
 *.xcarchive
 Config/Local.xcconfig
-.claude/worktrees/
-.claude/settings.local.json
+
+# Local agent instructions and planning notes; kept on this Mac, never published.
+.claude/
+CLAUDE.md
+docs/PRODUCT.md

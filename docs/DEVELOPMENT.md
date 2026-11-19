@@ -98,8 +98,6 @@ Changes inside `OrbitKit/` or to `.xcconfig` files don't need it.
 
 Dependencies point one way: `OrbitCore` <- `SpotifyKit`, `OrbitEngine` <- `OrbitUI` <- `OrbitShell`.
 
-Project conventions are in `CLAUDE.md`.
-
 ## Tests and demo mode
 
 Run the unit tests:
