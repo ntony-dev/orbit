@@ -36,7 +36,7 @@ An account that is not on the list can open Spotify's sign-in page, but its requ
 Orbit reads the Client ID from two places:
 
 - **In the app:** Settings > Spotify, in the Spotify Client ID section at the bottom. Paste the ID into the Client ID field and click Save or press Return. Orbit stores it in its preferences.
-- **At build time:** `SPOTIFY_CLIENT_ID` in `Config/Local.xcconfig`, which the build writes into the app's `Info.plist` as `SpotifyClientID`. `Scripts/archive.sh --friends` builds it into a disk image for the people on your user list (see [Sharing with friends](../README.md#sharing-with-friends)); the public `Scripts/archive.sh` zip never contains it.
+- **At build time:** `SPOTIFY_CLIENT_ID` in `Config/Local.xcconfig`, which the build writes into the app's `Info.plist` as `SpotifyClientID`. `Scripts/archive.sh --friends` builds it into a disk image for the people on your user list (see [Sharing Orbit with friends](SHARING.md)); the public `Scripts/archive.sh` zip never contains it.
 
 ```
 cp Config/Local.example.xcconfig Config/Local.xcconfig
@@ -60,7 +60,7 @@ Orbit reads the Client ID each time you sign in, so a change takes effect withou
 
 Orbit waits up to five minutes for the browser to come back. Your tokens go into your login keychain, and Orbit restores the session on the next launch and refreshes the access token as needed. Sign Out deletes the stored tokens from your Mac but cannot revoke them at Spotify.
 
-To revoke Orbit's access on Spotify's side as well, remove it at [spotify.com/account/apps](https://www.spotify.com/account/apps/). The README's [Security notes](../README.md#security-notes) describe what the sign-in protects against and what it cannot.
+To revoke Orbit's access on Spotify's side as well, remove it at [spotify.com/account/apps](https://www.spotify.com/account/apps/). The [Security](PRIVACY.md#security) section of PRIVACY.md describes what the sign-in protects against and what it cannot.
 
 ## Scopes
 

@@ -87,7 +87,7 @@ If the browser shows "Sign-in didn't finish.", the callback did not carry the co
 
 **Cause.** Orbit keeps your tokens in the login keychain. The keychain lets an app read its item without asking only if the app's signature matches the one that saved it. Each ad-hoc signed build has a different signature, so after installing an update or rebuilding, macOS asks whether Orbit may use the item.
 
-**Fix.** Enter your login password and click Always Allow. That covers the current build; the next update or rebuild asks once more. If you build Orbit yourself, sign it with a certificate to stop the prompts, as described under [Stable signing for your own Mac](../README.md#stable-signing-for-your-own-mac) in the README; `Scripts/install-local.sh` builds and installs such a copy. Grants then survive every rebuild signed with that certificate, because macOS ties them to the certificate rather than to one build.
+**Fix.** Enter your login password and click Always Allow. That covers the current build; the next update or rebuild asks once more. If you build Orbit yourself, sign it with a certificate to stop the prompts, as described under [Stable signing](DEVELOPMENT.md#stable-signing-stop-repeat-permission-prompts) in DEVELOPMENT.md; `Scripts/install-local.sh` builds and installs such a copy. Grants then survive every rebuild signed with that certificate, because macOS ties them to the certificate rather than to one build.
 
 ## Automation
 
