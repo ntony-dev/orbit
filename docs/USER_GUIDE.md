@@ -53,7 +53,7 @@ After you pick a playlist, its row shows a spinner until Spotify starts playing 
 - **Hide automatically (Settings > Behavior):** while another app is full screen, and when Spotify quits.
 - **Startup (Settings > Behavior):** launch at login.
 - **Devices (Settings > Spotify):** a preferred Spotify Connect device.
-- **Sync (Settings > Spotify):** choose how often Orbit checks for playback on your other devices: Automatically, Less often, or Only while Orbit is open. Refresh Now reloads your library. See [How often Orbit talks to Spotify](SPOTIFY_SETUP.md#how-often-orbit-talks-to-spotify).
+- **Sync (Settings > Spotify):** choose how often Orbit checks for playback on your other devices: Automatically, Less often, or Only while Orbit is open. Refresh Now reloads your library. See "How often Orbit talks to Spotify" under [More details](SPOTIFY_SETUP.md#more-details).
 - **Appearance:** system, light or dark; Clear, Balanced or Tinted glass; background opacity; five accent colors plus a custom one; pill size and artwork; and Reduce animation.
 - **About the glass:** macOS Liquid Glass has two native variants, clear and regular. The presets use those plus a backing layer and tint that Orbit draws itself. Orbit can't change how strongly the glass blurs.
 - **Global shortcuts:** open or close Orbit, search, play/pause, next, previous, and open the library. All are off until you set a key combination in Settings > Shortcuts.

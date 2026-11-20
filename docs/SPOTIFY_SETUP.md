@@ -1,99 +1,120 @@
-# Setting up Spotify for Orbit
+# Connect Orbit to Spotify
 
-Orbit reads your library and controls Spotify Connect through Spotify's Web API. Spotify only lets an app use the Web API with a Client ID, which you get by registering a Spotify Developer app. Orbit uses Authorization Code with PKCE, so it needs only the Client ID. There is no client secret and no server.
+Orbit needs a free "Client ID" from Spotify before it can show your playlists and search. You make one yourself in about five minutes. You only do this once.
 
-If someone gave you a copy of Orbit with their Client ID built in, you do not need your own app. Ask them to add your Spotify account under User Management (step 3), then go to [First sign-in](#first-sign-in).
+**You need:** Spotify Premium, and Orbit already open on your Mac.
 
-## 1. Create the app
+**Got Orbit from a friend?** Their copy already has a Client ID. Skip to [step 4](#4-sign-in).
 
-1. Sign in at the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) with the Spotify account that will own the app. That account needs Spotify Premium (see [Development Mode](#what-development-mode-means)).
-2. Click Create app and fill in:
-   - **App name** and **App description:** anything, for example "Orbit" and "Personal Spotify controller".
-   - **Redirect URIs:** add exactly
+## 1. Create your Spotify app
 
-     ```
-     http://127.0.0.1:8888/callback
-     ```
+1. Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) and log in with your Spotify account. If Spotify asks you to accept its developer terms or verify your email, do that first.
+2. Click **Create app**.
+3. Fill in the form:
 
-     Use `127.0.0.1`, not `localhost`, with `http`, port `8888` and the path `/callback`, and no trailing slash. Orbit sends this exact URI and Spotify rejects anything that does not match a registered one.
-   - **APIs used:** select Web API. Orbit uses nothing else.
-3. Accept the terms and save.
+   | Field | What to enter |
+   |---|---|
+   | App name | `Orbit` |
+   | App description | `My Orbit` |
+   | Redirect URIs | `http://127.0.0.1:8888/callback`, then click **Add** |
+   | APIs used | Tick **Web API** |
 
-Ignore the client secret. Orbit never asks for it; do not put it in Orbit's settings, in `Config/Local.xcconfig` or anywhere in the repository.
+4. Tick the box to accept Spotify's terms, then click **Save**.
 
-## 2. Copy the Client ID
+> Copy the redirect URI exactly as shown. Sign-in won't work if it differs by even one character.
 
-Open the app's Settings in the dashboard. The Client ID is under Basic Information. A Client ID is not a secret, but anyone who uses it shares your app's user list and quota.
+## 2. Add your own account
 
-## 3. Add users
+1. On your app's page, click **Settings**, then the **User Management** tab.
+2. Enter your name and the email address of your Spotify account, and add it.
 
-In the app's Settings, open User Management and add each person who will use Orbit with this Client ID: their name and the email address of their Spotify account. Development Mode allows up to five users. Add yourself as well if you are not sure whether the owner is included automatically.
+## 3. Copy the Client ID into Orbit
 
-An account that is not on the list can open Spotify's sign-in page, but its requests are refused and Orbit shows "This Spotify account isn't enabled for this Orbit client."
+1. Still in **Settings**, open the **Basic Information** tab and copy the **Client ID**.
+2. In Orbit, open **Settings > Spotify**. To get there, click the Orbit icon in the menu bar and choose **Settings…**.
+3. Paste the ID into the **Client ID** field at the bottom and click **Save**.
 
-## 4. Give Orbit the Client ID
+## 4. Sign in
 
-Orbit reads the Client ID from two places:
+1. In **Settings > Spotify**, click **Sign In…**. You can also click **Connect Spotify** in Orbit's Library tab.
+2. Your browser opens Spotify's page. Click **Agree**.
+3. When the page says **"You're signed in to Orbit."**, close the tab.
+4. The first time you press play in Orbit, macOS asks if Orbit may control Spotify. Click **Allow**.
 
-- **In the app:** Settings > Spotify, in the Spotify Client ID section at the bottom. Paste the ID into the Client ID field and click Save or press Return. Orbit stores it in its preferences.
-- **At build time:** `SPOTIFY_CLIENT_ID` in `Config/Local.xcconfig`, which the build writes into the app's `Info.plist` as `SpotifyClientID`. `Scripts/archive.sh --friends` builds it into a disk image for the people on your user list (see [Sharing Orbit with friends](SHARING.md)); the public `Scripts/archive.sh` zip never contains it.
+That's it. Settings > Spotify now says **Signed in as** and your name.
 
-```
-cp Config/Local.example.xcconfig Config/Local.xcconfig
-```
+Something not working? See [Troubleshooting](TROUBLESHOOTING.md).
 
-```
-SPOTIFY_CLIENT_ID = your_client_id_here
-```
+## More details
 
-The ID entered in Settings wins whenever it is not blank. Clear the field and click Save to go back to the ID built into your copy. The line under the field says which one is in use: "Using your Client ID.", "Using the Client ID built into this copy." or "No Client ID configured. Sign-in needs one."
+<details>
+<summary><b>What Orbit can see and do on your account</b></summary>
 
-Orbit reads the Client ID each time you sign in, so a change takes effect without relaunching. An existing session keeps the Client ID it was created with, so after changing it, click Reconnect (or Sign Out, then Sign In) in Settings > Spotify.
+<br>
 
-## First sign-in
+Spotify shows this list on the page where you click Agree.
 
-1. Click Connect Spotify in the panel's Library tab, or open Settings > Spotify and click Sign In…. Settings opens from Orbit's menu bar item, from the gear in the expanded player, or with Command-comma while the panel is open.
-2. Orbit starts a listener on `127.0.0.1:8888` and opens Spotify's authorization page in your default browser.
-3. Check the permissions listed (see [Scopes](#scopes)) and click Agree. If you approved Orbit's Client ID before, Spotify may skip this page and go straight to the next step.
-4. Spotify sends the browser back to `http://127.0.0.1:8888/callback`. The page should say "You're signed in to Orbit." You can close the tab.
-5. Settings > Spotify shows "Signed in as" followed by your Spotify display name.
-
-Orbit waits up to five minutes for the browser to come back. Your tokens go into your login keychain, and Orbit restores the session on the next launch and refreshes the access token as needed. Sign Out deletes the stored tokens from your Mac but cannot revoke them at Spotify.
-
-To revoke Orbit's access on Spotify's side as well, remove it at [spotify.com/account/apps](https://www.spotify.com/account/apps/). The [Security](PRIVACY.md#security) section of PRIVACY.md describes what the sign-in protects against and what it cannot.
-
-## Scopes
-
-Orbit requests these scopes, taken from `OrbitKit/Sources/SpotifyKit/Auth/AuthorizationRequest.swift`:
-
-| Scope | Used for |
+| Permission | Used for |
 |---|---|
-| `user-read-playback-state` | Reading what is playing, on which device, and the device list |
-| `user-modify-playback-state` | Play, pause, skip, seek, volume, shuffle, repeat, switching devices and adding to the queue |
-| `user-read-currently-playing` | Reading the current track and the queue |
+| `user-read-playback-state` | Seeing what's playing, on which device, and your device list |
+| `user-modify-playback-state` | Play, pause, skip, seek, volume, shuffle, repeat, switching devices, adding to the queue |
+| `user-read-currently-playing` | Seeing the current song and the queue |
 | `playlist-read-private` | Listing your private playlists |
 | `playlist-read-collaborative` | Listing collaborative playlists |
-| `user-library-read` | Reading Liked Songs and whether the current track is saved |
-| `user-library-modify` | Saving the current track to Liked Songs or removing it |
+| `user-library-read` | Reading Liked Songs, and whether the current song is liked |
+| `user-library-modify` | Liking or unliking the current song |
 
-Orbit cannot create, edit or delete playlists, follow anything, or read your email or account details. At launch Orbit checks the scopes recorded with your stored session. If one it needs is missing, for example because a newer version of Orbit asks for more, it signs you out and shows "Your Spotify session has expired." Sign in again to grant the full set.
+- **What Orbit can't do:** create, edit or delete playlists, follow anything, or read your email or account details.
+- **After an update:** if a newer Orbit needs a permission your sign-in doesn't have, it signs you out and shows "Your Spotify session has expired." Sign in again to approve it.
+- **Revoking access:** Sign Out removes your sign-in from this Mac. To cut Orbit off on Spotify's side too, remove it at [spotify.com/account/apps](https://www.spotify.com/account/apps/).
 
-## What Development Mode means
+The permissions are listed in `OrbitKit/Sources/SpotifyKit/Auth/AuthorizationRequest.swift`. How sign-in is secured is in [PRIVACY.md](PRIVACY.md#security).
 
-Spotify Developer apps run in Development Mode unless Spotify grants them extended access. For someone using Orbit, that means:
+</details>
 
-- **Five-user allowlist.** Only the accounts listed under User Management can use the app. Everyone else gets refused requests. If you want to share Orbit with more people, each group of up to five needs its own developer app and Client ID.
-- **The owner needs Premium.** Spotify requires the account that owns the developer app to have Spotify Premium.
-- **One shared quota.** Requests from every user of the Client ID, and from every other Development Mode app on the owner's developer account, count against one quota. When it runs out, Spotify answers with HTTP 429 and Orbit shows "This app's Spotify request quota is used up for now." Short-term rate limits show "Spotify is limiting requests right now." In both cases Orbit stops sending Web API requests until the wait Spotify names has passed, and local playback controls keep working.
-- **Playlist tracks.** Spotify returns a playlist's tracks only if you own it or collaborate on it. For other playlists Orbit shows the name and artwork and can still play the playlist, but it shows "Spotify doesn't share the tracks of playlists you don't own." instead of a track list.
-- **Search page size.** A search returns at most 10 results per type. Orbit asks for 10 songs, 10 albums and 10 playlists.
+<details>
+<summary><b>Spotify's limits on personal apps</b></summary>
 
-## How often Orbit talks to Spotify
+<br>
 
-Playback in the Spotify app on this Mac reaches Orbit directly from the app, without Spotify's servers. To notice playback on your other devices, Orbit checks the Web API on a schedule, which you set under Settings > Spotify > Synchronization:
+Your Spotify app runs in what Spotify calls Development Mode. That means:
 
-- **Automatically** (the default). Every few seconds while the panel is open and another device is playing; less often while only the pill shows; never while Orbit is hidden. While Spotify on this Mac is playing and only the pill shows, Orbit does not check at all.
-- **Less often.** The same schedule with intervals three times as long, for less battery and quota use.
-- **Only while Orbit is open.** No checks while only the pill shows. The open panel still checks.
+- **Up to five accounts.** Only accounts listed under User Management can sign in. Anyone else gets "This Spotify account isn't enabled for this Orbit client."
+- **Premium required.** The account that owns the app needs Spotify Premium.
+- **One shared request budget.** Everyone using your Client ID, plus any other Development Mode apps you own, share one budget. If it runs out, Orbit shows "This app's Spotify request quota is used up for now." A short burst limit shows "Spotify is limiting requests right now." Either way, Orbit waits as long as Spotify asks, and play, pause and skip keep working.
+- **Playlist tracks.** Spotify only shares the songs in playlists you own or collaborate on. Other playlists still play, but Orbit shows "Spotify doesn't share the tracks of playlists you don't own." instead of a track list.
+- **Search.** At most 10 songs, 10 albums and 10 playlists per search.
 
-Your list of playlists is reloaded when you open the panel, if Orbit's copy is more than five minutes old. Refresh Now, next to the setting, reloads your playlists and devices straight away, along with Liked Songs and the tracks of any playlist Orbit has already loaded, for example after you edit a playlist in Spotify.
+</details>
+
+<details>
+<summary><b>How often Orbit talks to Spotify</b></summary>
+
+<br>
+
+Playback in the Spotify app on this Mac reaches Orbit straight from the app. To notice playback on your other devices, Orbit checks Spotify's servers on a schedule. Set it in **Settings > Spotify > Synchronization**:
+
+| Setting | What it does |
+|---|---|
+| **Automatically** (default) | Every few seconds while the panel is open and another device is playing; less often while only the pill shows. No checks while Spotify on this Mac is playing and only the pill shows. |
+| **Less often** | The same, with intervals three times as long. Saves battery and request budget. |
+| **Only while Orbit is open** | No checks while only the pill shows. |
+
+Orbit never checks while it's hidden.
+
+- **Playlists** reload when you open the panel, if Orbit's copy is more than five minutes old.
+- **Refresh Now**, next to the setting, reloads your playlists, devices and Liked Songs straight away, plus any playlist Orbit has already loaded. Use it after editing a playlist in Spotify.
+
+</details>
+
+<details>
+<summary><b>Changing or removing your Client ID</b></summary>
+
+<br>
+
+- **Change it:** paste the new ID in Settings > Spotify and click **Save**, then click **Reconnect**. Your current sign-in keeps the old ID until you do.
+- **Go back to a friend's built-in ID:** clear the field and click **Save**.
+- **Which one is in use:** the line under the field says "Using your Client ID.", "Using the Client ID built into this copy." or "No Client ID configured. Sign-in needs one."
+- **Building Orbit yourself:** you can build your Client ID into your copy instead. See [DEVELOPMENT.md](DEVELOPMENT.md#build-and-run).
+
+</details>

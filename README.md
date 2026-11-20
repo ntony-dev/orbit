@@ -23,28 +23,37 @@ Playback controls work without signing in while the Spotify app is running. The 
 
 - macOS 26 or later
 - The Spotify desktop app
-- A Spotify Client ID ([how to get one](docs/SPOTIFY_SETUP.md)), unless a friend [built your copy with theirs](docs/SHARING.md)
+- Spotify Premium and your own free Client ID ([5-minute setup](docs/SPOTIFY_SETUP.md)), unless a friend [built your copy with theirs](docs/SHARING.md)
 
 ## Install
+
+There are two ways to install Orbit. Either way, finish by [connecting it to Spotify](docs/SPOTIFY_SETUP.md).
+
+### Option 1: Download
 
 1. Download `Orbit-<version>.zip` from [Releases](https://github.com/ntony-dev/orbit/releases), unzip it, and move `Orbit.app` to `/Applications`.
 2. Open Orbit. Releases aren't notarized, so macOS blocks the first launch. Click **Done** (not Move to Trash), then go to **System Settings > Privacy & Security** and click **Open Anyway**. You only need to do this once per download.
 3. Orbit has no Dock icon. Look for the pill on screen and the Orbit item in the menu bar.
-4. Paste your Client ID into **Settings > Spotify** and sign in.
 
-Don't turn off Gatekeeper to run Orbit. If you'd rather not trust a downloaded binary, [build from source](#build-from-source). If macOS says Orbit is damaged, see [Troubleshooting](docs/TROUBLESHOOTING.md).
+Don't turn off Gatekeeper to run Orbit. If you'd rather not trust a downloaded app, use Option 2. If macOS says Orbit is damaged, see [Troubleshooting](docs/TROUBLESHOOTING.md).
 
-## Build from source
+### Option 2: Build it yourself
 
-You need Xcode with the macOS 26 SDK. A paid developer account isn't required.
+Build Orbit from this code on your own Mac. macOS doesn't block a copy you built, so there's no Open Anyway step.
 
-```
-git clone https://github.com/ntony-dev/orbit.git
-cd orbit
-open Orbit.xcodeproj
-```
+1. Install [Xcode](https://apps.apple.com/app/xcode/id497799835) from the App Store and open it once to finish setup. A paid developer account isn't needed.
+2. In Terminal, run:
 
-Choose the Orbit scheme and run it. Add `--demo` to the scheme's launch arguments to try Orbit with made-up data and no Spotify account. Signing, release builds and the project layout are covered in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+   ```
+   git clone https://github.com/ntony-dev/orbit.git
+   cd orbit
+   xcodebuild -project Orbit.xcodeproj -scheme Orbit -configuration Release -derivedDataPath build build
+   cp -R build/Build/Products/Release/Orbit.app /Applications/
+   ```
+
+3. Open Orbit from your Applications folder.
+
+Working on Orbit itself? Running it from Xcode, demo mode and signing are covered in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Known limitations
 
