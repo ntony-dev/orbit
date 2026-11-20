@@ -1,5 +1,29 @@
 # Privacy, permissions and security
 
+## The short version
+
+**Orbit collects nothing.** It has no servers of its own. It talks only to Spotify, straight from your Mac. Nothing about you is ever sent to Orbit's developer or anyone else.
+
+| Your… | Who can see it through Orbit |
+|---|---|
+| What you listen to | Only you and Spotify. Never the developer. |
+| Spotify password | Only Spotify. You type it on Spotify's own page in your browser, and Orbit never sees it. |
+| Email address | Nobody. Orbit doesn't ask Spotify for it. |
+| Account details, such as country, plan or birthday | Nobody. Orbit doesn't ask Spotify for them. It reads only your public profile (name and picture), to show who's signed in. |
+| Playlists, Liked Songs and searches | Only you and Spotify. They go straight between your Mac and Spotify. |
+| Your sign-in | Only your Mac. It's kept in your keychain, never sent anywhere but Spotify. |
+
+**What Orbit doesn't have:**
+
+- **No analytics or tracking.** Nothing counts how you use Orbit.
+- **No crash reports or update checks.** Orbit never contacts the developer.
+- **No ads and no accounts.** There's nothing to sign up for except Spotify itself.
+- **No listening history.** Orbit doesn't keep or log what you play.
+
+**Using a copy a friend built?** To let you sign in, your friend added your name and email to their Spotify app, so they know the email you gave them. They can't see what you play or anything else in your account: that would need your sign-in, which stays on your Mac.
+
+Orbit is open source, so you can check all this yourself. The code that talks to Spotify is in `OrbitKit/Sources/SpotifyKit`.
+
 ## Permissions
 
 - **Automation for Spotify:** sends playback commands to the Spotify app and reads what's playing. macOS asks the first time you use a playback control while Spotify is running, or when you click Allow in Orbit. If you deny it, Orbit sends commands through the Web API instead, if you're signed in.
