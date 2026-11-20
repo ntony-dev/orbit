@@ -69,14 +69,17 @@ The [user guide](docs/USER_GUIDE.md#known-limitations) has the full list.
 
 ## Privacy
 
-**Orbit collects nothing.** It has no servers, analytics or tracking, and talks only to Spotify, straight from your Mac.
+**Orbit doesn't collect or send any personal data. It has no servers to send it to.** It talks only to Spotify, straight from your Mac. There's no analytics, tracking or crash reporting, so the developer never sees anything about you or what you play.
 
-- **What you listen to:** only you and Spotify see it. The developer never does.
-- **Your password:** you type it on Spotify's own page. Orbit never sees it.
-- **Your email and account details:** Orbit doesn't ask Spotify for them.
-- **Your sign-in:** stays in your Mac's keychain.
+**Orbit never sees** your Spotify password (you type it on Spotify's own page), your email, or your account details.
 
-What Orbit can access, permissions and security are in [docs/PRIVACY.md](docs/PRIVACY.md).
+**What Orbit can access** in your Spotify account, once you approve it:
+
+- **Playback:** what's playing, your queue and your devices, so it can show and control them.
+- **Your library:** your playlists and Liked Songs, to list them, and liking a song when you click the heart.
+- **Search:** what you type in the search field, sent to Spotify to find music.
+
+It can't create, edit or delete playlists. Your sign-in stays in your Mac's keychain. Full details are in [docs/PRIVACY.md](docs/PRIVACY.md).
 
 ## Development
 

@@ -2,7 +2,15 @@
 
 ## The short version
 
-**Orbit collects nothing.** It has no servers of its own. It talks only to Spotify, straight from your Mac. Nothing about you is ever sent to Orbit's developer or anyone else.
+**Orbit doesn't collect or send any personal data. It has no servers to send it to.** It talks only to Spotify, straight from your Mac. Nothing about you is ever sent to Orbit's developer or anyone else.
+
+**What Orbit can access** in your Spotify account, once you approve it on Spotify's page:
+
+- **Playback:** what's playing, your queue and your devices, so it can show and control them.
+- **Your library:** your playlists and Liked Songs, to list them, and liking a song when you click the heart.
+- **Search:** what you type in the search field, sent to Spotify to find music.
+
+It can't create, edit or delete playlists, follow anything, or read your email. The exact permissions are listed in [Connect Orbit to Spotify](SPOTIFY_SETUP.md#more-details).
 
 | Your… | Who can see it through Orbit |
 |---|---|
