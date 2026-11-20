@@ -29,7 +29,7 @@ Playback controls work without signing in while the Spotify app is running. The 
 
 There are two ways to install Orbit. Either way, finish by [connecting it to Spotify](docs/SPOTIFY_SETUP.md).
 
-### Option 1: Download
+### Option 1: Download (recommended)
 
 1. Download `Orbit-<version>.dmg` from [Releases](https://github.com/ntony-dev/orbit/releases), open it, and drag Orbit onto the Applications folder.
 2. Open Orbit. Releases aren't notarized, so macOS blocks the first launch. Click **Done** (not Move to Trash), then go to **System Settings > Privacy & Security** and click **Open Anyway**. You only need to do this once per download.
@@ -37,7 +37,10 @@ There are two ways to install Orbit. Either way, finish by [connecting it to Spo
 
 Don't turn off Gatekeeper to run Orbit. If you'd rather not trust a downloaded app, use Option 2. If macOS says Orbit is damaged, see [Troubleshooting](docs/TROUBLESHOOTING.md).
 
-### Option 2: Build it yourself
+<details>
+<summary><b>Option 2: Build it yourself</b></summary>
+
+<br>
 
 Build Orbit from this code on your own Mac. macOS doesn't block a copy you built, so there's no Open Anyway step.
 
@@ -53,7 +56,7 @@ Build Orbit from this code on your own Mac. macOS doesn't block a copy you built
 
 3. Open Orbit from your Applications folder.
 
-Working on Orbit itself? Running it from Xcode, demo mode and signing are covered in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+</details>
 
 ## Known limitations
 
@@ -67,6 +70,10 @@ The [user guide](docs/USER_GUIDE.md#known-limitations) has the full list.
 ## Privacy
 
 Orbit has no server, analytics or crash reporting. It talks only to Spotify and keeps your tokens in your login keychain. Permissions, data handling and security notes are in [docs/PRIVACY.md](docs/PRIVACY.md).
+
+## Development
+
+Running from Xcode, demo mode, signing, releases and the project layout are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## License
 
