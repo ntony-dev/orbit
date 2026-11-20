@@ -1,164 +1,223 @@
 # Troubleshooting
 
-Messages in quotes are the ones Orbit shows. Orbit's bundle identifier, used in some commands below, is `io.github.ntony46.orbit`. If you build Orbit yourself with a different `PRODUCT_BUNDLE_IDENTIFIER` in `Config/Local.xcconfig`, use yours instead.
+Find what you're seeing below, then follow the fix. Text in quotes is exactly what Orbit shows.
 
-## First launch
+| Problem | Go to |
+|---|---|
+| macOS won't open Orbit | [Orbit won't open](#orbit-wont-open) |
+| "Orbit is damaged" | [Orbit is damaged](#orbit-is-damaged) |
+| Can't sign in to Spotify | [Signing in](#signing-in) |
+| macOS keeps asking for your password after an update | [Password prompts after an update](#password-prompts-after-an-update) |
+| Play, pause or skip don't work | [Controlling Spotify](#controlling-spotify) |
+| An error in the player or library | [Playback errors](#playback-errors) |
+| You can't find Orbit on screen | [Finding Orbit](#finding-orbit) |
 
-### Orbit is blocked or "can't be opened"
+## Opening Orbit
 
-**Cause.** Release builds are signed ad hoc and not notarized. A downloaded copy carries the quarantine mark, so Gatekeeper checks it on first launch and refuses it, saying Apple could not verify that Orbit is free of malware.
+### Orbit won't open
 
-**Fix.** Click Done, not Move to Trash. Then open System Settings > Privacy & Security, find the note that Orbit was blocked in the Security section, click Open Anyway and confirm. On current macOS, right-click > Open shows the same warning again, so use Open Anyway.
+macOS says Apple could not verify that Orbit is free of malware. This is expected the first time: Orbit isn't notarized by Apple.
 
-Do not turn off Gatekeeper or strip the quarantine mark to get past this.
+1. Click **Done**. Don't click Move to Trash.
+2. Open **System Settings > Privacy & Security**.
+3. Scroll down to **Security**, where it says Orbit was blocked, and click **Open Anyway**.
+4. Confirm with your password or Touch ID.
 
-`spctl -a -vv Orbit.app` reports `rejected` for every ad-hoc signed copy, including one you build yourself. That is expected: Gatekeeper only stops a copy that carries the quarantine mark, and Open Anyway lets that copy through.
+You only do this once per download. Right-click > Open doesn't work for this on current macOS.
 
-### "Orbit is damaged and can't be opened"
+> Don't turn off Gatekeeper or use Terminal tricks to get past this. If you'd rather not trust a downloaded app, build Orbit yourself (see Install in the [README](../README.md)).
 
-**Cause.** The app's signature does not match its contents. This happens when the download was incomplete, or when the app was copied by a tool that dropped parts of the app bundle.
+### Orbit is damaged
 
-**Fix.** Delete the copy, download the disk image again, compare its checksum if the release lists one, and drag Orbit to Applications in Finder. You can check the signature yourself; this prints nothing when the signature is intact:
+> "Orbit is damaged and can't be opened."
 
-```
-codesign --verify --deep --strict /Applications/Orbit.app
-```
+The download was incomplete or got corrupted.
 
-If it still fails, build Orbit from source instead of working around the check.
+1. Delete Orbit from Applications.
+2. Download the disk image again from Releases.
+3. Open it and drag Orbit onto the Applications folder.
+
+Still happening? Build Orbit yourself instead (see Install in the [README](../README.md)).
+
+<details>
+<summary>Technical details</summary>
+
+<br>
+
+- The app's signature doesn't match its contents. Check it with the command below; it prints nothing when the signature is intact.
+
+  ```
+  codesign --verify --deep --strict /Applications/Orbit.app
+  ```
+
+- If the release lists a SHA-256 checksum, compare it with `shasum -a 256 ~/Downloads/Orbit-<version>.dmg`.
+- `spctl -a -vv Orbit.app` says `rejected` for every copy of Orbit, including one you build yourself. That's expected and harmless: macOS only blocks a downloaded copy, and Open Anyway lets it through.
+
+</details>
 
 ## Signing in
 
-### "No Spotify Client ID is configured."
+### No Client ID
 
-**Cause.** Your copy has no Client ID built in and none is set in Settings.
+> "No Spotify Client ID is configured."
 
-**Fix.** Create a Spotify Developer app as described in [SPOTIFY_SETUP.md](SPOTIFY_SETUP.md) and paste its Client ID into Settings > Spotify > Spotify Client ID.
+Orbit needs your Client ID before you can sign in. Follow [Connect Orbit to Spotify](SPOTIFY_SETUP.md), then paste the ID into **Settings > Spotify**.
 
-### "Port 8888 is in use, so sign-in can't finish."
+### Port 8888 is busy
 
-**Cause.** Orbit receives Spotify's sign-in callback on `127.0.0.1:8888`, and another program is already listening on that port. Jupyter and many local development servers use 8888 by default. The port is fixed because it is part of the registered redirect URI.
+> "Port 8888 is in use, so sign-in can't finish."
 
-**Fix.** Find the program:
+Another app on your Mac is using the connection Orbit needs for sign-in. It's usually a developer tool, such as Jupyter or a local web server.
+
+1. Quit that app.
+2. Click **Sign In** in Orbit again.
+
+You can reopen the other app once you're signed in.
+
+<details>
+<summary>Find which app it is</summary>
+
+<br>
+
+Run this in Terminal:
 
 ```
 lsof -nP -iTCP:8888 -sTCP:LISTEN
 ```
 
-Quit it, then click Sign In again. Orbit holds the port only while a sign-in is in progress, so you can restart the other program afterwards.
+If you don't recognize the app, look into it before quitting it. While the port is taken, Orbit doesn't open the browser, so your sign-in never reaches that app. The port can't be changed: it's part of the redirect URI registered with Spotify.
 
-While the port is taken, Orbit does not open the browser, so no sign-in callback goes to the other program. If you do not recognize the program holding the port, look into it before quitting it.
+</details>
 
-### Spotify's page shows an error instead of the Agree button
+### Spotify shows an error instead of Agree
 
-**Cause.** The Client ID is wrong, or the redirect URI registered for the app does not match what Orbit sends.
+The Client ID or the redirect URI doesn't match your Spotify app. In the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), open your app's **Settings** and check:
 
-**Fix.** In the Spotify Developer Dashboard, check that the app's redirect URIs include exactly `http://127.0.0.1:8888/callback` and that the Client ID in Orbit matches the dashboard.
+- **Redirect URIs** includes exactly `http://127.0.0.1:8888/callback`.
+- **Client ID** matches the one in Orbit's **Settings > Spotify**.
 
 ### Sign-in never finishes
 
-**Cause.** Orbit waits five minutes for the browser to return to `127.0.0.1:8888/callback`, then gives up.
+Orbit waits five minutes for you to finish in the browser, then stops waiting.
 
-**Fix.** Click Sign In again and finish in the browser tab that opens. If the browser cannot reach `127.0.0.1`, check that no proxy or browser extension intercepts local addresses.
+1. Click **Sign In** again.
+2. Finish in the newest browser tab, and close any older Spotify tabs.
 
-If the browser shows "Sign-in didn't finish.", the callback did not carry the code Orbit was waiting for: Spotify reported an error, or the tab belonged to an earlier sign-in attempt. Close it, click Sign In again and use the newest tab.
+If the page says "Sign-in didn't finish.", that tab was from an earlier attempt or Spotify reported an error. Sign in again and use the new tab.
 
-### "This Spotify account isn't enabled for this Orbit client."
+If the browser can't load the page at all, a proxy or browser extension may be blocking `127.0.0.1`.
 
-**Cause.** Spotify answered a Web API request with HTTP 403. The Client ID belongs to a Development Mode app, and your Spotify account is not on its User Management list. Spotify's sign-in page may still let you through; the refusal comes on the requests after it.
+### Your account isn't allowed
 
-**Fix.** Ask the app's owner to add your name and your Spotify account's email under User Management in the Spotify Developer Dashboard, then sign in again. Alternatively create your own app and use its Client ID. In Settings > Spotify, the Open Developer Dashboard button next to the error opens the dashboard.
+> "This Spotify account isn't enabled for this Orbit client."
 
-### "Your Spotify session has expired."
+Your Spotify account isn't on the app's user list.
 
-**Cause.** Spotify rejected the stored refresh token, for example because you removed Orbit's access in your Spotify account or the developer app was deleted. Orbit also shows this at launch when the stored session lacks a permission Orbit needs; see the next entry.
+- **Your own Client ID:** in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), open your app's **Settings > User Management** and add your name and the email address of your Spotify account. Then sign in again.
+- **A friend's copy:** ask your friend to add your account the same way.
 
-**Fix.** Click Sign In.
+The **Open Developer Dashboard** button next to the error in Settings > Spotify takes you there.
 
-### Orbit asks you to sign in every time it launches
+### Signed out unexpectedly
 
-**Cause.** One of two things:
+> "Your Spotify session has expired."
 
-- At launch Orbit checks the permissions (scopes) recorded with your stored session, and signs out a session that lacks one it needs, showing "Your Spotify session has expired." This is expected once after an update that needs a new permission. If it happens after every sign-in, Spotify is granting Orbit fewer permissions than it asks for.
-- Orbit could not read its keychain item, for example because you clicked Deny when macOS asked whether Orbit may use it. Orbit then starts signed out, with no error.
+Click **Sign In** again. This happens if you removed Orbit's access in your Spotify account, the Spotify app behind your Client ID was deleted, or an update needs a permission you haven't approved yet.
 
-**Fix.** For the first, remove Orbit at [spotify.com/account/apps](https://www.spotify.com/account/apps/), then sign in again and approve every permission on Spotify's page. If it keeps happening, report it with your Orbit version. For the second, sign in and click Always Allow when macOS asks about the keychain item. If you build Orbit yourself, see the next section.
+### Orbit asks you to sign in every time
 
-## Keychain prompts after an update or rebuild
+- **If macOS asked about Orbit's keychain item and you clicked Deny:** sign in again, and click **Always Allow** when macOS asks.
+- **If you see "Your Spotify session has expired." every launch:** remove Orbit at [spotify.com/account/apps](https://www.spotify.com/account/apps/), then sign in again and approve everything on Spotify's page. If it keeps happening, report it with your Orbit version.
 
-**Cause.** Orbit keeps your tokens in the login keychain. The keychain lets an app read its item without asking only if the app's signature matches the one that saved it. Each ad-hoc signed build has a different signature, so after installing an update or rebuilding, macOS asks whether Orbit may use the item.
+### Password prompts after an update
 
-**Fix.** Enter your login password and click Always Allow. That covers the current build; the next update or rebuild asks once more. If you build Orbit yourself, sign it with a certificate to stop the prompts, as described under [Stable signing](DEVELOPMENT.md#stable-signing-stop-repeat-permission-prompts) in DEVELOPMENT.md; `Scripts/install-local.sh` builds and installs such a copy. Grants then survive every rebuild signed with that certificate, because macOS ties them to the certificate rather than to one build.
+After you install a new version, macOS asks whether Orbit may use its saved sign-in in your keychain. Enter your Mac password and click **Always Allow**. This happens once per update, because each version of Orbit is signed differently.
 
-## Automation
+<details>
+<summary>Stop the prompts if you build Orbit yourself</summary>
 
-### "Orbit isn't allowed to control Spotify."
+<br>
 
-**Cause.** You declined the macOS prompt, or turned Orbit off under Automation. Without it Orbit cannot send commands to the Spotify app on this Mac. When you are signed in, it sends commands through the Web API instead.
+Sign your builds with a certificate instead of ad hoc. macOS then recognizes every rebuild as the same app. See [Stable signing](DEVELOPMENT.md#stable-signing-stop-repeat-permission-prompts) in DEVELOPMENT.md; `Scripts/install-local.sh` builds and installs a copy signed that way.
 
-**Fix.** Open System Settings > Privacy & Security > Automation, expand Orbit and turn on Spotify. The button next to the message in Orbit goes there directly.
+</details>
 
-### Orbit is not listed under Automation, or macOS never asked
+## Controlling Spotify
 
-**Cause.** Orbit asks only when Spotify is running and you use a playback control or click Allow in Orbit. Until then Settings > Spotify shows "Not asked yet" or "Checked when Spotify is running". After a denial, or after an ad-hoc signed update, macOS may keep an old decision and not ask again.
+### Orbit isn't allowed to control Spotify
 
-**Fix.** Open Spotify, then click Allow in Settings > Spotify or press play in Orbit. If no prompt appears, reset Orbit's Automation decisions, quit and reopen Orbit, and try again:
+> "Orbit isn't allowed to control Spotify."
+
+You clicked Don't Allow when macOS asked, or turned it off later.
+
+1. Click **Open Automation Settings** next to the message in Orbit, or open **System Settings > Privacy & Security > Automation**.
+2. Find **Orbit** and turn on **Spotify**.
+
+Until then, Orbit controls Spotify through Spotify's servers if you're signed in.
+
+### macOS never asked
+
+macOS only asks once Spotify is open and you press play in Orbit. Until then, Settings > Spotify shows "Not asked yet" or "Checked when Spotify is running".
+
+1. Open Spotify.
+2. Press play in Orbit, or click **Allow…** in Settings > Spotify.
+
+<details>
+<summary>Still no prompt?</summary>
+
+<br>
+
+macOS may be remembering an old answer. Reset it in Terminal, quit and reopen Orbit, and try again:
 
 ```
 tccutil reset AppleEvents io.github.ntony46.orbit
 ```
 
-## Playback
+If you built Orbit with your own `PRODUCT_BUNDLE_IDENTIFIER` in `Config/Local.xcconfig`, use that instead of `io.github.ntony46.orbit`.
 
-### "Spotify isn't running."
+</details>
 
-**Cause.** Orbit controls the Spotify desktop app and never launches it by sending a command.
+### Spotify isn't running
 
-**Fix.** Click Open Spotify in Orbit, which starts Spotify without bringing its window forward, or open Spotify yourself.
+> "Spotify isn't running."
 
-### "Spotify isn't installed on this Mac."
+Click **Open Spotify** in Orbit, which starts Spotify without bringing its window forward, or open Spotify yourself. Orbit never opens Spotify on its own.
 
-**Fix.** Install the Spotify desktop app from spotify.com, then reopen Orbit.
+### Spotify isn't installed
 
-### "No Spotify device is active."
+> "Spotify isn't installed on this Mac."
 
-**Cause.** The command went through the Web API and no Spotify device is currently active, for example because Spotify has been idle for a while or nothing has played yet.
+Install the Spotify app from [spotify.com/download](https://www.spotify.com/download/), then reopen Orbit.
 
-**Fix.** Start playback in Spotify, or open the device picker in Orbit's player and choose a device. Devices appear there only while Spotify is open on them.
+## Playback errors
 
-### "Spotify Premium is required for remote playback control."
+| Message | What to do |
+|---|---|
+| "No Spotify device is active." | Start playing something in Spotify, or choose a device from the device button in Orbit's player. Devices only appear while Spotify is open on them. |
+| "Spotify Premium is required for remote playback control." | Control Spotify on this Mac instead, with Orbit allowed to control it. Controlling other devices needs Premium. |
+| "Spotify didn't start playing that." | Check Spotify, then try again. |
+| "This device can't be controlled remotely." | Choose another device. |
+| "This item isn't available on Spotify anymore." | Click **Refresh Now** in Settings > Spotify, then try again. |
+| "Can't reach Spotify." | Check your internet connection. Play, pause and skip on this Mac keep working. |
+| "Spotify is limiting requests right now." | Wait. Orbit shows how long, and play, pause and skip keep working meanwhile. |
+| "This app's Spotify request quota is used up for now." | Wait, as above. To use less, set **Settings > Spotify > Synchronization** to **Less often**. |
+| "Spotify doesn't share the tracks of playlists you don't own." | Not an error. Spotify only lists songs in playlists you own or collaborate on, but you can still play the playlist. |
 
-**Cause.** Spotify only accepts playback commands through the Web API from Premium accounts. That route is used for other devices, for switching devices, and as the fallback when Automation is unavailable.
+## Finding Orbit
 
-**Fix.** Control the Spotify app on this Mac instead, with Automation allowed. Those commands go directly to the app and do not involve the Web API.
+### The pill is missing
 
-### "Spotify didn't start playing that."
+Click the Orbit icon in the top menu bar, then:
 
-**Cause.** Spotify accepted the command but Orbit never saw it playing what you chose.
+- **Show Pill**, if it was hidden.
+- **Reset Position**, if it's off the edge of the screen or on a display you can't see. The same button is in Settings > Behavior.
+- **Open Player**, to open Orbit anyway.
 
-**Fix.** Check Spotify, then try again from the error.
-
-### "Spotify is limiting requests right now." or "This app's Spotify request quota is used up for now."
-
-**Cause.** Spotify answered with HTTP 429. The first is a short-term rate limit. The second means the Development Mode quota is spent; that quota is shared by every user of the Client ID and every Development Mode app on the owner's account.
-
-**Fix.** Wait. Orbit shows how long when Spotify says, stops sending Web API requests until then, and keeps local playback controls working in the meantime. To use less quota, keep Orbit collapsed or hidden when you are not using it. If the quota runs out often, consider using your own Client ID instead of a shared one.
-
-### "Spotify doesn't share the tracks of playlists you don't own."
-
-This is a Spotify restriction, not an error. You can still play the playlist.
-
-## The pill
-
-### The pill is missing or offscreen
-
-**Fix.** Click the Orbit icon in the top menu bar:
-
-- Show Pill, if it was hidden.
-- Reset Position, if it is off the edge of a display or on a display you cannot see. The same button is in Settings > Behavior.
-- Open Player, to open Orbit regardless.
-
-Also check Settings > Behavior: the pill hides while another app is full screen, and can be set to hide when Spotify quits. Orbit has no Dock icon; opening Orbit again from Finder or Spotlight while it runs also shows the panel.
+The pill also hides on its own while another app is full screen, and when Spotify quits if you turned that on. Both are in Settings > Behavior.
 
 ### The menu bar icon is missing
 
-Orbit has no Dock icon, so the icon in the top menu bar is the main way back in when the pill is hidden. If the menu bar is too crowded, the icon may not fit. Opening Orbit again from Finder or Spotlight while it runs brings up the panel. A global shortcut for Open or close Orbit, if you recorded one, does the same.
+If your top menu bar is crowded, Orbit's icon may not fit. To open Orbit anyway:
+
+- Open Orbit again from Finder or Spotlight.
+- Or use your **Open or close Orbit** shortcut, if you set one in Settings > Shortcuts.
