@@ -58,13 +58,13 @@ After you pick a playlist, its row shows a spinner until Spotify starts playing 
 - **About the glass:** macOS Liquid Glass has two native variants, clear and regular. The presets use those plus a backing layer and tint that Orbit draws itself. Orbit can't change how strongly the glass blurs.
 - **Global shortcuts:** open or close Orbit, search, play/pause, next, previous, and open the library. All are off until you set a key combination in Settings > Shortcuts.
 
-## Menu bar
+## Menu bar icon
 
-Now playing, playback controls, open the player, library or search, show or hide the pill, reset its position, About Orbit (which lists third-party licenses), Settings and Quit.
+Orbit's icon sits in the top menu bar, near the clock. Click it for: now playing, playback controls, open the player, library or search, show or hide the pill, reset its position, About Orbit (which lists third-party licenses), Settings and Quit.
 
 ## Keyboard
 
-These keys work while the expanded panel is active, meaning after you click the pill or open it from the menu bar or a shortcut. Where Spotify's desktop app has a shortcut for the same action, Orbit uses it.
+These keys work while the expanded panel is active, meaning after you click the pill or open it from the menu bar icon or a shortcut. Where Spotify's desktop app has a shortcut for the same action, Orbit uses it.
 
 | Key | Action |
 |---|---|
@@ -108,7 +108,7 @@ On one Mac, a Release build in demo mode with the pill collapsed and music playi
 
 2. Open it and drag Orbit onto the Applications folder, then eject the Orbit disk in Finder's sidebar. The image also contains the license and third-party notices.
 3. Open Orbit and get past Gatekeeper (see below).
-4. Orbit has no Dock icon. Look for the pill on screen and the Orbit item in the menu bar.
+4. Orbit has no Dock icon. Look for the pill on screen and the Orbit icon in the top menu bar, near the clock.
 
 ### Gatekeeper
 

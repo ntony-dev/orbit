@@ -151,7 +151,7 @@ This is a Spotify restriction, not an error. You can still play the playlist.
 
 ### The pill is missing or offscreen
 
-**Fix.** Click the Orbit item in the menu bar:
+**Fix.** Click the Orbit icon in the top menu bar, near the clock:
 
 - Show Pill, if it was hidden.
 - Reset Position, if it is off the edge of a display or on a display you cannot see. The same button is in Settings > Behavior.
@@ -159,6 +159,6 @@ This is a Spotify restriction, not an error. You can still play the playlist.
 
 Also check Settings > Behavior: the pill hides while another app is full screen, and can be set to hide when Spotify quits. Orbit has no Dock icon; opening Orbit again from Finder or Spotlight while it runs also shows the panel.
 
-### The menu bar item is missing
+### The menu bar icon is missing
 
-Orbit has no Dock icon, so the menu bar item is the main way back in when the pill is hidden. If the menu bar is too crowded, the item may not fit. Opening Orbit again from Finder or Spotlight while it runs brings up the panel. A global shortcut for Open or close Orbit, if you recorded one, does the same.
+Orbit has no Dock icon, so the icon in the top menu bar is the main way back in when the pill is hidden. If the menu bar is too crowded, the icon may not fit. Opening Orbit again from Finder or Spotlight while it runs brings up the panel. A global shortcut for Open or close Orbit, if you recorded one, does the same.

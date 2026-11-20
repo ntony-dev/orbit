@@ -131,4 +131,4 @@ Scripts/screenshot.sh /tmp/library.png --demo --expanded --ui-screen library --u
 
 ## Acknowledgements
 
-- [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) by Sindre Sorhus (MIT), used for global shortcuts. Its license is in `App/Acknowledgements.txt` and shown under About Orbit in the menu bar.
+- [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) by Sindre Sorhus (MIT), used for global shortcuts. Its license is in `App/Acknowledgements.txt` and shown under About Orbit in the menu bar icon's menu.
