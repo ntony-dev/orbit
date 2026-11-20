@@ -73,7 +73,7 @@ The [user guide](docs/USER_GUIDE.md#known-limitations) has the full list.
 
 **Orbit never sees** your Spotify password (you type it on Spotify's own page), your email, or your account details.
 
-**What Orbit can access** in your Spotify account, once you approve it:
+**What your copy of Orbit can access.** Your copy of Orbit uses these to work, once you approve it on Spotify's page. They stay between your Mac and Spotify, and the developer never receives them.
 
 - **Playback:** what's playing, your queue and your devices, so it can show and control them.
 - **Your library:** your playlists and Liked Songs, to list them, and liking a song when you click the heart.
