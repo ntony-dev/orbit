@@ -33,7 +33,7 @@ There are two ways to install Orbit. Either way, finish by [connecting it to Spo
 
 1. Download `Orbit-<version>.dmg` from [Releases](https://github.com/ntony-dev/orbit/releases), open it, and drag Orbit onto the Applications folder.
 2. Open Orbit. Releases aren't notarized, so macOS blocks the first launch. Click **Done** (not Move to Trash), then go to **System Settings > Privacy & Security** and click **Open Anyway**. You only need to do this once per download.
-3. Orbit has no Dock icon. Look for the pill on screen and the Orbit icon in the top menu bar, near the clock.
+3. Orbit has no Dock icon. Look for the pill on screen and the Orbit icon in the top menu bar.
 
 Don't turn off Gatekeeper to run Orbit. If you'd rather not trust a downloaded app, use Option 2. If macOS says Orbit is damaged, see [Troubleshooting](docs/TROUBLESHOOTING.md).
 

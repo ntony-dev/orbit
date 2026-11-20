@@ -151,7 +151,7 @@ This is a Spotify restriction, not an error. You can still play the playlist.
 
 ### The pill is missing or offscreen
 
-**Fix.** Click the Orbit icon in the top menu bar, near the clock:
+**Fix.** Click the Orbit icon in the top menu bar:
 
 - Show Pill, if it was hidden.
 - Reset Position, if it is off the edge of a display or on a display you cannot see. The same button is in Settings > Behavior.

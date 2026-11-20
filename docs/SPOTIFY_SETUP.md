@@ -31,7 +31,7 @@ Orbit needs a free "Client ID" from Spotify before it can show your playlists an
 ## 3. Copy the Client ID into Orbit
 
 1. Still in **Settings**, open the **Basic Information** tab and copy the **Client ID**.
-2. In Orbit, open **Settings > Spotify**. To get there, click the Orbit icon in the top menu bar (near the clock) and choose **Settings…**.
+2. In Orbit, open **Settings > Spotify**. To get there, click the Orbit icon in the top menu bar and choose **Settings…**.
 3. Paste the ID into the **Client ID** field at the bottom and click **Save**.
 
 ## 4. Sign in

@@ -60,7 +60,7 @@ After you pick a playlist, its row shows a spinner until Spotify starts playing 
 
 ## Menu bar icon
 
-Orbit's icon sits in the top menu bar, near the clock. Click it for: now playing, playback controls, open the player, library or search, show or hide the pill, reset its position, About Orbit (which lists third-party licenses), Settings and Quit.
+Orbit's icon sits in the top menu bar. Click it for: now playing, playback controls, open the player, library or search, show or hide the pill, reset its position, About Orbit (which lists third-party licenses), Settings and Quit.
 
 ## Keyboard
 
@@ -108,7 +108,7 @@ On one Mac, a Release build in demo mode with the pill collapsed and music playi
 
 2. Open it and drag Orbit onto the Applications folder, then eject the Orbit disk in Finder's sidebar. The image also contains the license and third-party notices.
 3. Open Orbit and get past Gatekeeper (see below).
-4. Orbit has no Dock icon. Look for the pill on screen and the Orbit icon in the top menu bar, near the clock.
+4. Orbit has no Dock icon. Look for the pill on screen and the Orbit icon in the top menu bar.
 
 ### Gatekeeper
 
