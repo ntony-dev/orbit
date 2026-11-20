@@ -120,8 +120,14 @@ Other launch arguments are documented in `OrbitKit/Sources/OrbitShell/LaunchOpti
 `Scripts/screenshot.sh` launches the Debug build, captures one of its windows by window ID, and quits it, without moving the pointer or changing focus. Your terminal app needs Screen Recording permission.
 
 ```
-Scripts/screenshot.sh docs/images/library-dark.png --demo --expanded --ui-screen library --ui-shelf --ui-backdrop plain --appearance dark
+Scripts/screenshot.sh /tmp/library.png --demo --expanded --ui-screen library --ui-shelf --ui-backdrop plain --appearance dark
 ```
+
+`Scripts/readme-images.sh` regenerates the three images in `docs/images`:
+
+- captures each screen twice, over a stand-in wallpaper and with none, and uses the second capture's transparency to cut out the panel
+- lays the panels on one wallpaper with a window shadow (`Scripts/compose-readme-image.swift`)
+- opens the panel in the main display's top-right corner. Captures match that display's scale, so pass `--panel-anchor X,Y` on a Retina display for sharp images.
 
 ## Acknowledgements
 

@@ -2,27 +2,13 @@
 
 ## Screenshots
 
-Captured in demo mode, with made-up playlists and artwork. The colored background is a debug option that stands in for a desktop behind the glass.
+Captured in demo mode, with made-up playlists and artwork, over a stand-in wallpaper.
 
-<p>
-  <img src="images/pill-dark.png" width="312" alt="The collapsed pill in dark mode: round album artwork, the song Afterglow Avenue by Lumen Drift, and a playing indicator">
-  <img src="images/pill-light.png" width="312" alt="The same collapsed pill in light mode">
-</p>
+<img src="images/overview.png" alt="Orbit in dark mode over a purple desktop: the collapsed pill playing Afterglow Avenue by Lumen Drift; the Now Playing panel with the playlist Night Drive at the top beside a settings gear and a collapse button, artwork, a heart for Liked Songs, a seek bar with the elapsed and remaining time, shuffle, previous, pause, next and repeat, and a volume slider with queue and device buttons; and the Library panel with a search field, two pinned playlists, three recent playlists, Liked Songs, and Night Drive marked Now playing">
 
-<p>
-  <img src="images/player-dark.png" width="384" alt="Now Playing in dark mode: the playlist Night Drive at the top with a settings gear and a collapse button; album artwork, the title Afterglow Avenue, the artist Lumen Drift and a heart for Liked Songs; a seek bar with the elapsed and remaining time on the same row; shuffle, previous, pause, next and repeat; a volume slider with queue and device buttons; and the Now Playing and Library tabs at the bottom">
-  <img src="images/player-light.png" width="384" alt="The same Now Playing view in light mode">
-</p>
+<img src="images/player-drawers.png" alt="The player's two drawers, opened below the volume slider: Up Next, listing songs starting with Bicycle Bell by Juniper Lane; and the device list, with This Mac playing, a phone without volume control, a kitchen speaker, and a living room TV that can't be controlled from Orbit">
 
-<p>
-  <img src="images/queue-dark.png" width="384" alt="Now Playing in dark mode with the queue open below the volume slider: Up Next, seven songs, starting with Bicycle Bell by Juniper Lane">
-  <img src="images/library-dark.png" width="384" alt="The Library tab in dark mode: the current song with pause and collapse buttons, a field reading Search your library and Spotify, two pinned playlists, three recent playlists, then Your Library with Liked Songs and Night Drive, marked Now playing; each row ends with a chevron that opens its tracks">
-</p>
-
-<p>
-  <img src="images/library-search-light.png" width="384" alt="The Library in light mode while searching for night: Night Drive and Late Night Jazz from Your Library, then Search Spotify with the matching songs Midnight Ledger and Night Drive 1986">
-  <img src="images/playlist-detail-light.png" width="384" alt="A playlist opened from the Library in light mode: Night Drive with Pause, pin and Open in Spotify buttons, and its numbered tracks with durations, the first marked as playing">
-</p>
+<img src="images/library-browsing.png" alt="Searching the library for night: Night Drive and Late Night Jazz from Your Library, then the Spotify songs Midnight Ledger and Night Drive 1986; and the Night Drive playlist opened from the library, with Pause, pin and Open in Spotify buttons and its numbered tracks, the first marked as playing">
 
 ## What needs a sign-in
 

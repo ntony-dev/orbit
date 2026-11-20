@@ -6,14 +6,7 @@
 
 A small floating Spotify controller for macOS. A translucent pill sits above your windows and expands into a player and your library, so you can change what's playing without switching to Spotify. The Spotify app still plays the audio; Orbit controls it.
 
-<p>
-  <img src="docs/images/pill-dark.png" width="312" alt="The collapsed pill in dark mode: round album artwork, the song Afterglow Avenue by Lumen Drift, and a playing indicator">
-</p>
-
-<p>
-  <img src="docs/images/player-dark.png" width="384" alt="Now Playing in dark mode: playlist name, album artwork, title and artist, a seek bar, shuffle, previous, pause, next and repeat, a volume slider with queue and device buttons, and the Now Playing and Library tabs">
-  <img src="docs/images/library-dark.png" width="384" alt="The Library tab in dark mode: a search field, pinned playlists, recent playlists, then Your Library with Liked Songs and Night Drive">
-</p>
+<img src="docs/images/overview.png" alt="Orbit in dark mode over a purple desktop: the collapsed pill playing Afterglow Avenue by Lumen Drift; the Now Playing panel with artwork, a seek bar, shuffle, previous, pause, next and repeat, and a volume slider with queue and device buttons; and the Library panel with a search field, pinned and recent playlists, Liked Songs, and Night Drive marked Now playing">
 
 ## Features
 
