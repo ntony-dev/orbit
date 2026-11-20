@@ -100,13 +100,13 @@ On one Mac, a Release build in demo mode with the pill collapsed and music playi
 
 ## Installing from a release
 
-1. Download `Orbit-<version>.zip` from Releases. If the release lists a SHA-256 checksum, compare it:
+1. Download `Orbit-<version>.dmg` from Releases. If the release lists a SHA-256 checksum, compare it:
 
    ```
-   shasum -a 256 ~/Downloads/Orbit-<version>.zip
+   shasum -a 256 ~/Downloads/Orbit-<version>.dmg
    ```
 
-2. Unzip it and move `Orbit.app` to `/Applications`. The zip also contains the license and third-party notices.
+2. Open it and drag Orbit onto the Applications folder, then eject the Orbit disk in Finder's sidebar. The image also contains the license and third-party notices.
 3. Open Orbit and get past Gatekeeper (see below).
 4. Orbit has no Dock icon. Look for the pill on screen and the Orbit item in the menu bar.
 

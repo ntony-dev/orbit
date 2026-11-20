@@ -59,7 +59,7 @@ Keep only one installed copy, so launch at login and permissions refer to a sing
 Scripts/archive.sh
 ```
 
-Writes `dist/Orbit-<version>.zip`, containing `Orbit.app`, `LICENSE.txt` and `Acknowledgements.txt`. The script:
+Writes `dist/Orbit-<version>.dmg`, a drag-to-Applications disk image containing `Orbit.app`, `LICENSE.txt` and `Acknowledgements.txt`. Attach it to a GitHub release. The script:
 
 - makes a clean Release build, signed ad hoc whatever `Local.xcconfig` says
 - verifies the signature (ad hoc, no team, hardened runtime)

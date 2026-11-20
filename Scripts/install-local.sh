@@ -6,7 +6,7 @@
 #
 # It refuses to replace a copy that is running unless --quit-running is passed, which quits that copy first.
 # For your own Mac. A stable identity keeps macOS's Automation and Keychain grants across rebuilds, so this
-# refuses an ad-hoc signature; Scripts/archive.sh makes the shareable ad-hoc zip.
+# refuses an ad-hoc signature; Scripts/archive.sh makes the shareable ad-hoc disk image.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

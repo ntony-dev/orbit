@@ -3,8 +3,8 @@
 # third-party notices (App/Acknowledgements.txt, also shown in the About panel).
 # Usage: Scripts/archive.sh [--friends]
 #
-# Without options it writes the public archive, dist/Orbit-<version>.zip, with no Spotify Client ID built in, so
-# everyone who downloads it enters their own in Settings > Spotify. The build fails if a Client ID ends up in it.
+# Without options it writes the public disk image, dist/Orbit-<version>.dmg, with no Spotify Client ID built in,
+# so everyone who downloads it enters their own in Settings > Spotify. The build fails if a Client ID ends up in it.
 #
 # --friends writes dist/Orbit-<version>-friends.dmg for the people on your Spotify app's User Management list. It
 # builds in the Client ID from the SPOTIFY_CLIENT_ID environment variable or, when that is unset, from
@@ -121,19 +121,13 @@ ditto "$app" "$staging/Orbit.app"
 cp -X LICENSE "$staging/LICENSE.txt"
 cp -X "$notices" "$staging/Acknowledgements.txt"
 
-if $friends; then
-    # The Applications link gives the usual drag-to-install window. Finder lays the icons out itself, since
-    # arranging them would mean scripting Finder.
-    output="dist/Orbit-$version-friends.dmg"
-    ln -s /Applications "$staging/Applications"
-    rm -f "$output"
-    hdiutil create -quiet -volname "Orbit $version" -srcfolder "$staging" -fs HFS+ -format UDZO "$output"
-    hdiutil verify -quiet "$output"
-else
-    output="dist/Orbit-$version.zip"
-    rm -f "$output"
-    ditto -c -k --sequesterRsrc --keepParent "$staging" "$output"
-fi
+# The Applications link gives the usual drag-to-install window. Finder lays the icons out itself, since arranging
+# them would mean scripting Finder.
+if $friends; then output="dist/Orbit-$version-friends.dmg"; else output="dist/Orbit-$version.dmg"; fi
+ln -s /Applications "$staging/Applications"
+rm -f "$output"
+hdiutil create -quiet -volname "Orbit $version" -srcfolder "$staging" -fs HFS+ -format UDZO "$output"
+hdiutil verify -quiet "$output"
 
 echo "Built $output from $revision ($(lipo -archs "$app/Contents/MacOS/Orbit"))"
 echo "Signature: $(codesign -dv "$app" 2>&1 | grep -E '^Signature=')"

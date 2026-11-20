@@ -16,7 +16,7 @@ If you have a Spotify Developer app, you can build a copy of Orbit with your Cli
 
 For updates, build and send a new image.
 
-> **Keep it private.** The image contains your Client ID. Everyone using it shares your app's request quota, and only accounts on your User Management list can sign in. Never attach it to a public release. Plain `Scripts/archive.sh` builds the public zip, which has no Client ID.
+> **Keep it private.** The image contains your Client ID. Everyone using it shares your app's request quota, and only accounts on your User Management list can sign in. Never attach it to a public release. Plain `Scripts/archive.sh` builds the public image, `dist/Orbit-<version>.dmg`, which has no Client ID.
 
 ## Install a copy a friend sent you
 

@@ -16,9 +16,9 @@ Do not turn off Gatekeeper or strip the quarantine mark to get past this.
 
 ### "Orbit is damaged and can't be opened"
 
-**Cause.** The app's signature does not match its contents. This happens when the download was incomplete, or when the zip was extracted by a tool that dropped parts of the app bundle.
+**Cause.** The app's signature does not match its contents. This happens when the download was incomplete, or when the app was copied by a tool that dropped parts of the app bundle.
 
-**Fix.** Delete the copy, download the zip again, compare its checksum if the release lists one, and extract it by double-clicking it in Finder. You can check the signature yourself; this prints nothing when the signature is intact:
+**Fix.** Delete the copy, download the disk image again, compare its checksum if the release lists one, and drag Orbit to Applications in Finder. You can check the signature yourself; this prints nothing when the signature is intact:
 
 ```
 codesign --verify --deep --strict /Applications/Orbit.app
